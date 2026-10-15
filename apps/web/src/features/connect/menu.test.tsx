@@ -8,7 +8,7 @@ import { A11yProvider } from '@/features/a11y/A11yProvider';
 import { TooltipProvider } from '@/components/ui/Tooltip';
 import { Bubble } from './Bubble';
 import { MessageMenu } from './MessageMenu';
-import { SelectBar } from './SelectBar';
+import { BulkDeleteDialog, SelectBar } from './SelectBar';
 import { threadKeyDown } from './threadKeys';
 import { useSwipeReply } from './useSwipeReply';
 
@@ -227,5 +227,18 @@ describe('select bar', () => {
     expect(onCopy).toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Cancel selection' }));
     expect(onCancel).toHaveBeenCalled();
+  });
+
+  it('words the bulk delete title for one or many messages', () => {
+    const { rerender } = render(
+      <BulkDeleteDialog open count={1} onClose={vi.fn()} onConfirm={vi.fn()} />,
+    );
+    expect(
+      screen.getByRole('dialog', { name: 'Delete 1 message for everyone?' }),
+    ).toBeInTheDocument();
+    rerender(<BulkDeleteDialog open count={3} onClose={vi.fn()} onConfirm={vi.fn()} />);
+    expect(
+      screen.getByRole('dialog', { name: 'Delete 3 messages for everyone?' }),
+    ).toBeInTheDocument();
   });
 });

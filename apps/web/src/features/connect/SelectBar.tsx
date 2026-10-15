@@ -1,5 +1,6 @@
 import { CopyIcon, TrashIcon, XIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/Dialog';
 
 /** Replaces the chat header while messages are being selected. */
 export function SelectBar({
@@ -47,5 +48,38 @@ export function SelectBar({
         <TrashIcon size={20} />
       </Button>
     </div>
+  );
+}
+
+/**
+ * Confirms deleting the selected messages. `count` is captured by the caller when the
+ * dialog opens, so the title doesn't change while the dialog closes.
+ */
+export function BulkDeleteDialog({
+  open,
+  count,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean;
+  count: number;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const one = count === 1;
+  return (
+    <ConfirmDialog
+      open={open}
+      onClose={onClose}
+      onConfirm={onConfirm}
+      title={one ? 'Delete 1 message for everyone?' : `Delete ${count} messages for everyone?`}
+      description={
+        one
+          ? 'It is removed on every device in this chat.'
+          : 'They are removed on every device in this chat.'
+      }
+      confirmLabel="Delete"
+      danger
+    />
   );
 }

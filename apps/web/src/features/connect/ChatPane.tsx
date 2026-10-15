@@ -54,7 +54,7 @@ import {
   useTyping,
 } from './hooks';
 import { DateChip, groupByDay, JumpToLatest, UnreadDivider } from './ThreadParts';
-import { SelectBar } from './SelectBar';
+import { BulkDeleteDialog, SelectBar } from './SelectBar';
 import { threadKeyDown } from './threadKeys';
 import { chatBackground, effectiveTheme, GroupAvatar, TypingDots, useChatTheme } from './ui';
 import { VerifyDialog } from './VerifyDialog';
@@ -134,6 +134,8 @@ export default function ChatPane() {
   const [dragging, setDragging] = useState(false);
   const [selection, setSelection] = useState<Set<string> | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  // Captured when the dialog opens: the selection is cleared on confirm, while it closes.
+  const [bulkCount, setBulkCount] = useState(0);
   useEffect(() => setSelection(null), [id]);
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -451,7 +453,10 @@ export default function ChatPane() {
             count={selectedMessages.length}
             canDelete={canBulkDelete}
             onCopy={() => void copySelection()}
-            onDelete={() => setBulkDeleting(true)}
+            onDelete={() => {
+              setBulkCount(selectedMessages.length);
+              setBulkDeleting(true);
+            }}
             onCancel={() => setSelection(null)}
           />
         ) : (
@@ -721,8 +726,9 @@ export default function ChatPane() {
         danger
       />
 
-      <ConfirmDialog
+      <BulkDeleteDialog
         open={bulkDeleting}
+        count={bulkCount}
         onClose={() => setBulkDeleting(false)}
         onConfirm={() => {
           const targets = selectedMessages.map((m) => m.id);
@@ -732,10 +738,6 @@ export default function ChatPane() {
             for (const target of targets) await engine!.send(id, { t: 'delete', target });
           });
         }}
-        title={`Delete ${selectedMessages.length} messages for everyone?`}
-        description="They are removed on every device in this chat."
-        confirmLabel="Delete"
-        danger
       />
 
       {verifying && conv && (
