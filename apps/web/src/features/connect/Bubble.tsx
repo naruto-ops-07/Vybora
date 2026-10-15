@@ -4,19 +4,31 @@ import {
   ChecksIcon,
   ClockIcon,
   CopyIcon,
+  DotsThreeIcon,
   ShieldSlashIcon,
   SmileyIcon,
   TimerIcon,
   TrashIcon,
   WarningCircleIcon,
 } from '@phosphor-icons/react';
-import { formatClock, messageSummary, tokenizeText, type Receipt } from '@vybora/core';
+import {
+  formatClock,
+  messageActions,
+  messageSummary,
+  SWIPE_REPLY_THRESHOLD,
+  tokenizeText,
+  type MessageAction,
+  type Receipt,
+} from '@vybora/core';
 import type { LocalMessage } from '@vybora/e2ee';
-import { memo, useState, type ReactNode } from 'react';
+import { memo, useRef, useState, type ReactNode } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
+import { useA11y } from '@/features/a11y/A11yProvider';
 import { cn } from '@/lib/cn';
 import { FileAttachment, ImageAttachment, VideoAttachment, VoiceAttachment } from './Attachment';
+import { MessageMenu } from './MessageMenu';
 import type { ResolvedChatTheme } from './ui';
+import { useSwipeReply } from './useSwipeReply';
 
 export type { Receipt } from '@vybora/core';
 /** Reactions are message content (shown as emoji), not interface icons. */
@@ -107,7 +119,7 @@ function ActionButton({
       aria-expanded={expanded}
       title={label}
       className={cn(
-        'flex h-8 w-8 items-center justify-center rounded-md text-subtle transition-colors duration-150',
+        'touch-target flex h-8 w-8 items-center justify-center rounded-md text-subtle transition-colors duration-150',
         danger ? 'hover:bg-danger-soft hover:text-danger' : 'hover:bg-surface-muted hover:text-ink',
       )}
     >
@@ -159,8 +171,35 @@ export const Bubble = memo(function Bubble({
   runEnd,
   avatar,
   tabbable,
+  onSelect,
 }: BubbleProps) {
   const [picker, setPicker] = useState(false);
+  const { prefs, reduceMotion } = useA11y();
+  const root = useRef<HTMLDivElement>(null);
+  const actions = messageActions(m, mine);
+  const swipe = useSwipeReply(() => onReply(m), prefs.swipeToReply && actions.includes('reply'));
+  const myReactions = Object.entries(m.reactions)
+    .filter(([, users]) => users.includes(myUserId))
+    .map(([e]) => e);
+  const openMenu = () => {
+    const el = root.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    el.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: r.left + 24,
+        clientY: r.top + 12,
+      }),
+    );
+  };
+  const onAction = (a: MessageAction) => {
+    if (a === 'reply') onReply(m);
+    else if (a === 'copy') void navigator.clipboard?.writeText(m.body ?? '');
+    else if (a === 'select') onSelect(m);
+    else if (a === 'delete') onDelete(m);
+  };
   const senderLabel = mine ? 'You' : nameOf(m.senderId);
   const label = [
     senderLabel,
@@ -171,8 +210,6 @@ export const Bubble = memo(function Bubble({
     .filter(Boolean)
     .join(', ');
   const filled = mine && !m.deleted && m.kind !== 'undecryptable';
-  const actionable =
-    !m.deleted && m.kind !== 'undecryptable' && m.status !== 'sending' && m.status !== 'failed';
   const media =
     m.kind === 'attachment' &&
     (m.attachment?.kind === 'image' || m.attachment?.kind === 'video') &&
@@ -215,182 +252,210 @@ export const Bubble = memo(function Bubble({
   const reactions = Object.entries(m.reactions).filter(([, users]) => users.length);
 
   return (
-    <div
-      className={cn(
-        'group flex flex-col px-3 md:px-6',
-        runStart ? 'pt-2' : 'pt-0.5',
-        mine ? 'items-end' : 'items-start',
-      )}
-      data-message-id={m.id}
-      tabIndex={tabbable ? 0 : -1}
-      role="article"
-      aria-label={label}
+    <MessageMenu
+      actions={actions}
+      myReactions={myReactions}
+      onReact={(e) => onReact(m, e)}
+      onAction={onAction}
     >
-      {showSender && !mine && senderName && (
-        <span
-          className={cn('mb-0.5 text-xs font-semibold', avatar ? 'ml-9' : 'ml-1')}
-          style={{ color: theme.accent }}
-        >
-          {senderName}
-        </span>
-      )}
-      <div className={cn('flex max-w-full items-end gap-2', mine && 'flex-row-reverse')}>
-        {avatar &&
-          !mine &&
-          (runEnd ? (
-            <Avatar path={avatar.path} name={avatar.name} size={28} />
-          ) : (
-            <span className="w-7 shrink-0" aria-hidden="true" />
-          ))}
+      <div
+        ref={root}
+        {...swipe.handlers}
+        style={{ touchAction: 'pan-y' }}
+        className={cn(
+          'group flex flex-col px-3 md:px-6',
+          runStart ? 'pt-2' : 'pt-0.5',
+          mine ? 'items-end' : 'items-start',
+        )}
+        data-message-id={m.id}
+        tabIndex={tabbable ? 0 : -1}
+        role="article"
+        aria-label={label}
+      >
+        {showSender && !mine && senderName && (
+          <span
+            className={cn('mb-0.5 text-xs font-semibold', avatar ? 'ml-9' : 'ml-1')}
+            style={{ color: theme.accent }}
+          >
+            {senderName}
+          </span>
+        )}
         <div
-          className={cn(
-            'relative flex max-w-[min(80%,600px)] items-center gap-1',
-            mine && 'flex-row-reverse',
-          )}
+          className={cn('relative flex max-w-full items-end gap-2', mine && 'flex-row-reverse')}
+          style={{
+            transform: swipe.offset ? `translateX(${swipe.offset}px)` : undefined,
+            transition: swipe.offset || reduceMotion ? 'none' : 'transform 180ms ease-out',
+          }}
         >
+          {swipe.offset > 0 && (
+            <span
+              className="absolute -left-8 top-1/2 -translate-y-1/2 text-muted"
+              style={{ opacity: Math.min(1, swipe.offset / SWIPE_REPLY_THRESHOLD) }}
+              aria-hidden="true"
+            >
+              <ArrowBendUpLeftIcon size={18} />
+            </span>
+          )}
+          {avatar &&
+            !mine &&
+            (runEnd ? (
+              <Avatar path={avatar.path} name={avatar.name} size={28} />
+            ) : (
+              <span className="w-7 shrink-0" aria-hidden="true" />
+            ))}
           <div
             className={cn(
-              'relative min-w-0 rounded-lg',
-              media ? 'p-1' : 'px-3 py-2',
-              runEnd && (mine ? 'rounded-br-sm' : 'rounded-bl-sm'),
-              !filled && 'border border-line bg-bubble-in text-ink',
+              'relative flex max-w-[min(80%,600px)] items-center gap-1',
+              mine && 'flex-row-reverse',
             )}
-            style={filled ? { background: theme.bubble, color: theme.bubbleText } : undefined}
           >
-            {m.replyTo && !m.deleted && (
-              <button
-                type="button"
-                onClick={() => onJumpTo?.(m.replyTo!.id)}
-                className={cn(
-                  'mb-1.5 block w-full border-l-2 py-0.5 pl-2 text-left',
-                  filled ? 'border-white/70' : '',
-                  media && 'mx-1 mt-1 w-[calc(100%-8px)]',
-                )}
-                style={filled ? undefined : { borderColor: theme.accent }}
-              >
-                <span
-                  className="block text-xs font-semibold"
-                  style={{ color: filled ? undefined : theme.accent }}
-                >
-                  {nameOf(m.replyTo.senderId)}
-                </span>
-                <span className="line-clamp-2 text-[13px] opacity-80">{m.replyTo.preview}</span>
-              </button>
-            )}
-            {content}
-            <span
-              className={cn(
-                'mt-0.5 flex items-center justify-end gap-1 font-mono text-[11px] leading-4',
-                metaColor,
-                media && 'px-2 pb-1',
-              )}
-            >
-              {m.expiresAt && <TimerIcon size={11} aria-label="Disappearing message" />}
-              <time dateTime={m.createdAt}>{formatClock(m.createdAt)}</time>
-              {mine && receipt && <Ticks receipt={receipt} />}
-            </span>
-            {runEnd && <Tail mine={mine} fill={filled ? theme.bubble : undefined} />}
-          </div>
-
-          {actionable && (
             <div
               className={cn(
-                'flex shrink-0 items-center opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover:opacity-100',
-                picker && 'opacity-100',
+                'relative min-w-0 rounded-lg',
+                media ? 'p-1' : 'px-3 py-2',
+                runEnd && (mine ? 'rounded-br-sm' : 'rounded-bl-sm'),
+                !filled && 'border border-line bg-bubble-in text-ink',
               )}
+              style={filled ? { background: theme.bubble, color: theme.bubbleText } : undefined}
             >
-              <ActionButton label="React" onClick={() => setPicker((p) => !p)} expanded={picker}>
-                <SmileyIcon size={16} />
-              </ActionButton>
-              <ActionButton label="Reply" onClick={() => onReply(m)}>
-                <ArrowBendUpLeftIcon size={16} />
-              </ActionButton>
-              {m.kind === 'text' && (
-                <ActionButton
-                  label="Copy text"
-                  onClick={() => void navigator.clipboard?.writeText(m.body ?? '')}
+              {m.replyTo && !m.deleted && (
+                <button
+                  type="button"
+                  onClick={() => onJumpTo?.(m.replyTo!.id)}
+                  className={cn(
+                    'mb-1.5 block w-full border-l-2 py-0.5 pl-2 text-left',
+                    filled ? 'border-white/70' : '',
+                    media && 'mx-1 mt-1 w-[calc(100%-8px)]',
+                  )}
+                  style={filled ? undefined : { borderColor: theme.accent }}
                 >
-                  <CopyIcon size={15} />
-                </ActionButton>
-              )}
-              {mine && (
-                <ActionButton label="Delete for everyone" onClick={() => onDelete(m)} danger>
-                  <TrashIcon size={15} />
-                </ActionButton>
-              )}
-            </div>
-          )}
-
-          {picker && (
-            <div
-              role="menu"
-              aria-label="Reactions"
-              className={cn(
-                'absolute -top-11 z-10 flex gap-0.5 rounded-md border border-line-strong bg-surface p-1',
-                mine ? 'right-0' : 'left-0',
-              )}
-              onKeyDown={(e) => e.key === 'Escape' && setPicker(false)}
-            >
-              {QUICK_REACTIONS.map((e) => {
-                const on = m.reactions[e]?.includes(myUserId);
-                return (
-                  <button
-                    key={e}
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setPicker(false);
-                      onReact(m, e);
-                    }}
-                    className={cn(
-                      'flex h-8 w-8 items-center justify-center rounded-sm text-lg hover:bg-surface-muted',
-                      on && 'bg-accent-soft',
-                    )}
-                    aria-label={`${on ? 'Remove' : 'React with'} ${e}`}
+                  <span
+                    className="block text-xs font-semibold"
+                    style={{ color: filled ? undefined : theme.accent }}
                   >
-                    {e}
-                  </button>
-                );
-              })}
+                    {nameOf(m.replyTo.senderId)}
+                  </span>
+                  <span className="line-clamp-2 text-[13px] opacity-80">{m.replyTo.preview}</span>
+                </button>
+              )}
+              {content}
+              <span
+                className={cn(
+                  'mt-0.5 flex items-center justify-end gap-1 font-mono text-[11px] leading-4',
+                  metaColor,
+                  media && 'px-2 pb-1',
+                )}
+              >
+                {m.expiresAt && <TimerIcon size={11} aria-label="Disappearing message" />}
+                <time dateTime={m.createdAt}>{formatClock(m.createdAt)}</time>
+                {mine && receipt && <Ticks receipt={receipt} />}
+              </span>
+              {runEnd && <Tail mine={mine} fill={filled ? theme.bubble : undefined} />}
             </div>
-          )}
+
+            {actions.length > 0 && (
+              <div
+                className={cn(
+                  'flex shrink-0 items-center transition-opacity duration-150 focus-within:opacity-100 group-hover:opacity-100',
+                  prefs.alwaysShowActions || picker ? 'opacity-100' : 'opacity-0',
+                )}
+              >
+                <ActionButton label="React" onClick={() => setPicker((p) => !p)} expanded={picker}>
+                  <SmileyIcon size={16} />
+                </ActionButton>
+                <ActionButton label="Reply" onClick={() => onReply(m)}>
+                  <ArrowBendUpLeftIcon size={16} />
+                </ActionButton>
+                {m.kind === 'text' && (
+                  <ActionButton
+                    label="Copy text"
+                    onClick={() => void navigator.clipboard?.writeText(m.body ?? '')}
+                  >
+                    <CopyIcon size={15} />
+                  </ActionButton>
+                )}
+                {mine && (
+                  <ActionButton label="Delete for everyone" onClick={() => onDelete(m)} danger>
+                    <TrashIcon size={15} />
+                  </ActionButton>
+                )}
+                <ActionButton label="More actions" onClick={openMenu}>
+                  <DotsThreeIcon size={16} />
+                </ActionButton>
+              </div>
+            )}
+
+            {picker && (
+              <div
+                role="menu"
+                aria-label="Reactions"
+                className={cn(
+                  'absolute -top-11 z-10 flex gap-0.5 rounded-md border border-line-strong bg-surface p-1',
+                  mine ? 'right-0' : 'left-0',
+                )}
+                onKeyDown={(e) => e.key === 'Escape' && setPicker(false)}
+              >
+                {QUICK_REACTIONS.map((e) => {
+                  const on = m.reactions[e]?.includes(myUserId);
+                  return (
+                    <button
+                      key={e}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setPicker(false);
+                        onReact(m, e);
+                      }}
+                      className={cn(
+                        'flex h-8 w-8 items-center justify-center rounded-sm text-lg hover:bg-surface-muted',
+                        on && 'bg-accent-soft',
+                      )}
+                      aria-label={`${on ? 'Remove' : 'React with'} ${e}`}
+                    >
+                      {e}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
+
+        {reactions.length > 0 && (
+          <div className={cn('mt-1 flex gap-1', mine ? 'mr-1' : 'ml-1')}>
+            {reactions.map(([emoji, users]) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => onReact(m, emoji)}
+                title={users.map(nameOf).join(', ')}
+                aria-label={`${emoji} ${users.length}, ${users.includes(myUserId) ? 'remove your reaction' : 'react'}`}
+                className={cn(
+                  'flex h-6 items-center gap-1 rounded-sm border px-1.5 text-xs',
+                  users.includes(myUserId)
+                    ? 'border-accent bg-accent-soft'
+                    : 'border-line bg-surface',
+                )}
+              >
+                <span>{emoji}</span>
+                {users.length > 1 && (
+                  <span className="font-mono text-[11px] text-muted">{users.length}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {receipt === 'failed' && (
+          <button
+            type="button"
+            onClick={() => onRetry(m)}
+            className="mr-1 mt-0.5 text-xs font-medium text-danger underline-offset-2 hover:underline"
+          >
+            Not sent · Retry
+          </button>
+        )}
       </div>
-
-      {reactions.length > 0 && (
-        <div className={cn('mt-1 flex gap-1', mine ? 'mr-1' : 'ml-1')}>
-          {reactions.map(([emoji, users]) => (
-            <button
-              key={emoji}
-              type="button"
-              onClick={() => onReact(m, emoji)}
-              title={users.map(nameOf).join(', ')}
-              aria-label={`${emoji} ${users.length}, ${users.includes(myUserId) ? 'remove your reaction' : 'react'}`}
-              className={cn(
-                'flex h-6 items-center gap-1 rounded-sm border px-1.5 text-xs',
-                users.includes(myUserId)
-                  ? 'border-accent bg-accent-soft'
-                  : 'border-line bg-surface',
-              )}
-            >
-              <span>{emoji}</span>
-              {users.length > 1 && (
-                <span className="font-mono text-[11px] text-muted">{users.length}</span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {receipt === 'failed' && (
-        <button
-          type="button"
-          onClick={() => onRetry(m)}
-          className="mr-1 mt-0.5 text-xs font-medium text-danger underline-offset-2 hover:underline"
-        >
-          Not sent · Retry
-        </button>
-      )}
-    </div>
+    </MessageMenu>
   );
 });

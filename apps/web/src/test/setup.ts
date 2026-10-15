@@ -28,3 +28,15 @@ class IO {
   }
 }
 (globalThis as unknown as { IntersectionObserver: unknown }).IntersectionObserver ??= IO;
+
+// Radix menus measure and capture pointers; jsdom lacks these APIs.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver;
+Element.prototype.scrollIntoView ??= function scrollIntoView() {};
+Element.prototype.hasPointerCapture ??= () => false;
+Element.prototype.releasePointerCapture ??= () => undefined;
+Element.prototype.setPointerCapture ??= () => undefined;
