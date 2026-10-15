@@ -9,8 +9,8 @@ import {
   WifiSlashIcon,
   XIcon,
 } from '@phosphor-icons/react';
-import { fetchConnectPrivacy, peerOf, qk, watchPresence } from '@vybora/api';
-import { friendlyError, layoutThread, receiptOf } from '@vybora/core';
+import { fetchConnectPrivacy, isMuted, peerOf, qk, watchPresence } from '@vybora/api';
+import { friendlyError, layoutThread, messageActions, receiptOf } from '@vybora/core';
 import { MAX_ATTACHMENT_BYTES, type AttachmentRef, type LocalMessage } from '@vybora/e2ee';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -20,9 +20,11 @@ import { Button } from '@/components/ui/Button';
 import { Tip } from '@/components/ui/Tooltip';
 import { ConfirmDialog } from '@/components/ui/Dialog';
 import { useToast } from '@/components/ui/Toast';
+import { useA11y } from '@/features/a11y/A11yProvider';
 import { useMe } from '@/features/auth/AuthProvider';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
+import { useIncomingAnnouncement } from './announce';
 import { Bubble } from './Bubble';
 import { Composer, type ComposerHandle, type ReplyDraft } from './Composer';
 import { useConnect } from './ConnectProvider';
@@ -36,7 +38,8 @@ import {
   useSecureMessages,
   useTyping,
 } from './hooks';
-import { DateChip, groupByDay, UnreadDivider } from './ThreadParts';
+import { DateChip, groupByDay, JumpToLatest, UnreadDivider } from './ThreadParts';
+import { threadKeyDown } from './threadKeys';
 import { chatBackground, effectiveTheme, GroupAvatar, TypingDots, useChatTheme } from './ui';
 import { VerifyDialog } from './VerifyDialog';
 
@@ -181,6 +184,53 @@ export default function ChatPane() {
   );
   const days = useMemo(() => groupByDay(items), [items]);
   const newestId = ordered.at(-1)?.id;
+
+  const { reduceMotion } = useA11y();
+  const [away, setAway] = useState(false);
+  const [newCount, setNewCount] = useState(0);
+  const lastSeenSeq = useRef(0);
+  useEffect(() => {
+    lastSeenSeq.current = 0;
+    setNewCount(0);
+    setAway(false);
+  }, [id]);
+  useEffect(() => {
+    const newest = ordered.at(-1)?.seq ?? 0;
+    if (stick.current || !lastSeenSeq.current) {
+      setNewCount(0);
+      lastSeenSeq.current = Math.max(lastSeenSeq.current, newest);
+      return;
+    }
+    const fresh = ordered.filter(
+      (m) => (m.seq ?? 0) > lastSeenSeq.current && m.senderId !== userId,
+    ).length;
+    if (fresh) setNewCount((c) => c + fresh);
+    lastSeenSeq.current = Math.max(lastSeenSeq.current, newest);
+  }, [ordered, userId]);
+
+  const jumpToLatest = () => {
+    const el = scroller.current;
+    if (!el) return;
+    stick.current = true;
+    setNewCount(0);
+    el.scrollTo({ top: el.scrollHeight, behavior: reduceMotion ? 'auto' : 'smooth' });
+  };
+
+  const announcement = useIncomingAnnouncement(ordered, {
+    ready: messages.isSuccess,
+    userId,
+    muted: conv ? isMuted(conv) || !conv.notificationsEnabled : true,
+    conversationId: id,
+    nameOf,
+  });
+
+  const replyById = (mid: string) => {
+    const m = ordered.find((x) => x.id === mid);
+    if (m && messageActions(m, m.senderId === userId).includes('reply')) {
+      setReplyTo(m);
+      composer.current?.focus();
+    }
+  };
 
   // Stay pinned to the newest message unless the reader scrolled up; keep the
   // reading position when older messages are prepended.
@@ -412,105 +462,115 @@ export default function ChatPane() {
           </button>
         )}
 
-        <div
-          ref={scroller}
-          className="scroll-thin min-h-0 flex-1 overflow-y-auto py-4"
-          onScroll={(e) => {
-            const el = e.currentTarget;
-            stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-          }}
-          role="log"
-          aria-label={`Messages with ${title}`}
-        >
-          {hasMore ? (
-            <div className="mb-4 flex justify-center">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={loadEarlier}
-                loading={messages.isFetching}
-              >
-                Load earlier messages
-              </Button>
-            </div>
-          ) : (
-            <p className="mx-auto mb-6 mt-2 flex max-w-sm items-start justify-center gap-2 px-6 text-center text-xs leading-relaxed text-muted">
-              <LockSimpleIcon
-                size={13}
-                className="mt-0.5 shrink-0 text-accent"
-                aria-hidden="true"
-              />
-              Messages and attachments in this chat are end-to-end encrypted. Only its members’
-              devices can read them.
-            </p>
-          )}
-          {(messages.isPending || (syncState === 'syncing' && !ordered.length)) && (
-            <div className="flex justify-center py-8" style={{ color: def.accent }}>
-              <CircleNotchIcon className="animate-spin" size={22} aria-label="Loading messages" />
-            </div>
-          )}
-          {!messages.isPending && syncState !== 'syncing' && ordered.length === 0 && (
-            <p className="py-10 text-center text-sm text-muted">
-              No messages yet. Say hello — it’s encrypted.
-            </p>
-          )}
-          {days.map((day) => (
-            <section key={day.key} aria-label={day.label}>
-              {day.items.map((it) => {
-                if (it.type === 'date') return <DateChip key={it.key} label={it.label} />;
-                if (it.type === 'unread') return <UnreadDivider key={it.key} count={it.count} />;
-                const m = it.message;
-                const group = conv?.kind === 'group';
-                const sender = conv?.members.find((x) => x.id === m.senderId);
-                return (
-                  <Bubble
-                    key={it.key}
-                    message={m}
-                    mine={it.mine}
-                    theme={def}
-                    senderName={group ? nameOf(m.senderId) : undefined}
-                    showSender={!!group && it.runStart}
-                    runStart={it.runStart}
-                    runEnd={it.runEnd}
-                    avatar={
-                      group && !it.mine
-                        ? { path: sender?.avatar_path ?? null, name: sender?.username ?? '?' }
-                        : undefined
-                    }
-                    tabbable={m.id === newestId}
-                    receipt={receiptOf(m, userId, conv?.members ?? [])}
-                    myUserId={userId}
-                    nameOf={nameOf}
-                    onReact={(msg, emoji) =>
-                      void run(() =>
-                        engine!.send(id, {
-                          t: 'reaction',
-                          target: msg.id,
-                          emoji,
-                          remove: !!msg.reactions[emoji]?.includes(userId),
-                        }),
-                      )
-                    }
-                    onReply={(msg) => {
-                      setReplyTo(msg);
-                      composer.current?.focus();
-                    }}
-                    onDelete={setDeleting}
-                    onRetry={(msg) => void run(() => engine!.retry(id, msg.id))}
-                    onOpenImage={setViewer}
-                    onJumpTo={jumpTo}
-                    onSelect={() => undefined}
-                  />
-                );
-              })}
-            </section>
-          ))}
-          {uploads > 0 && (
-            <div className="flex items-center justify-end gap-2 px-6 py-2 font-mono text-[11px] text-muted">
-              <CircleNotchIcon className="animate-spin" size={13} aria-hidden="true" />
-              Encrypting and uploading{uploads > 1 ? ` ${uploads} files` : ''}…
-            </div>
-          )}
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <div
+            ref={scroller}
+            className="scroll-thin min-h-0 flex-1 overflow-y-auto py-4"
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+              stick.current = distance < 80;
+              setAway(distance > el.clientHeight);
+              if (stick.current) setNewCount(0);
+            }}
+            onKeyDown={(e) => threadKeyDown(e, { onReply: replyById })}
+            role="log"
+            aria-label={`Messages with ${title}`}
+          >
+            {hasMore ? (
+              <div className="mb-4 flex justify-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={loadEarlier}
+                  loading={messages.isFetching}
+                >
+                  Load earlier messages
+                </Button>
+              </div>
+            ) : (
+              <p className="mx-auto mb-6 mt-2 flex max-w-sm items-start justify-center gap-2 px-6 text-center text-xs leading-relaxed text-muted">
+                <LockSimpleIcon
+                  size={13}
+                  className="mt-0.5 shrink-0 text-accent"
+                  aria-hidden="true"
+                />
+                Messages and attachments in this chat are end-to-end encrypted. Only its members’
+                devices can read them.
+              </p>
+            )}
+            {(messages.isPending || (syncState === 'syncing' && !ordered.length)) && (
+              <div className="flex justify-center py-8" style={{ color: def.accent }}>
+                <CircleNotchIcon className="animate-spin" size={22} aria-label="Loading messages" />
+              </div>
+            )}
+            {!messages.isPending && syncState !== 'syncing' && ordered.length === 0 && (
+              <p className="py-10 text-center text-sm text-muted">
+                No messages yet. Say hello — it’s encrypted.
+              </p>
+            )}
+            {days.map((day) => (
+              <section key={day.key} aria-label={day.label}>
+                {day.items.map((it) => {
+                  if (it.type === 'date') return <DateChip key={it.key} label={it.label} />;
+                  if (it.type === 'unread') return <UnreadDivider key={it.key} count={it.count} />;
+                  const m = it.message;
+                  const group = conv?.kind === 'group';
+                  const sender = conv?.members.find((x) => x.id === m.senderId);
+                  return (
+                    <Bubble
+                      key={it.key}
+                      message={m}
+                      mine={it.mine}
+                      theme={def}
+                      senderName={group ? nameOf(m.senderId) : undefined}
+                      showSender={!!group && it.runStart}
+                      runStart={it.runStart}
+                      runEnd={it.runEnd}
+                      avatar={
+                        group && !it.mine
+                          ? { path: sender?.avatar_path ?? null, name: sender?.username ?? '?' }
+                          : undefined
+                      }
+                      tabbable={m.id === newestId}
+                      receipt={receiptOf(m, userId, conv?.members ?? [])}
+                      myUserId={userId}
+                      nameOf={nameOf}
+                      onReact={(msg, emoji) =>
+                        void run(() =>
+                          engine!.send(id, {
+                            t: 'reaction',
+                            target: msg.id,
+                            emoji,
+                            remove: !!msg.reactions[emoji]?.includes(userId),
+                          }),
+                        )
+                      }
+                      onReply={(msg) => {
+                        setReplyTo(msg);
+                        composer.current?.focus();
+                      }}
+                      onDelete={setDeleting}
+                      onRetry={(msg) => void run(() => engine!.retry(id, msg.id))}
+                      onOpenImage={setViewer}
+                      onJumpTo={jumpTo}
+                      onSelect={() => undefined}
+                    />
+                  );
+                })}
+              </section>
+            ))}
+            {uploads > 0 && (
+              <div className="flex items-center justify-end gap-2 px-6 py-2 font-mono text-[11px] text-muted">
+                <CircleNotchIcon className="animate-spin" size={13} aria-hidden="true" />
+                Encrypting and uploading{uploads > 1 ? ` ${uploads} files` : ''}…
+              </div>
+            )}
+          </div>
+          {away && <JumpToLatest count={newCount} onClick={jumpToLatest} />}
+          <p className="sr-only" role="status" aria-live="polite">
+            {announcement}
+          </p>
         </div>
 
         <Composer

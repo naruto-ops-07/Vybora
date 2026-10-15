@@ -1,10 +1,12 @@
 import { resolveChatTheme } from '@vybora/config';
 import type { ThreadItem } from '@vybora/core';
 import type { LocalMessage } from '@vybora/e2ee';
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/Tooltip';
 import { Bubble } from './Bubble';
+import { useIncomingAnnouncement } from './announce';
+import { threadKeyDown } from './threadKeys';
 import { DateChip, groupByDay, JumpToLatest, UnreadDivider } from './ThreadParts';
 
 vi.mock('./ConnectProvider', () => ({ useConnect: () => ({ engine: null }) }));
@@ -113,5 +115,91 @@ describe('groupByDay', () => {
       ['Yesterday', ['date-a', '1', '2']],
       ['Today', ['date-b', 'unread', '3']],
     ]);
+  });
+});
+
+describe('new-message announcements', () => {
+  const nameOf = (id: string) => (id === 'maya' ? 'Maya' : 'You');
+  const base = { ready: true, userId: 'me', muted: false, conversationId: 'c1', nameOf };
+
+  it('announces only messages that arrive after the chat loaded', () => {
+    const first = { ...msg, id: 'a' };
+    const { result, rerender } = renderHook(
+      (p: { list: LocalMessage[] }) => useIncomingAnnouncement(p.list, base),
+      { initialProps: { list: [first] } },
+    );
+    expect(result.current).toBe('');
+    rerender({ list: [first, { ...msg, id: 'b', body: 'hello' }] });
+    expect(result.current).toBe('Maya: hello');
+  });
+
+  it('stays quiet in muted chats and for my own messages', () => {
+    const { result, rerender } = renderHook(
+      (p: { list: LocalMessage[]; muted: boolean }) =>
+        useIncomingAnnouncement(p.list, { ...base, muted: p.muted }),
+      { initialProps: { list: [{ ...msg, id: 'a' }], muted: true } },
+    );
+    rerender({
+      list: [
+        { ...msg, id: 'a' },
+        { ...msg, id: 'b' },
+      ],
+      muted: true,
+    });
+    expect(result.current).toBe('');
+    rerender({
+      list: [
+        { ...msg, id: 'a' },
+        { ...msg, id: 'b' },
+        { ...msg, id: 'c', senderId: 'me' },
+      ],
+      muted: false,
+    });
+    expect(result.current).toBe('');
+  });
+});
+
+describe('thread keyboard', () => {
+  function setup() {
+    const onReply = vi.fn();
+    const onToggle = vi.fn();
+    const { container } = render(
+      <div onKeyDown={(e) => threadKeyDown(e, { onReply, onToggle })}>
+        {['a', 'b', 'c'].map((id) => (
+          <div key={id} data-message-id={id} tabIndex={-1}>
+            {id}
+          </div>
+        ))}
+      </div>,
+    );
+    const rows = [...container.querySelectorAll<HTMLElement>('[data-message-id]')];
+    return { rows, onReply, onToggle };
+  }
+
+  it('moves between messages with arrow keys', () => {
+    const { rows } = setup();
+    act(() => rows[1]!.focus());
+    fireEvent.keyDown(rows[1]!, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(rows[2]);
+    fireEvent.keyDown(rows[2]!, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(rows[1]);
+  });
+
+  it('replies with R and toggles selection with Space', () => {
+    const { rows, onReply, onToggle } = setup();
+    act(() => rows[0]!.focus());
+    fireEvent.keyDown(rows[0]!, { key: 'r' });
+    expect(onReply).toHaveBeenCalledWith('a');
+    fireEvent.keyDown(rows[0]!, { key: ' ' });
+    expect(onToggle).toHaveBeenCalledWith('a');
+  });
+
+  it('opens the message menu with Enter', () => {
+    const { rows } = setup();
+    const onMenu = vi.fn();
+    rows[0]!.addEventListener('contextmenu', onMenu);
+    act(() => rows[0]!.focus());
+    fireEvent.keyDown(rows[0]!, { key: 'Enter' });
+    expect(onMenu).toHaveBeenCalled();
   });
 });
