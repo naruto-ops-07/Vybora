@@ -14,8 +14,10 @@ import {
   layoutThread,
   messageActions,
   messageSummary,
+  nextAnnouncement,
   receiptOf,
   selectionToText,
+  type AnnounceMark,
   type MessageAction,
 } from '@vybora/core';
 import { MAX_ATTACHMENT_BYTES, type LocalMessage } from '@vybora/e2ee';
@@ -301,20 +303,17 @@ function Chat() {
     lastSeenSeq.current = Math.max(lastSeenSeq.current, newest);
   }, [ordered, userId, away]);
 
-  const announced = useRef<{ conv: string; id: string } | null>(null);
+  // Tracks the highest announced seq, so an expiring newest message never re-announces older ones.
+  const announced = useRef<AnnounceMark | null>(null);
   useEffect(() => {
     if (!messages.isSuccess) return;
-    const newest = ordered.find((m) => m.senderId !== userId);
-    if (announced.current?.conv !== id) {
-      announced.current = { conv: id, id: newest?.id ?? '' };
-      return;
-    }
-    if (!newest || newest.id === announced.current.id) return;
-    announced.current = { conv: id, id: newest.id };
+    const { mark, announce } = nextAnnouncement(announced.current, ordered, id, userId);
+    announced.current = mark;
+    if (!announce) return;
     const muted = conv ? isMuted(conv) || !conv.notificationsEnabled : true;
     if (!muted)
       AccessibilityInfo.announceForAccessibility(
-        `${nameOf(newest.senderId)}: ${messageSummary(newest)}`,
+        `${nameOf(announce.senderId)}: ${messageSummary(announce)}`,
       );
   }, [ordered, messages.isSuccess, userId, id, conv, nameOf]);
 

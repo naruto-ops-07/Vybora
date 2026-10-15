@@ -205,35 +205,50 @@ describe('new-message announcements', () => {
   const base = { ready: true, userId: 'me', muted: false, conversationId: 'c1', nameOf };
 
   it('announces only messages that arrive after the chat loaded', () => {
-    const first = { ...msg, id: 'a' };
+    const first = { ...msg, id: 'a', seq: 1 };
     const { result, rerender } = renderHook(
       (p: { list: LocalMessage[] }) => useIncomingAnnouncement(p.list, base),
       { initialProps: { list: [first] } },
     );
     expect(result.current).toBe('');
-    rerender({ list: [first, { ...msg, id: 'b', body: 'hello' }] });
+    rerender({ list: [first, { ...msg, id: 'b', seq: 2, body: 'hello' }] });
     expect(result.current).toBe('Maya: hello');
+  });
+
+  it('does not re-announce an older message when the newest one expires', () => {
+    const a = { ...msg, id: 'a', seq: 1, body: 'older' };
+    const b = { ...msg, id: 'b', seq: 2, body: 'newest' };
+    const { result, rerender } = renderHook(
+      (p: { list: LocalMessage[] }) => useIncomingAnnouncement(p.list, base),
+      { initialProps: { list: [a] } },
+    );
+    rerender({ list: [a, b] });
+    expect(result.current).toBe('Maya: newest');
+    rerender({ list: [a] });
+    expect(result.current).toBe('Maya: newest');
+    rerender({ list: [a, { ...msg, id: 'c', seq: 3, body: 'later' }] });
+    expect(result.current).toBe('Maya: later');
   });
 
   it('stays quiet in muted chats and for my own messages', () => {
     const { result, rerender } = renderHook(
       (p: { list: LocalMessage[]; muted: boolean }) =>
         useIncomingAnnouncement(p.list, { ...base, muted: p.muted }),
-      { initialProps: { list: [{ ...msg, id: 'a' }], muted: true } },
+      { initialProps: { list: [{ ...msg, id: 'a', seq: 1 }], muted: true } },
     );
     rerender({
       list: [
-        { ...msg, id: 'a' },
-        { ...msg, id: 'b' },
+        { ...msg, id: 'a', seq: 1 },
+        { ...msg, id: 'b', seq: 2 },
       ],
       muted: true,
     });
     expect(result.current).toBe('');
     rerender({
       list: [
-        { ...msg, id: 'a' },
-        { ...msg, id: 'b' },
-        { ...msg, id: 'c', senderId: 'me' },
+        { ...msg, id: 'a', seq: 1 },
+        { ...msg, id: 'b', seq: 2 },
+        { ...msg, id: 'c', seq: 3, senderId: 'me' },
       ],
       muted: false,
     });

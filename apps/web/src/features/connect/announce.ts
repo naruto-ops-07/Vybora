@@ -1,4 +1,4 @@
-import { messageSummary } from '@vybora/core';
+import { messageSummary, nextAnnouncement, type AnnounceMark } from '@vybora/core';
 import type { LocalMessage } from '@vybora/e2ee';
 import { useEffect, useRef, useState } from 'react';
 
@@ -19,19 +19,16 @@ export function useIncomingAnnouncement(
 ): string {
   const { ready, userId, muted, conversationId, nameOf } = opts;
   const [text, setText] = useState('');
-  const seen = useRef<{ conv: string; id: string } | null>(null);
+  const seen = useRef<AnnounceMark | null>(null);
 
   useEffect(() => {
     if (!ready) return;
-    const newest = [...messages].reverse().find((m) => m.senderId !== userId);
-    if (seen.current?.conv !== conversationId) {
-      seen.current = { conv: conversationId, id: newest?.id ?? '' };
-      setText('');
-      return;
-    }
-    if (!newest || newest.id === seen.current.id) return;
-    seen.current = { conv: conversationId, id: newest.id };
-    if (!muted) setText(`${nameOf(newest.senderId)}: ${messageSummary(newest)}`);
+    const changed = seen.current?.conv !== conversationId;
+    const { mark, announce } = nextAnnouncement(seen.current, messages, conversationId, userId);
+    seen.current = mark;
+    if (changed) setText('');
+    else if (announce && !muted)
+      setText(`${nameOf(announce.senderId)}: ${messageSummary(announce)}`);
   }, [messages, ready, userId, muted, conversationId, nameOf]);
 
   return text;
