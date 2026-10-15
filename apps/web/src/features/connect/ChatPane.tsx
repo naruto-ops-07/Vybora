@@ -205,8 +205,24 @@ export default function ChatPane() {
   const canBulkDelete =
     selectedMessages.length > 0 &&
     selectedMessages.every((m) => messageActions(m, m.senderId === userId).includes('delete'));
-  const copySelection = () => {
-    void navigator.clipboard?.writeText(selectionToText(selectedMessages, { nameOf }));
+  // Drop ids of messages that expired or were deleted remotely; stay in select mode.
+  useEffect(() => {
+    setSelection((s) => {
+      if (!s) return s;
+      const live = new Set(ordered.map((m) => m.id));
+      const kept = [...s].filter((x) => live.has(x));
+      return kept.length === s.size ? s : new Set(kept);
+    });
+  }, [ordered]);
+  const copySelection = async () => {
+    if (!selectedMessages.length) return;
+    try {
+      if (!navigator.clipboard) throw new Error('no clipboard');
+      await navigator.clipboard.writeText(selectionToText(selectedMessages, { nameOf }));
+    } catch {
+      toast.show('Couldn’t copy. Your browser blocked clipboard access.', 'error');
+      return;
+    }
     toast.show(
       selectedMessages.length === 1
         ? 'Message copied'
@@ -414,9 +430,9 @@ export default function ChatPane() {
       >
         {selection ? (
           <SelectBar
-            count={selection.size}
+            count={selectedMessages.length}
             canDelete={canBulkDelete}
-            onCopy={copySelection}
+            onCopy={() => void copySelection()}
             onDelete={() => setBulkDeleting(true)}
             onCancel={() => setSelection(null)}
           />

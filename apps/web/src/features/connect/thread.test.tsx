@@ -66,6 +66,34 @@ describe('conversation layout', () => {
     expect(onToggleSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }));
   });
 
+  it('does not act on the reply quote while selecting', async () => {
+    const onToggleSelect = vi.fn();
+    const onJumpTo = vi.fn();
+    const replied = {
+      ...msg,
+      replyTo: { id: 'm0', senderId: 'me', preview: 'Earlier message' },
+    };
+    render(
+      <Harness
+        message={replied}
+        selecting
+        selected={false}
+        onToggleSelect={onToggleSelect}
+        onJumpTo={onJumpTo}
+      />,
+    );
+    await userEvent.click(screen.getByText('Earlier message'));
+    expect(onToggleSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }));
+    expect(onJumpTo).not.toHaveBeenCalled();
+  });
+
+  it('marks the selected row without invalid article ARIA', () => {
+    render(<Harness selecting selected onToggleSelect={vi.fn()} />);
+    const row = screen.getByRole('article');
+    expect(row).not.toHaveAttribute('aria-selected');
+    expect(row).toHaveAttribute('data-selected', 'true');
+  });
+
   it('omits the tail inside a run', () => {
     const { container } = render(<Harness runEnd={false} />);
     expect(container.querySelector('[data-tail="true"]')).toBeNull();

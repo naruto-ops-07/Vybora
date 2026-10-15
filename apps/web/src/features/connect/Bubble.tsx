@@ -239,7 +239,9 @@ export const Bubble = memo(function Bubble({
     const a = m.attachment;
     content = (
       <div className="space-y-1.5">
-        {a.kind === 'image' && <ImageAttachment attachment={a} onOpen={onOpenImage} />}
+        {a.kind === 'image' && (
+          <ImageAttachment attachment={a} onOpen={selecting ? () => undefined : onOpenImage} />
+        )}
         {a.kind === 'video' && <VideoAttachment attachment={a} />}
         {a.kind === 'voice' && <VoiceAttachment attachment={a} />}
         {a.kind === 'file' && <FileAttachment attachment={a} />}
@@ -273,6 +275,7 @@ export const Bubble = memo(function Bubble({
         style={{ touchAction: 'pan-y' }}
         className={cn(
           'group flex flex-col px-3 md:px-6',
+          selecting && selected && 'bg-accent-soft',
           runStart ? 'pt-2' : 'pt-0.5',
           mine ? 'items-end' : 'items-start',
         )}
@@ -280,7 +283,7 @@ export const Bubble = memo(function Bubble({
         tabIndex={tabbable ? 0 : -1}
         role="article"
         aria-label={label}
-        aria-selected={selecting ? selected : undefined}
+        data-selected={selecting ? !!selected : undefined}
         onClick={selecting ? () => onToggleSelect?.(m) : undefined}
       >
         {showSender && !mine && senderName && (
@@ -346,13 +349,14 @@ export const Bubble = memo(function Bubble({
                 media ? 'p-1' : 'px-3 py-2',
                 runEnd && (mine ? 'rounded-br-sm' : 'rounded-bl-sm'),
                 !filled && 'border border-line bg-bubble-in text-ink',
+                selecting && 'pointer-events-none',
               )}
               style={filled ? { background: theme.bubble, color: theme.bubbleText } : undefined}
             >
               {m.replyTo && !m.deleted && (
                 <button
                   type="button"
-                  onClick={() => onJumpTo?.(m.replyTo!.id)}
+                  onClick={() => !selecting && onJumpTo?.(m.replyTo!.id)}
                   className={cn(
                     'mb-1.5 block w-full border-l-2 py-0.5 pl-2 text-left',
                     filled ? 'border-white/70' : '',
