@@ -1,6 +1,12 @@
 import type { LocalMessage } from '@vybora/e2ee';
 import 'react-native-gesture-handler/jestSetup';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import {
+  act as rtlAct,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+} from '@testing-library/react-native';
 import { Text as RNText } from 'react-native';
 jest.mock('react-native-worklets', () => require('react-native-worklets/src/mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
@@ -8,6 +14,24 @@ jest.mock('@/lib/supabase', () => ({
   supabase: {},
   supabaseConfig: { url: 'http://x', anonKey: 'k' },
 }));
+const mockTypingListeners = new Map<string, (who: string, typing: boolean) => void>();
+const mockTypingJoins: string[] = [];
+const mockTypingLeaves: string[] = [];
+jest.mock('@vybora/api', () => ({
+  ...jest.requireActual('@vybora/api'),
+  joinTypingChannel: (
+    _c: unknown,
+    conv: string,
+    _u: string,
+    cb: (who: string, t: boolean) => void,
+  ) => {
+    mockTypingListeners.set(conv, cb);
+    mockTypingJoins.push(conv);
+    return { send: jest.fn(), leave: () => mockTypingLeaves.push(conv) };
+  },
+}));
+jest.mock('@/features/auth/AuthProvider', () => ({ useMe: () => ({ userId: 'me' }) }));
+jest.mock('@/features/connect/ConnectProvider', () => ({ useConnect: () => ({ engine: null }) }));
 jest.mock('@/features/connect/ui/Attachment', () => ({
   ImageAttachment: () => null,
   VideoAttachment: () => null,
@@ -15,10 +39,13 @@ jest.mock('@/features/connect/ui/Attachment', () => ({
   FileAttachment: () => null,
 }));
 
+import { useInboxTyping } from '@/features/connect/hooks';
 import { Bubble } from '@/features/connect/ui/Bubble';
+import { RowPreviewLine } from '@/features/connect/ui/ChatRowParts';
 import { MessageActions } from '@/features/connect/ui/MessageActions';
 import { SwipeToReply } from '@/features/connect/ui/SwipeToReply';
 import { useThemeDef } from '@/features/connect/ui/primitives';
+import { UndoBar } from '@/features/connect/ui/UndoBar';
 import { DateChip, JumpToLatest, UnreadDivider } from '@/features/connect/ui/ThreadParts';
 
 const msg: LocalMessage = {
@@ -288,5 +315,113 @@ describe('select mode and reply affordances', () => {
       </SwipeToReply>,
     );
     expect(screen.getByText('child')).toBeTruthy();
+  });
+});
+
+describe('mobile chat row preview', () => {
+  it('shows You: with ticks, and typing in the accent colour', async () => {
+    const { rerender } = await render(
+      <RowPreviewLine
+        unread={false}
+        preview={{ prefix: 'You', text: 'See you', receipt: 'read', typing: false }}
+      />,
+    );
+    expect(screen.getByText('You: See you')).toBeTruthy();
+    expect(screen.getByLabelText('Read')).toBeTruthy();
+    await rerender(
+      <RowPreviewLine
+        unread={false}
+        preview={{ prefix: null, text: 'typing…', receipt: null, typing: true }}
+      />,
+    );
+    expect(screen.getByText('typing…')).toBeTruthy();
+  });
+});
+
+describe('undo bar', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it('runs undo on press and calls onDone after 5 seconds', async () => {
+    const onUndo = jest.fn();
+    const onDone = jest.fn();
+    await render(<UndoBar message="Archived" onUndo={onUndo} onDone={onDone} />);
+    expect(screen.getByText('Archived')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Undo'));
+    expect(onUndo).toHaveBeenCalled();
+    await rtlAct(() => {
+      jest.advanceTimersByTime(4_900);
+    });
+    expect(onDone).not.toHaveBeenCalled();
+    await rtlAct(() => {
+      jest.advanceTimersByTime(200);
+    });
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('typing in the chat list', () => {
+  beforeEach(() => {
+    mockTypingListeners.clear();
+    mockTypingJoins.length = 0;
+    mockTypingLeaves.length = 0;
+  });
+  afterEach(() => jest.useRealTimers());
+
+  it('clears a typing indicator that never receives a stop after 5 seconds', async () => {
+    jest.useFakeTimers();
+    const { result } = await renderHook(() => useInboxTyping(['c1', 'c2'], true));
+    await rtlAct(() => mockTypingListeners.get('c1')!('maya', true));
+    expect(result.current.c1).toEqual(['maya']);
+    await rtlAct(() => {
+      jest.advanceTimersByTime(5_000);
+    });
+    expect(result.current.c1).toEqual([]);
+  });
+
+  it('keeps channels and live indicators when the same chats are reordered', async () => {
+    const { result, rerender } = await renderHook(
+      ({ ids }: { ids: string[] }) => useInboxTyping(ids, true),
+      { initialProps: { ids: ['c1', 'c2'] } },
+    );
+    await rtlAct(() => mockTypingListeners.get('c1')!('maya', true));
+    expect(mockTypingJoins).toEqual(['c1', 'c2']);
+    await rerender({ ids: ['c2', 'c1'] });
+    expect(mockTypingLeaves).toEqual([]);
+    expect(mockTypingJoins).toEqual(['c1', 'c2']);
+    expect(result.current.c1).toEqual(['maya']);
+  });
+
+  it('leaves only the removed chat and joins only the new one', async () => {
+    const { result, rerender } = await renderHook(
+      ({ ids }: { ids: string[] }) => useInboxTyping(ids, true),
+      { initialProps: { ids: ['c1', 'c2'] } },
+    );
+    await rtlAct(() => mockTypingListeners.get('c1')!('maya', true));
+    await rtlAct(() => mockTypingListeners.get('c2')!('sam', true));
+    await rerender({ ids: ['c2', 'c3'] });
+    expect(mockTypingLeaves).toEqual(['c1']);
+    expect(mockTypingJoins).toEqual(['c1', 'c2', 'c3']);
+    expect(result.current.c1).toBeUndefined();
+    expect(result.current.c2).toEqual(['sam']);
+  });
+
+  it('clears the entry on a typing stop', async () => {
+    const { result } = await renderHook(() => useInboxTyping(['c1'], true));
+    await rtlAct(() => mockTypingListeners.get('c1')!('maya', true));
+    expect(result.current.c1).toEqual(['maya']);
+    await rtlAct(() => mockTypingListeners.get('c1')!('maya', false));
+    expect(result.current.c1).toEqual([]);
+  });
+
+  it('leaves every channel on unmount', async () => {
+    const { unmount } = await renderHook(() => useInboxTyping(['c1', 'c2'], true));
+    await unmount();
+    expect([...mockTypingLeaves].sort()).toEqual(['c1', 'c2']);
+  });
+
+  it('joins nothing when disabled', async () => {
+    renderHook(() => useInboxTyping(['c1'], false));
+    expect(mockTypingListeners.size).toBe(0);
   });
 });

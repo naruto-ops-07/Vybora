@@ -193,3 +193,84 @@ export function useTyping(conversationId: string, enabled: boolean) {
 
   return { typingUsers, notifyTyping };
 }
+
+/**
+ * Typing users per conversation for the chat list (max 20 chats; 5 s expiry).
+ * Membership is diffed against live channels so reordering the list or switching
+ * the open chat never leaves and re-joins a topic that is still in the set.
+ */
+export function useInboxTyping(conversationIds: readonly string[], enabled: boolean) {
+  const { userId } = useMe();
+  const [typing, setTyping] = useState<Record<string, string[]>>({});
+  const channels = useRef(new Map<string, { leave: () => void }>());
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  // Order-independent key: only a change in which chats are tracked matters.
+  const key = [...new Set(conversationIds.slice(0, 20))].sort().join(',');
+
+  // Leave everything on unmount, when disabled, or when the signed-in user changes.
+  useEffect(() => {
+    const live = channels.current;
+    const pending = timers.current;
+    return () => {
+      live.forEach((c) => c.leave());
+      live.clear();
+      pending.forEach(clearTimeout);
+      pending.clear();
+      setTyping({});
+    };
+  }, [enabled, userId]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const live = channels.current;
+    const pending = timers.current;
+    const target = new Set(key ? key.split(',') : []);
+
+    const removed = [...live.keys()].filter((conv) => !target.has(conv));
+    for (const conv of removed) {
+      live.get(conv)?.leave();
+      live.delete(conv);
+      for (const [t, handle] of pending) {
+        if (t.startsWith(`${conv}:`)) {
+          clearTimeout(handle);
+          pending.delete(t);
+        }
+      }
+    }
+    if (removed.length)
+      setTyping((prev) =>
+        Object.fromEntries(Object.entries(prev).filter(([c]) => !removed.includes(c))),
+      );
+
+    const update = (conv: string, who: string, on: boolean) =>
+      setTyping((prev) => {
+        const cur = prev[conv] ?? [];
+        const next = on ? (cur.includes(who) ? cur : [...cur, who]) : cur.filter((x) => x !== who);
+        return { ...prev, [conv]: next };
+      });
+    for (const conv of target) {
+      if (live.has(conv)) continue;
+      live.set(
+        conv,
+        joinTypingChannel(supabase, conv, userId, (who, on) => {
+          if (!live.has(conv)) return;
+          const t = `${conv}:${who}`;
+          const old = pending.get(t);
+          if (old) clearTimeout(old);
+          pending.delete(t);
+          update(conv, who, on);
+          if (on)
+            pending.set(
+              t,
+              setTimeout(() => {
+                pending.delete(t);
+                update(conv, who, false);
+              }, 5000),
+            );
+        }),
+      );
+    }
+  }, [key, enabled, userId]);
+
+  return typing;
+}
