@@ -12,6 +12,9 @@ import { useCc, type ResolvedTheme } from './primitives';
 
 export type { Receipt } from '@vybora/core';
 
+/** Avatar width (28) + gap (8): group bubbles are inset by this much. */
+const AVATAR_COLUMN = 36;
+
 const RECEIPT_LABEL: Record<Receipt, string> = {
   sending: 'sending',
   failed: 'not sent',
@@ -203,9 +206,26 @@ export const Bubble = memo(function Bubble({
     </>
   );
 
+  const actionable = !m.deleted && m.kind !== 'undecryptable';
+  // The merged label hides the inner Pressable from screen readers, so its
+  // gestures are re-exposed as accessibility actions. Opening a photo is not:
+  // the decrypted image URI lives inside ImageAttachment, not here.
+  const actions = [
+    ...(receipt === 'failed' ? [{ name: 'activate', label: 'Retry sending' }] : []),
+    ...(actionable ? [{ name: 'longpress', label: 'Message actions' }] : []),
+  ];
+
   return (
     <View
       accessible
+      accessibilityActions={actions}
+      onAccessibilityAction={(e) => {
+        if (e.nativeEvent.actionName === 'activate' && receipt === 'failed') onRetry(m);
+        else if (e.nativeEvent.actionName === 'longpress' && actionable) onLongPress(m);
+      }}
+      accessibilityHint={
+        receipt === 'failed' ? 'Tap to retry sending' : 'Long press for reactions and actions'
+      }
       accessibilityLabel={[
         mine ? 'You' : nameOf(m.senderId),
         formatClock(m.createdAt),
@@ -227,7 +247,7 @@ export const Bubble = memo(function Bubble({
             color: theme.accent,
             fontSize: 12,
             fontWeight: '600',
-            marginLeft: 4,
+            marginLeft: avatar ? 4 + AVATAR_COLUMN : 4,
             marginBottom: 2,
           }}
         >
@@ -253,9 +273,6 @@ export const Bubble = memo(function Bubble({
           onLongPress={() => !m.deleted && m.kind !== 'undecryptable' && onLongPress(m)}
           onPress={() => receipt === 'failed' && onRetry(m)}
           delayLongPress={280}
-          accessibilityHint={
-            receipt === 'failed' ? 'Tap to retry sending' : 'Long press for reactions and actions'
-          }
           style={[
             bubbleStyle,
             filled
@@ -274,7 +291,15 @@ export const Bubble = memo(function Bubble({
         </Pressable>
       </View>
       {reactions.length > 0 && (
-        <View style={{ flexDirection: 'row', gap: 4, marginTop: 4, marginHorizontal: 4 }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            gap: 4,
+            marginTop: 4,
+            marginLeft: !mine && avatar ? 4 + AVATAR_COLUMN : 4,
+            marginRight: 4,
+          }}
+        >
           {reactions.map(([emoji, users]) => (
             <View
               key={emoji}

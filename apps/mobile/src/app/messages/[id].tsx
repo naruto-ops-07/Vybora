@@ -14,6 +14,7 @@ import {
   AccessibilityInfo,
   ActivityIndicator,
   Alert,
+  Animated,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -153,7 +154,15 @@ function Chat() {
   const { reduceMotion } = useA11y();
   const list = useRef<FlatList<(typeof rows)[number]>>(null);
   const [floatingDay, setFloatingDay] = useState<string | null>(null);
+  const fade = useRef(new Animated.Value(0)).current;
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The floating chip only follows the finger: viewability also fires on first
+  // layout, after programmatic scrolls and when live messages arrive.
+  const scrolling = useRef(false);
+  const reduceRef = useRef(reduceMotion);
+  useEffect(() => {
+    reduceRef.current = reduceMotion;
+  }, [reduceMotion]);
   const [away, setAway] = useState(false);
   const [newCount, setNewCount] = useState(0);
   const lastSeenSeq = useRef(0);
@@ -164,19 +173,39 @@ function Chat() {
       null,
     );
     const item = top?.item as (typeof rows)[number] | undefined;
-    if (!item) return;
-    setFloatingDay(
+    if (!item || !scrolling.current) return;
+    const label =
       item.type === 'message'
         ? dayLabel(item.message.createdAt, new Date())
         : item.type === 'date'
           ? item.label
-          : null,
-    );
+          : null;
+    if (!label) return;
+    setFloatingDay(label);
+    fade.stopAnimation();
+    if (reduceRef.current) fade.setValue(1);
+    else Animated.timing(fade, { toValue: 1, duration: 120, useNativeDriver: true }).start();
   }).current;
-  const scheduleHide = () => {
+  const beginScroll = useRef(() => {
+    scrolling.current = true;
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setFloatingDay(null), reduceMotion ? 0 : 1500);
-  };
+    hideTimer.current = null;
+  }).current;
+  const endScroll = useRef(() => {
+    scrolling.current = false;
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => {
+      hideTimer.current = null;
+      fade.stopAnimation();
+      if (reduceRef.current) {
+        fade.setValue(0);
+        setFloatingDay(null);
+      } else
+        Animated.timing(fade, { toValue: 0, duration: 250, useNativeDriver: true }).start(
+          ({ finished }) => finished && setFloatingDay(null),
+        );
+    }, 1500);
+  }).current;
   useEffect(
     () => () => {
       if (hideTimer.current) clearTimeout(hideTimer.current);
@@ -187,7 +216,11 @@ function Chat() {
   useEffect(() => {
     lastSeenSeq.current = 0;
     setNewCount(0);
-  }, [id]);
+    scrolling.current = false;
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    fade.setValue(0);
+    setFloatingDay(null);
+  }, [id, fade]);
   useEffect(() => {
     const newest = ordered[0]?.seq ?? 0;
     if (!away || !lastSeenSeq.current) {
@@ -476,8 +509,10 @@ function Chat() {
               setAway(contentOffset.y > layoutMeasurement.height);
             }}
             scrollEventThrottle={100}
-            onScrollEndDrag={scheduleHide}
-            onMomentumScrollEnd={scheduleHide}
+            onScrollBeginDrag={beginScroll}
+            onMomentumScrollBegin={beginScroll}
+            onScrollEndDrag={endScroll}
+            onMomentumScrollEnd={endScroll}
             onScrollToIndexFailed={(info) =>
               list.current?.scrollToOffset({
                 offset: info.averageItemLength * info.index,
@@ -537,9 +572,14 @@ function Chat() {
             }
           />
           {floatingDay && (
-            <View style={{ position: 'absolute', top: 8, left: 0, right: 0 }} pointerEvents="none">
+            <Animated.View
+              style={{ position: 'absolute', top: 8, left: 0, right: 0, opacity: fade }}
+              pointerEvents="none"
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            >
               <DateChip label={floatingDay} floating />
-            </View>
+            </Animated.View>
           )}
           {away && (
             <JumpToLatest
