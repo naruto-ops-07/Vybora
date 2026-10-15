@@ -11,3 +11,4 @@ export * from './admin';
 export * from './keys';
 export * from './cache';
 export * from './connect';
+export * from './realtime';
