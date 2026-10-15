@@ -36,7 +36,7 @@ import {
   useSecureMessages,
   useTyping,
 } from './hooks';
-import { DateChip, UnreadDivider } from './ThreadParts';
+import { DateChip, groupByDay, UnreadDivider } from './ThreadParts';
 import { chatBackground, effectiveTheme, GroupAvatar, TypingDots, useChatTheme } from './ui';
 import { VerifyDialog } from './VerifyDialog';
 
@@ -163,9 +163,10 @@ export default function ChatPane() {
 
   // The unread divider uses the read position from when the chat was opened,
   // so it doesn't vanish the moment this tab acknowledges the messages.
-  const [readMark, setReadMark] = useState<{ id: string; seq: number } | null>(null);
+  const [readMark, setReadMark] = useState<{ id: string; seq: number; until: number } | null>(null);
   useEffect(() => {
-    if (conv && readMark?.id !== id) setReadMark({ id, seq: conv.lastReadSeq });
+    if (conv && readMark?.id !== id)
+      setReadMark({ id, seq: conv.lastReadSeq, until: conv.lastSeq });
   }, [conv, id, readMark?.id]);
 
   const items = useMemo(
@@ -173,10 +174,12 @@ export default function ChatPane() {
       layoutThread(ordered, {
         myUserId: userId,
         lastReadSeq: readMark?.id === id ? readMark.seq : Number.MAX_SAFE_INTEGER,
+        unreadUntilSeq: readMark?.id === id ? readMark.until : undefined,
         now: new Date(),
       }),
     [ordered, userId, readMark, id],
   );
+  const days = useMemo(() => groupByDay(items), [items]);
   const newestId = ordered.at(-1)?.id;
 
   // Stay pinned to the newest message unless the reader scrolled up; keep the
@@ -451,53 +454,57 @@ export default function ChatPane() {
               No messages yet. Say hello — it’s encrypted.
             </p>
           )}
-          {items.map((it) => {
-            if (it.type === 'date') return <DateChip key={it.key} label={it.label} />;
-            if (it.type === 'unread') return <UnreadDivider key={it.key} count={it.count} />;
-            const m = it.message;
-            const group = conv?.kind === 'group';
-            const sender = conv?.members.find((x) => x.id === m.senderId);
-            return (
-              <Bubble
-                key={it.key}
-                message={m}
-                mine={it.mine}
-                theme={def}
-                senderName={group ? nameOf(m.senderId) : undefined}
-                showSender={!!group && it.runStart}
-                runStart={it.runStart}
-                runEnd={it.runEnd}
-                avatar={
-                  group && !it.mine
-                    ? { path: sender?.avatar_path ?? null, name: sender?.username ?? '?' }
-                    : undefined
-                }
-                tabbable={m.id === newestId}
-                receipt={receiptOf(m, userId, conv?.members ?? [])}
-                myUserId={userId}
-                nameOf={nameOf}
-                onReact={(msg, emoji) =>
-                  void run(() =>
-                    engine!.send(id, {
-                      t: 'reaction',
-                      target: msg.id,
-                      emoji,
-                      remove: !!msg.reactions[emoji]?.includes(userId),
-                    }),
-                  )
-                }
-                onReply={(msg) => {
-                  setReplyTo(msg);
-                  composer.current?.focus();
-                }}
-                onDelete={setDeleting}
-                onRetry={(msg) => void run(() => engine!.retry(id, msg.id))}
-                onOpenImage={setViewer}
-                onJumpTo={jumpTo}
-                onSelect={() => undefined}
-              />
-            );
-          })}
+          {days.map((day) => (
+            <section key={day.key} aria-label={day.label}>
+              {day.items.map((it) => {
+                if (it.type === 'date') return <DateChip key={it.key} label={it.label} />;
+                if (it.type === 'unread') return <UnreadDivider key={it.key} count={it.count} />;
+                const m = it.message;
+                const group = conv?.kind === 'group';
+                const sender = conv?.members.find((x) => x.id === m.senderId);
+                return (
+                  <Bubble
+                    key={it.key}
+                    message={m}
+                    mine={it.mine}
+                    theme={def}
+                    senderName={group ? nameOf(m.senderId) : undefined}
+                    showSender={!!group && it.runStart}
+                    runStart={it.runStart}
+                    runEnd={it.runEnd}
+                    avatar={
+                      group && !it.mine
+                        ? { path: sender?.avatar_path ?? null, name: sender?.username ?? '?' }
+                        : undefined
+                    }
+                    tabbable={m.id === newestId}
+                    receipt={receiptOf(m, userId, conv?.members ?? [])}
+                    myUserId={userId}
+                    nameOf={nameOf}
+                    onReact={(msg, emoji) =>
+                      void run(() =>
+                        engine!.send(id, {
+                          t: 'reaction',
+                          target: msg.id,
+                          emoji,
+                          remove: !!msg.reactions[emoji]?.includes(userId),
+                        }),
+                      )
+                    }
+                    onReply={(msg) => {
+                      setReplyTo(msg);
+                      composer.current?.focus();
+                    }}
+                    onDelete={setDeleting}
+                    onRetry={(msg) => void run(() => engine!.retry(id, msg.id))}
+                    onOpenImage={setViewer}
+                    onJumpTo={jumpTo}
+                    onSelect={() => undefined}
+                  />
+                );
+              })}
+            </section>
+          ))}
           {uploads > 0 && (
             <div className="flex items-center justify-end gap-2 px-6 py-2 font-mono text-[11px] text-muted">
               <CircleNotchIcon className="animate-spin" size={13} aria-hidden="true" />

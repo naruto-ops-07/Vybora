@@ -25,6 +25,8 @@ export interface LayoutOptions extends TimeOpts {
   myUserId: string;
   /** Read position captured when the chat was opened (not the live value). */
   lastReadSeq: number;
+  /** Newest seq present when the chat was opened; later arrivals are not counted as unread. */
+  unreadUntilSeq?: number;
   now: Date;
 }
 
@@ -38,7 +40,10 @@ export function layoutThread<M extends ThreadMessageLike>(
   opts: LayoutOptions,
 ): ThreadItem<M>[] {
   const isUnread = (m: M) =>
-    m.senderId !== opts.myUserId && m.seq !== null && m.seq > opts.lastReadSeq;
+    m.senderId !== opts.myUserId &&
+    m.seq !== null &&
+    m.seq > opts.lastReadSeq &&
+    (opts.unreadUntilSeq === undefined || m.seq <= opts.unreadUntilSeq);
   const firstUnread = messages.findIndex(isUnread);
   const unreadCount = firstUnread < 0 ? 0 : messages.slice(firstUnread).filter(isUnread).length;
 

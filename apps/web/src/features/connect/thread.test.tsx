@@ -1,10 +1,11 @@
 import { resolveChatTheme } from '@vybora/config';
+import type { ThreadItem } from '@vybora/core';
 import type { LocalMessage } from '@vybora/e2ee';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/Tooltip';
 import { Bubble } from './Bubble';
-import { DateChip, JumpToLatest, UnreadDivider } from './ThreadParts';
+import { DateChip, groupByDay, JumpToLatest, UnreadDivider } from './ThreadParts';
 
 vi.mock('./ConnectProvider', () => ({ useConnect: () => ({ engine: null }) }));
 
@@ -78,5 +79,39 @@ describe('conversation layout', () => {
     expect(
       screen.getByRole('button', { name: 'Jump to latest message, 3 new' }),
     ).toBeInTheDocument();
+  });
+});
+
+describe('groupByDay', () => {
+  it('starts a new group at each date chip', () => {
+    const m = (id: string) => ({ id, senderId: 'maya', createdAt: '2026-10-15T10:00:00Z', seq: 1 });
+    type Item = ThreadItem<ReturnType<typeof m>>;
+    const msgItem = (id: string): Item => ({
+      type: 'message',
+      key: id,
+      message: m(id),
+      mine: false,
+      runStart: true,
+      runEnd: true,
+    });
+    const date = (day: string, label: string): Item => ({
+      type: 'date',
+      key: `date-${day}`,
+      label,
+      day,
+    });
+    const items: Item[] = [
+      date('a', 'Yesterday'),
+      msgItem('1'),
+      msgItem('2'),
+      date('b', 'Today'),
+      { type: 'unread', key: 'unread', count: 1 },
+      msgItem('3'),
+    ];
+    const groups = groupByDay(items);
+    expect(groups.map((g) => [g.label, g.items.map((i) => i.key)])).toEqual([
+      ['Yesterday', ['date-a', '1', '2']],
+      ['Today', ['date-b', 'unread', '3']],
+    ]);
   });
 });

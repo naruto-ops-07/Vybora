@@ -228,7 +228,7 @@ export const Bubble = memo(function Bubble({
     >
       {showSender && !mine && senderName && (
         <span
-          className={cn('mb-0.5 text-xs font-semibold', avatar ? 'ml-10' : 'ml-1')}
+          className={cn('mb-0.5 text-xs font-semibold', avatar ? 'ml-9' : 'ml-1')}
           style={{ color: theme.accent }}
         >
           {senderName}

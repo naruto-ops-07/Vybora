@@ -82,6 +82,22 @@ describe('layoutThread', () => {
     expect(items.some((i) => i.type === 'unread')).toBe(false);
   });
 
+  it('ignores messages that arrived after the chat was opened', () => {
+    const items = layoutThread(
+      [msg('101', 'maya', '2026-10-15T10:01:00Z'), msg('102', 'maya', '2026-10-15T10:02:00Z')],
+      { ...opts, lastReadSeq: 100, unreadUntilSeq: 101 },
+    );
+    expect(shape(items)).toEqual(['[Today]', '(1 unread)', '101<', '102>']);
+  });
+
+  it('shows no divider when nothing was unread at open', () => {
+    const items = layoutThread(
+      [msg('101', 'maya', '2026-10-15T10:01:00Z'), msg('102', 'maya', '2026-10-15T10:02:00Z')],
+      { ...opts, lastReadSeq: 100, unreadUntilSeq: 100 },
+    );
+    expect(items.some((i) => i.type === 'unread')).toBe(false);
+  });
+
   it('marks mine correctly', () => {
     const [, first] = layoutThread([msg('1', 'me', '2026-10-15T10:00:00Z')], opts);
     expect(first).toMatchObject({ type: 'message', mine: true });

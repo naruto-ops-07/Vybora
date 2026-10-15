@@ -1,5 +1,5 @@
 import { ArrowDownIcon } from '@phosphor-icons/react';
-import { formatUnread } from '@vybora/core';
+import { formatUnread, type ThreadItem, type ThreadMessageLike } from '@vybora/core';
 
 /** Day separator; sticks to the top of the thread while its day is on screen. */
 export function DateChip({ label }: { label: string }) {
@@ -43,4 +43,20 @@ export function JumpToLatest({ count, onClick }: { count: number; onClick: () =>
       )}
     </button>
   );
+}
+
+export interface DayGroup<M extends ThreadMessageLike> {
+  key: string;
+  label: string;
+  items: ThreadItem<M>[];
+}
+
+/** Split thread items into per-day sections so each sticky chip is bounded by its own day. */
+export function groupByDay<M extends ThreadMessageLike>(items: ThreadItem<M>[]): DayGroup<M>[] {
+  const groups: DayGroup<M>[] = [];
+  for (const it of items) {
+    if (it.type === 'date') groups.push({ key: it.key, label: it.label, items: [it] });
+    else groups.at(-1)?.items.push(it);
+  }
+  return groups;
 }
