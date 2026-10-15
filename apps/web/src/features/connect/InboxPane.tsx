@@ -127,6 +127,10 @@ export function InboxPane({
     }
     return watchPresence(supabase, peersKey.split(','), setOnline);
   }, [peersKey, showOnline]);
+  const shownOnline = useMemo(
+    () => (showOnline ? online : new Set<string>()),
+    [showOnline, online],
+  );
 
   const visible = useMemo(() => {
     const t = term.trim().toLowerCase();
@@ -320,7 +324,7 @@ export function InboxPane({
                       ) : (
                         <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={48} />
                       )}
-                      {peer && online.has(peer.id) && (
+                      {peer && shownOnline.has(peer.id) && (
                         <span
                           className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-surface bg-success"
                           aria-label="Online"

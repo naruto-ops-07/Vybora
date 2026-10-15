@@ -170,10 +170,9 @@ export default function ChatPane() {
         : undefined,
     [peerId, showOnline],
   );
-  useEffect(() => {
-    if (!showOnline) setOnline(false);
-  }, [showOnline]);
-  const lastSeen = useLastSeen(peerId, showOnline && conv?.kind === 'direct' && !online);
+  // Derived so the "online" state never outlives the toggle, even for one render.
+  const shownOnline = showOnline && online;
+  const lastSeen = useLastSeen(peerId, showOnline && conv?.kind === 'direct' && !shownOnline);
 
   const keys = useQuery({
     queryKey: qk.connect.keys(peerId ?? ''),
@@ -424,7 +423,7 @@ export default function ChatPane() {
     isGroup: conv?.kind === 'group',
     memberCount: conv?.members.length ?? 0,
     typingNames,
-    online,
+    online: shownOnline,
     lastSeenAt: lastSeen.data ?? null,
     now: new Date(),
   });
@@ -483,13 +482,13 @@ export default function ChatPane() {
                 >
                   {typingNames.length ? (
                     <TypingDots color={def.accent} />
-                  ) : online ? (
+                  ) : shownOnline ? (
                     <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
                   ) : (
                     <LockSimpleIcon size={10} className="text-subtle" aria-hidden="true" />
                   )}
                   <span
-                    className={online && !typingNames.length ? 'text-success' : 'text-subtle'}
+                    className={shownOnline && !typingNames.length ? 'text-success' : 'text-subtle'}
                     style={typingNames.length ? { color: def.accent } : undefined}
                   >
                     {subtitle}

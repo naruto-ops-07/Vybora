@@ -142,29 +142,42 @@ describe('typing in the chat list', () => {
   });
 });
 
-const wrapper = ({ children }: { children: ReactNode }) => (
-  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-    {children}
-  </QueryClientProvider>
-);
+const makeWrapper = (client: QueryClient) =>
+  function Wrapper({ children }: { children: ReactNode }) {
+    return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  };
+const wrapper = () =>
+  makeWrapper(new QueryClient({ defaultOptions: { queries: { retry: false } } }));
 
 describe('last seen in the header', () => {
   it('returns the allowed time for a peer', async () => {
     fetchLastSeen.mockResolvedValue({ maya: '2026-10-15T09:12:00Z' });
-    const { result } = renderHook(() => useLastSeen('maya', true), { wrapper });
+    const { result } = renderHook(() => useLastSeen('maya', true), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.data).toBe('2026-10-15T09:12:00Z'));
   });
 
   it('falls back quietly when the request fails (offline)', async () => {
     fetchLastSeen.mockRejectedValue(new TypeError('Failed to fetch'));
-    const { result } = renderHook(() => useLastSeen('maya', true), { wrapper });
+    const { result } = renderHook(() => useLastSeen('maya', true), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.data).toBeUndefined();
   });
 
   it('does not ask when my own online status is off', () => {
     fetchLastSeen.mockClear();
-    renderHook(() => useLastSeen('maya', false), { wrapper });
+    renderHook(() => useLastSeen('maya', false), { wrapper: wrapper() });
     expect(fetchLastSeen).not.toHaveBeenCalled();
+  });
+
+  it('hides cached last seen once my own online status is turned off', async () => {
+    fetchLastSeen.mockResolvedValue({ maya: '2026-10-15T09:12:00Z' });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result, rerender } = renderHook(({ on }) => useLastSeen('maya', on), {
+      wrapper: makeWrapper(client),
+      initialProps: { on: true },
+    });
+    await waitFor(() => expect(result.current.data).toBe('2026-10-15T09:12:00Z'));
+    rerender({ on: false });
+    expect(result.current.data).toBeUndefined();
   });
 });
