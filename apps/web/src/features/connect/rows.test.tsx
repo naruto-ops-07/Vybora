@@ -2,11 +2,13 @@ import type * as Api from '@vybora/api';
 import type { SecureConversation } from '@vybora/api';
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatRowMenu, RowPreviewText } from './ChatRowParts';
 import { useInboxTyping } from './hooks';
 
 const listeners = new Map<string, (who: string, typing: boolean) => void>();
+const joins: string[] = [];
+const leaves: string[] = [];
 vi.mock('@vybora/api', async (orig) => ({
   ...(await orig<typeof Api>()),
   joinTypingChannel: (
@@ -16,15 +18,21 @@ vi.mock('@vybora/api', async (orig) => ({
     cb: (who: string, t: boolean) => void,
   ) => {
     listeners.set(conv, cb);
-    return { send: vi.fn(), leave: vi.fn() };
+    joins.push(conv);
+    return { send: vi.fn(), leave: () => leaves.push(conv) };
   },
 }));
 vi.mock('@/features/auth/AuthProvider', () => ({ useMe: () => ({ userId: 'me' }) }));
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 vi.mock('./ConnectProvider', () => ({ useConnect: () => ({ engine: null }) }));
 
-afterEach(() => {
+beforeEach(() => {
   listeners.clear();
+  joins.length = 0;
+  leaves.length = 0;
+});
+
+afterEach(() => {
   vi.useRealTimers();
 });
 
@@ -83,6 +91,45 @@ describe('typing in the chat list', () => {
     expect(result.current.c1).toEqual(['maya']);
     act(() => vi.advanceTimersByTime(5_000));
     expect(result.current.c1).toEqual([]);
+  });
+
+  it('keeps channels and live indicators when the same chats are reordered', () => {
+    const { result, rerender } = renderHook(({ ids }) => useInboxTyping(ids, true), {
+      initialProps: { ids: ['c1', 'c2'] },
+    });
+    act(() => listeners.get('c1')!('maya', true));
+    expect(joins).toEqual(['c1', 'c2']);
+    rerender({ ids: ['c2', 'c1'] });
+    expect(leaves).toEqual([]);
+    expect(joins).toEqual(['c1', 'c2']);
+    expect(result.current.c1).toEqual(['maya']);
+  });
+
+  it('leaves only the removed chat and joins only the new one', () => {
+    const { result, rerender } = renderHook(({ ids }) => useInboxTyping(ids, true), {
+      initialProps: { ids: ['c1', 'c2'] },
+    });
+    act(() => listeners.get('c1')!('maya', true));
+    act(() => listeners.get('c2')!('sam', true));
+    rerender({ ids: ['c2', 'c3'] });
+    expect(leaves).toEqual(['c1']);
+    expect(joins).toEqual(['c1', 'c2', 'c3']);
+    expect(result.current.c1).toBeUndefined();
+    expect(result.current.c2).toEqual(['sam']);
+  });
+
+  it('clears the entry on a typing stop', () => {
+    const { result } = renderHook(() => useInboxTyping(['c1'], true));
+    act(() => listeners.get('c1')!('maya', true));
+    expect(result.current.c1).toEqual(['maya']);
+    act(() => listeners.get('c1')!('maya', false));
+    expect(result.current.c1).toEqual([]);
+  });
+
+  it('leaves every channel on unmount', () => {
+    const { unmount } = renderHook(() => useInboxTyping(['c1', 'c2'], true));
+    unmount();
+    expect(leaves.sort()).toEqual(['c1', 'c2']);
   });
 
   it('joins nothing when disabled', () => {

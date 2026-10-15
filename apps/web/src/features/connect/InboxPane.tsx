@@ -225,7 +225,7 @@ export function InboxPane({
           <ul className="space-y-1 p-3" aria-label="Loading chats">
             {[0, 1, 2, 3, 4].map((i) => (
               <li key={i} className="flex items-center gap-3 py-2">
-                <div className="skeleton h-11 w-11 rounded-full" />
+                <div className="skeleton h-12 w-12 rounded-full" />
                 <div className="flex-1 space-y-2">
                   <div className="skeleton h-3 w-32 rounded-sm" />
                   <div className="skeleton h-3 w-48 rounded-sm" />
@@ -307,9 +307,9 @@ export function InboxPane({
                     )}
                     <span className="relative">
                       {c.kind === 'group' ? (
-                        <GroupAvatar size={44} />
+                        <GroupAvatar size={48} />
                       ) : (
-                        <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={44} />
+                        <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={48} />
                       )}
                       {peer && online.has(peer.id) && (
                         <span
@@ -335,7 +335,7 @@ export function InboxPane({
                             aria-label="Pinned"
                           />
                         )}
-                        {isMuted(c) && (
+                        {muted && (
                           <BellSlashIcon
                             size={12}
                             className="shrink-0 text-subtle"
@@ -348,7 +348,10 @@ export function InboxPane({
                       </span>
                       <span className="mt-0.5 flex items-center gap-2">
                         <span
-                          className={cn('truncate text-[13px]', unread ? 'text-ink' : 'text-muted')}
+                          className={cn(
+                            'text-msg-sm min-w-0 truncate',
+                            unread ? 'text-ink' : 'text-muted',
+                          )}
                         >
                           {engine ? (
                             <RowPreviewText preview={preview} unread={unread} />
@@ -379,43 +382,49 @@ export function InboxPane({
                     a11y.alwaysShowActions ? 'flex' : 'hidden',
                   )}
                 >
-                  <button
-                    type="button"
-                    onClick={() => prefs(c, { pinned: !c.pinned })}
-                    className="rounded-sm p-1.5 text-muted hover:bg-surface-muted hover:text-ink"
-                    aria-label={c.pinned ? `Unpin ${title}` : `Pin ${title}`}
-                  >
-                    {c.pinned ? <PushPinSlashIcon size={14} /> : <PushPinIcon size={14} />}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => archive(c)}
-                    className="rounded-sm p-1.5 text-muted hover:bg-surface-muted hover:text-ink"
-                    aria-label={c.archived ? `Unarchive ${title}` : `Archive ${title}`}
-                  >
-                    <ArchiveIcon size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      const link = e.currentTarget
-                        .closest('li')
-                        ?.querySelector<HTMLElement>('[data-chat-link]');
-                      const r = link?.getBoundingClientRect();
-                      link?.dispatchEvent(
-                        new MouseEvent('contextmenu', {
-                          bubbles: true,
-                          cancelable: true,
-                          clientX: (r?.right ?? 0) - 40,
-                          clientY: (r?.top ?? 0) + 20,
-                        }),
-                      );
-                    }}
-                    className="touch-target rounded-sm p-1.5 text-muted hover:bg-surface-muted hover:text-ink"
-                    aria-label={`More actions for ${title}`}
-                  >
-                    <DotsThreeIcon size={14} />
-                  </button>
+                  <Tip label={c.pinned ? 'Unpin' : 'Pin'} side="top">
+                    <button
+                      type="button"
+                      onClick={() => prefs(c, { pinned: !c.pinned })}
+                      className="rounded-sm p-1.5 text-muted hover:bg-surface-muted hover:text-ink"
+                      aria-label={c.pinned ? `Unpin ${title}` : `Pin ${title}`}
+                    >
+                      {c.pinned ? <PushPinSlashIcon size={14} /> : <PushPinIcon size={14} />}
+                    </button>
+                  </Tip>
+                  <Tip label={c.archived ? 'Unarchive' : 'Archive'} side="top">
+                    <button
+                      type="button"
+                      onClick={() => archive(c)}
+                      className="rounded-sm p-1.5 text-muted hover:bg-surface-muted hover:text-ink"
+                      aria-label={c.archived ? `Unarchive ${title}` : `Archive ${title}`}
+                    >
+                      <ArchiveIcon size={14} />
+                    </button>
+                  </Tip>
+                  <Tip label="More actions" side="top">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        const link = e.currentTarget
+                          .closest('li')
+                          ?.querySelector<HTMLElement>('[data-chat-link]');
+                        const r = link?.getBoundingClientRect();
+                        link?.dispatchEvent(
+                          new MouseEvent('contextmenu', {
+                            bubbles: true,
+                            cancelable: true,
+                            clientX: (r?.right ?? 0) - 40,
+                            clientY: (r?.top ?? 0) + 20,
+                          }),
+                        );
+                      }}
+                      className="touch-target rounded-sm p-1.5 text-muted hover:bg-surface-muted hover:text-ink"
+                      aria-label={`More actions for ${title}`}
+                    >
+                      <DotsThreeIcon size={14} />
+                    </button>
+                  </Tip>
                 </div>
               </li>
             );
