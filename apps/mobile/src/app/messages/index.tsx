@@ -8,13 +8,7 @@ import {
   watchPresence,
   type SecureConversation,
 } from '@vybora/api';
-import {
-  chatRowPreview,
-  formatRowTime,
-  formatUnread,
-  receiptOf,
-  type RowPreview,
-} from '@vybora/core';
+import { chatRowPreview, formatRowTime, receiptOf } from '@vybora/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useIsFocused } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -44,7 +38,7 @@ import {
   usePreviews,
   useSecureInbox,
 } from '@/features/connect/hooks';
-import { RowPreviewLine } from '@/features/connect/ui/ChatRowParts';
+import { ChatRow } from '@/features/connect/ui/ChatRowParts';
 import { ConnectEmpty, PrimaryButton, useCc } from '@/features/connect/ui/primitives';
 import { UndoBar } from '@/features/connect/ui/UndoBar';
 import { useHaptics } from '@/lib/haptics';
@@ -53,136 +47,6 @@ import { supabase } from '@/lib/supabase';
 
 type Filter = 'all' | 'unread' | 'groups' | 'pinned' | 'archived';
 const FILTERS: Filter[] = ['all', 'unread', 'groups', 'pinned', 'archived'];
-
-function GroupAvatar({ size }: { size: number }) {
-  const cc = useCc();
-  return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        backgroundColor: cc.strong,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-      accessibilityLabel="Group"
-    >
-      <Icon name="users" size={Math.round(size * 0.46)} color={cc.accent} />
-    </View>
-  );
-}
-
-function ChatRow({
-  conv,
-  myId,
-  title,
-  preview,
-  time,
-  online,
-  onLongPress,
-}: {
-  conv: SecureConversation;
-  myId: string;
-  title: string;
-  preview: RowPreview;
-  time: string;
-  online: boolean;
-  onLongPress: () => void;
-}) {
-  const cc = useCc();
-  const peer = peerOf(conv, myId);
-  const unread = conv.unreadCount > 0;
-  const muted = isMuted(conv) || !conv.notificationsEnabled;
-  return (
-    <Pressable
-      onPress={() => router.push({ pathname: '/messages/[id]', params: { id: conv.id } })}
-      onLongPress={onLongPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${title}${unread ? `, ${conv.unreadCount} unread` : ''}${muted ? ', muted' : ''}${conv.pinned ? ', pinned' : ''}`}
-      accessibilityHint="Long press for pin, archive and details"
-      style={({ pressed }) => ({
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        backgroundColor: pressed ? cc.raised : 'transparent',
-      })}
-    >
-      <View>
-        {conv.kind === 'group' ? (
-          <GroupAvatar size={48} />
-        ) : (
-          <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={48} />
-        )}
-        {online && (
-          <View
-            style={{
-              position: 'absolute',
-              right: 0,
-              bottom: 0,
-              width: 13,
-              height: 13,
-              borderRadius: 7,
-              backgroundColor: cc.success,
-              borderWidth: 2,
-              borderColor: cc.panel,
-            }}
-            accessibilityLabel="Online"
-          />
-        )}
-      </View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text
-            scale
-            style={{
-              color: cc.text,
-              fontSize: 16,
-              fontWeight: unread ? '600' : '500',
-              flexShrink: 1,
-            }}
-            numberOfLines={1}
-          >
-            {title}
-          </Text>
-          {conv.pinned && <Icon name="pin" size={12} color={cc.textSubtle} />}
-          {muted && <Icon name="bell-off" size={12} color={cc.textSubtle} />}
-          <Text
-            mono
-            style={{ color: unread ? cc.accent : cc.textSubtle, fontSize: 11, marginLeft: 'auto' }}
-          >
-            {time}
-          </Text>
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <RowPreviewLine preview={preview} unread={unread} />
-          {unread && (
-            <View
-              style={{
-                minWidth: 20,
-                height: 20,
-                borderRadius: radii.sm,
-                alignItems: 'center',
-                justifyContent: 'center',
-                paddingHorizontal: 5,
-                backgroundColor: muted ? cc.strong : cc.accent,
-              }}
-            >
-              <Text
-                mono
-                style={{ color: muted ? cc.text : cc.onAccent, fontSize: 11, fontWeight: '500' }}
-              >
-                {formatUnread(conv.unreadCount)}
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
-    </Pressable>
-  );
-}
 
 function Inbox() {
   const cc = useCc();
@@ -472,7 +336,11 @@ function Inbox() {
                 preview={preview}
                 time={formatRowTime(last?.createdAt ?? c.lastMessageAt, new Date())}
                 online={c.kind === 'direct' && online.has(peerOf(c, userId)?.id ?? '')}
+                onPress={() => router.push({ pathname: '/messages/[id]', params: { id: c.id } })}
                 onLongPress={() => actions(c)}
+                onTogglePin={() => setPrefs(c, { pinned: !c.pinned })}
+                onToggleMute={() => setPrefs(c, { muted_until: muted ? null : muteUntil('8h') })}
+                onArchive={() => archive(c)}
               />
             </ReanimatedSwipeable>
           );

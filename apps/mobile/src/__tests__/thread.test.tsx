@@ -7,7 +7,8 @@ import {
   renderHook,
   screen,
 } from '@testing-library/react-native';
-import { Text as RNText } from 'react-native';
+import { AccessibilityInfo, StyleSheet, Text as RNText } from 'react-native';
+import type { SecureConversation } from '@vybora/api';
 jest.mock('react-native-worklets', () => require('react-native-worklets/src/mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 jest.mock('@/lib/supabase', () => ({
@@ -30,6 +31,9 @@ jest.mock('@vybora/api', () => ({
     return { send: jest.fn(), leave: () => mockTypingLeaves.push(conv) };
   },
 }));
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 34, left: 0, right: 0 }),
+}));
 jest.mock('@/features/auth/AuthProvider', () => ({ useMe: () => ({ userId: 'me' }) }));
 jest.mock('@/features/connect/ConnectProvider', () => ({ useConnect: () => ({ engine: null }) }));
 jest.mock('@/features/connect/ui/Attachment', () => ({
@@ -41,7 +45,7 @@ jest.mock('@/features/connect/ui/Attachment', () => ({
 
 import { useInboxTyping } from '@/features/connect/hooks';
 import { Bubble } from '@/features/connect/ui/Bubble';
-import { RowPreviewLine } from '@/features/connect/ui/ChatRowParts';
+import { ChatRow, RowPreviewLine } from '@/features/connect/ui/ChatRowParts';
 import { MessageActions } from '@/features/connect/ui/MessageActions';
 import { SwipeToReply } from '@/features/connect/ui/SwipeToReply';
 import { useThemeDef } from '@/features/connect/ui/primitives';
@@ -345,8 +349,12 @@ describe('undo bar', () => {
   it('runs undo on press and calls onDone after 5 seconds', async () => {
     const onUndo = jest.fn();
     const onDone = jest.fn();
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
     await render(<UndoBar message="Archived" onUndo={onUndo} onDone={onDone} />);
     expect(screen.getByText('Archived')).toBeTruthy();
+    expect(announce).toHaveBeenCalledWith('Archived');
+    const bar = screen.getByTestId('undo-bar');
+    expect(StyleSheet.flatten(bar.props.style).bottom).toBe(50);
     await fireEvent.press(screen.getByText('Undo'));
     expect(onUndo).toHaveBeenCalled();
     await rtlAct(() => {
@@ -421,7 +429,88 @@ describe('typing in the chat list', () => {
   });
 
   it('joins nothing when disabled', async () => {
-    renderHook(() => useInboxTyping(['c1'], false));
+    await renderHook(() => useInboxTyping(['c1'], false));
     expect(mockTypingListeners.size).toBe(0);
+  });
+
+  it('leaves every channel and clears state when paused', async () => {
+    const { result, rerender } = await renderHook(
+      ({ on }: { on: boolean }) => useInboxTyping(['c1', 'c2'], on),
+      { initialProps: { on: true } },
+    );
+    await rtlAct(() => mockTypingListeners.get('c1')!('maya', true));
+    expect(result.current.c1).toEqual(['maya']);
+    await rerender({ on: false });
+    expect([...mockTypingLeaves].sort()).toEqual(['c1', 'c2']);
+    expect(result.current).toEqual({});
+  });
+});
+
+describe('chat row accessibility actions', () => {
+  const conv = {
+    id: 'c1',
+    kind: 'direct',
+    pinned: false,
+    archived: false,
+    mutedUntil: null,
+    notificationsEnabled: true,
+    unreadCount: 0,
+    members: [{ id: 'maya', username: 'maya', display_name: 'Maya', avatar_path: null }],
+  } as unknown as SecureConversation;
+  const handlers = () => ({
+    onPress: jest.fn(),
+    onLongPress: jest.fn(),
+    onTogglePin: jest.fn(),
+    onToggleMute: jest.fn(),
+    onArchive: jest.fn(),
+  });
+  const preview = { prefix: null, text: 'hi', receipt: null, typing: false };
+
+  it('exposes pin, mute, archive and more actions and dispatches them', async () => {
+    const h = handlers();
+    await render(
+      <ChatRow
+        conv={conv}
+        myId="me"
+        title="Maya"
+        preview={preview}
+        time="2:05 PM"
+        online={false}
+        {...h}
+      />,
+    );
+    const row = screen.getByRole('button', { name: 'Maya' });
+    expect(row.props.accessibilityActions).toEqual([
+      { name: 'togglePin', label: 'Pin' },
+      { name: 'toggleMute', label: 'Mute' },
+      { name: 'archive', label: 'Archive' },
+      { name: 'longpress', label: 'More actions' },
+    ]);
+    await fireEvent(row, 'accessibilityAction', { nativeEvent: { actionName: 'archive' } });
+    await fireEvent(row, 'accessibilityAction', { nativeEvent: { actionName: 'togglePin' } });
+    await fireEvent(row, 'accessibilityAction', { nativeEvent: { actionName: 'toggleMute' } });
+    await fireEvent(row, 'accessibilityAction', { nativeEvent: { actionName: 'longpress' } });
+    expect(h.onArchive).toHaveBeenCalledTimes(1);
+    expect(h.onTogglePin).toHaveBeenCalledTimes(1);
+    expect(h.onToggleMute).toHaveBeenCalledTimes(1);
+    expect(h.onLongPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('labels the actions by current state', async () => {
+    await render(
+      <ChatRow
+        conv={{ ...conv, pinned: true, archived: true, mutedUntil: 'infinity' }}
+        myId="me"
+        title="Maya"
+        preview={preview}
+        time="2:05 PM"
+        online={false}
+        {...handlers()}
+      />,
+    );
+    const labels = screen
+      .getByRole('button', { name: /Maya/ })
+      .props.accessibilityActions.map((a: { label: string }) => a.label);
+    expect(labels).toEqual(['Unpin', 'Unmute', 'Unarchive', 'More actions']);
   });
 });
