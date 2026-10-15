@@ -10,7 +10,13 @@ import {
   XIcon,
 } from '@phosphor-icons/react';
 import { fetchConnectPrivacy, isMuted, peerOf, qk, watchPresence } from '@vybora/api';
-import { friendlyError, layoutThread, messageActions, receiptOf } from '@vybora/core';
+import {
+  friendlyError,
+  layoutThread,
+  messageActions,
+  receiptOf,
+  selectionToText,
+} from '@vybora/core';
 import { MAX_ATTACHMENT_BYTES, type AttachmentRef, type LocalMessage } from '@vybora/e2ee';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -39,6 +45,7 @@ import {
   useTyping,
 } from './hooks';
 import { DateChip, groupByDay, JumpToLatest, UnreadDivider } from './ThreadParts';
+import { SelectBar } from './SelectBar';
 import { threadKeyDown } from './threadKeys';
 import { chatBackground, effectiveTheme, GroupAvatar, TypingDots, useChatTheme } from './ui';
 import { VerifyDialog } from './VerifyDialog';
@@ -116,6 +123,9 @@ export default function ChatPane() {
   const [details, setDetails] = useState(false);
   const [verifying, setVerifying] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [selection, setSelection] = useState<Set<string> | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  useEffect(() => setSelection(null), [id]);
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const restoreFrom = useRef<number | null>(null);
@@ -184,6 +194,27 @@ export default function ChatPane() {
   );
   const days = useMemo(() => groupByDay(items), [items]);
   const newestId = ordered.at(-1)?.id;
+  const toggle = (mid: string) =>
+    setSelection((s) => {
+      const next = new Set(s ?? []);
+      if (next.has(mid)) next.delete(mid);
+      else next.add(mid);
+      return next;
+    });
+  const selectedMessages = ordered.filter((m) => selection?.has(m.id));
+  const canBulkDelete =
+    selectedMessages.length > 0 &&
+    selectedMessages.every((m) => messageActions(m, m.senderId === userId).includes('delete'));
+  const copySelection = () => {
+    void navigator.clipboard?.writeText(selectionToText(selectedMessages, { nameOf }));
+    toast.show(
+      selectedMessages.length === 1
+        ? 'Message copied'
+        : `${selectedMessages.length} messages copied`,
+      'success',
+    );
+    setSelection(null);
+  };
 
   const { reduceMotion } = useA11y();
   const [away, setAway] = useState(false);
@@ -337,12 +368,18 @@ export default function ChatPane() {
       if (e.altKey && (e.key === 'i' || e.key === 'I')) {
         e.preventDefault();
         setDetails((d) => !d);
+      } else if (
+        e.key === 'Escape' &&
+        selection &&
+        !document.querySelector('[role="dialog"],[role="menu"]')
+      ) {
+        setSelection(null);
       } else if (e.key === 'Escape' && details && !document.querySelector('[role="dialog"]'))
         setDetails(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [details]);
+  }, [details, selection]);
 
   // Only once the inbox is settled: a just-created chat may not be in the cached list yet.
   if (conversation.isSuccess && !conversation.isFetching && !conv)
@@ -375,69 +412,79 @@ export default function ChatPane() {
           if (!composerDisabled) void sendFiles([...e.dataTransfer.files]);
         }}
       >
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-surface px-2 md:px-4">
-          <Link
-            to="/messages"
-            className="flex h-10 w-10 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-ink md:hidden"
-            aria-label="Back to chats"
-          >
-            <ArrowLeftIcon size={20} />
-          </Link>
-          <button
-            type="button"
-            onClick={() => setDetails((d) => !d)}
-            className="flex min-w-0 flex-1 items-center gap-3 rounded-md py-1 text-left"
-            aria-label={`${title}, chat details`}
-          >
-            {conv?.kind === 'group' ? (
-              <GroupAvatar size={34} />
-            ) : (
-              <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={34} />
-            )}
-            <span className="min-w-0">
-              <span className="block truncate text-[15px] font-semibold">{title || ' '}</span>
-              <span
-                className="flex items-center gap-1.5 font-mono text-[11px] leading-4"
-                aria-live="polite"
-              >
-                {typingNames.length ? (
-                  <TypingDots color={def.accent} />
-                ) : online ? (
-                  <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
-                ) : (
-                  <LockSimpleIcon size={10} className="text-subtle" aria-hidden="true" />
-                )}
+        {selection ? (
+          <SelectBar
+            count={selection.size}
+            canDelete={canBulkDelete}
+            onCopy={copySelection}
+            onDelete={() => setBulkDeleting(true)}
+            onCancel={() => setSelection(null)}
+          />
+        ) : (
+          <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-surface px-2 md:px-4">
+            <Link
+              to="/messages"
+              className="flex h-10 w-10 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-ink md:hidden"
+              aria-label="Back to chats"
+            >
+              <ArrowLeftIcon size={20} />
+            </Link>
+            <button
+              type="button"
+              onClick={() => setDetails((d) => !d)}
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-md py-1 text-left"
+              aria-label={`${title}, chat details`}
+            >
+              {conv?.kind === 'group' ? (
+                <GroupAvatar size={34} />
+              ) : (
+                <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={34} />
+              )}
+              <span className="min-w-0">
+                <span className="block truncate text-[15px] font-semibold">{title || ' '}</span>
                 <span
-                  className={online && !typingNames.length ? 'text-success' : 'text-subtle'}
-                  style={typingNames.length ? { color: def.accent } : undefined}
+                  className="flex items-center gap-1.5 font-mono text-[11px] leading-4"
+                  aria-live="polite"
                 >
-                  {subtitle}
+                  {typingNames.length ? (
+                    <TypingDots color={def.accent} />
+                  ) : online ? (
+                    <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
+                  ) : (
+                    <LockSimpleIcon size={10} className="text-subtle" aria-hidden="true" />
+                  )}
+                  <span
+                    className={online && !typingNames.length ? 'text-success' : 'text-subtle'}
+                    style={typingNames.length ? { color: def.accent } : undefined}
+                  >
+                    {subtitle}
+                  </span>
                 </span>
               </span>
-            </span>
-          </button>
-          {conv?.disappearingSeconds ? (
-            <span
-              className="flex items-center gap-1 rounded-sm border border-line px-1.5 py-0.5 font-mono text-[11px] text-muted"
-              title="Disappearing messages are on"
-            >
-              <TimerIcon size={12} aria-hidden="true" /> {ttlLabel(conv.disappearingSeconds)}
-              <span className="sr-only">disappearing messages</span>
-            </span>
-          ) : null}
-          <Tip label="Details" shortcut="Alt I">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setDetails((d) => !d)}
-              aria-label="Chat details"
-              aria-pressed={details}
-              className={cn('text-muted', details && 'bg-surface-strong text-ink')}
-            >
-              <InfoIcon size={20} />
-            </Button>
-          </Tip>
-        </header>
+            </button>
+            {conv?.disappearingSeconds ? (
+              <span
+                className="flex items-center gap-1 rounded-sm border border-line px-1.5 py-0.5 font-mono text-[11px] text-muted"
+                title="Disappearing messages are on"
+              >
+                <TimerIcon size={12} aria-hidden="true" /> {ttlLabel(conv.disappearingSeconds)}
+                <span className="sr-only">disappearing messages</span>
+              </span>
+            ) : null}
+            <Tip label="Details" shortcut="Alt I">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setDetails((d) => !d)}
+                aria-label="Chat details"
+                aria-pressed={details}
+                className={cn('text-muted', details && 'bg-surface-strong text-ink')}
+              >
+                <InfoIcon size={20} />
+              </Button>
+            </Tip>
+          </header>
+        )}
 
         {!live && (
           <div
@@ -473,7 +520,9 @@ export default function ChatPane() {
               setAway(distance > el.clientHeight);
               if (stick.current) setNewCount(0);
             }}
-            onKeyDown={(e) => threadKeyDown(e, { onReply: replyById })}
+            onKeyDown={(e) =>
+              threadKeyDown(e, { onReply: replyById, onToggle: selection ? toggle : undefined })
+            }
             role="log"
             aria-label={`Messages with ${title}`}
           >
@@ -554,7 +603,10 @@ export default function ChatPane() {
                       onRetry={(msg) => void run(() => engine!.retry(id, msg.id))}
                       onOpenImage={setViewer}
                       onJumpTo={jumpTo}
-                      onSelect={() => undefined}
+                      onSelect={(msg) => setSelection(new Set([msg.id]))}
+                      selecting={!!selection}
+                      selected={!!selection?.has(m.id)}
+                      onToggleSelect={(msg) => toggle(msg.id)}
                     />
                   );
                 })}
@@ -631,6 +683,23 @@ export default function ChatPane() {
         }}
         title="Delete for everyone?"
         description="This removes the message on every device in this chat."
+        confirmLabel="Delete"
+        danger
+      />
+
+      <ConfirmDialog
+        open={bulkDeleting}
+        onClose={() => setBulkDeleting(false)}
+        onConfirm={() => {
+          const targets = selectedMessages.map((m) => m.id);
+          setBulkDeleting(false);
+          setSelection(null);
+          void run(async () => {
+            for (const target of targets) await engine!.send(id, { t: 'delete', target });
+          });
+        }}
+        title={`Delete ${selectedMessages.length} messages for everyone?`}
+        description="They are removed on every device in this chat."
         confirmLabel="Delete"
         danger
       />

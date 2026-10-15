@@ -2,6 +2,7 @@ import { resolveChatTheme } from '@vybora/config';
 import type { ThreadItem } from '@vybora/core';
 import type { LocalMessage } from '@vybora/e2ee';
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/Tooltip';
 import { Bubble } from './Bubble';
@@ -56,6 +57,13 @@ describe('conversation layout', () => {
     const item = screen.getByRole('article');
     expect(item.getAttribute('aria-label')).toMatch(/^Maya, .+, See you at 7$/);
     expect(container.querySelector('[data-tail="true"]')).not.toBeNull();
+  });
+
+  it('shows a checkbox in select mode and toggles on click', async () => {
+    const onToggleSelect = vi.fn();
+    render(<Harness selecting selected={false} onToggleSelect={onToggleSelect} />);
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Select message from Maya' }));
+    expect(onToggleSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }));
   });
 
   it('omits the tail inside a run', () => {

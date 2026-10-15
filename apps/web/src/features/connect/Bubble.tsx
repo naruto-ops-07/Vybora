@@ -150,6 +150,9 @@ export interface BubbleProps {
   /** The newest message is the thread's single Tab stop. */
   tabbable?: boolean;
   onSelect: (m: LocalMessage) => void;
+  selecting?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (m: LocalMessage) => void;
 }
 
 export const Bubble = memo(function Bubble({
@@ -172,12 +175,18 @@ export const Bubble = memo(function Bubble({
   avatar,
   tabbable,
   onSelect,
+  selecting,
+  selected,
+  onToggleSelect,
 }: BubbleProps) {
   const [picker, setPicker] = useState(false);
   const { prefs, reduceMotion } = useA11y();
   const root = useRef<HTMLDivElement>(null);
   const actions = messageActions(m, mine);
-  const swipe = useSwipeReply(() => onReply(m), prefs.swipeToReply && actions.includes('reply'));
+  const swipe = useSwipeReply(
+    () => onReply(m),
+    !selecting && prefs.swipeToReply && actions.includes('reply'),
+  );
   const myReactions = Object.entries(m.reactions)
     .filter(([, users]) => users.includes(myUserId))
     .map(([e]) => e);
@@ -253,7 +262,7 @@ export const Bubble = memo(function Bubble({
 
   return (
     <MessageMenu
-      actions={actions}
+      actions={selecting ? [] : actions}
       myReactions={myReactions}
       onReact={(e) => onReact(m, e)}
       onAction={onAction}
@@ -271,6 +280,8 @@ export const Bubble = memo(function Bubble({
         tabIndex={tabbable ? 0 : -1}
         role="article"
         aria-label={label}
+        aria-selected={selecting ? selected : undefined}
+        onClick={selecting ? () => onToggleSelect?.(m) : undefined}
       >
         {showSender && !mine && senderName && (
           <span
@@ -295,6 +306,26 @@ export const Bubble = memo(function Bubble({
             >
               <ArrowBendUpLeftIcon size={18} />
             </span>
+          )}
+          {selecting && (
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={!!selected}
+              aria-label={`Select message from ${senderLabel}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleSelect?.(m);
+              }}
+              className={cn(
+                'touch-target flex h-6 w-6 shrink-0 items-center justify-center self-center rounded-sm border',
+                selected
+                  ? 'border-accent bg-accent text-on-accent'
+                  : 'border-line-strong bg-surface',
+              )}
+            >
+              {selected && <CheckIcon size={14} aria-hidden="true" />}
+            </button>
           )}
           {avatar &&
             !mine &&
@@ -353,7 +384,7 @@ export const Bubble = memo(function Bubble({
               {runEnd && <Tail mine={mine} fill={filled ? theme.bubble : undefined} />}
             </div>
 
-            {actions.length > 0 && (
+            {!selecting && actions.length > 0 && (
               <div
                 className={cn(
                   'flex shrink-0 items-center transition-opacity duration-150',

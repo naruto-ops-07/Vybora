@@ -8,6 +8,7 @@ import { A11yProvider } from '@/features/a11y/A11yProvider';
 import { TooltipProvider } from '@/components/ui/Tooltip';
 import { Bubble } from './Bubble';
 import { MessageMenu } from './MessageMenu';
+import { SelectBar } from './SelectBar';
 import { threadKeyDown } from './threadKeys';
 import { useSwipeReply } from './useSwipeReply';
 
@@ -204,5 +205,27 @@ describe('swipe to reply (touch)', () => {
     act(() => result.current.handlers.onPointerDown?.(ev(0, 0, 0)));
     act(() => result.current.handlers.onPointerUp?.(ev(90, 0, 100)));
     expect(onTrigger).not.toHaveBeenCalled();
+  });
+});
+
+describe('select bar', () => {
+  it('shows the count and only enables delete when allowed', async () => {
+    const onCopy = vi.fn();
+    const onCancel = vi.fn();
+    render(
+      <SelectBar
+        count={2}
+        canDelete={false}
+        onCopy={onCopy}
+        onDelete={vi.fn()}
+        onCancel={onCancel}
+      />,
+    );
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete selected for everyone' })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Copy selected' }));
+    expect(onCopy).toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel selection' }));
+    expect(onCancel).toHaveBeenCalled();
   });
 });
