@@ -161,6 +161,8 @@ export const Bubble = memo(function Bubble({
   const reactions = Object.entries(m.reactions).filter(([, users]) => users.length);
   const bubbleStyle = {
     maxWidth: '82%' as const,
+    flexShrink: 1,
+    minWidth: 0,
     paddingHorizontal: media ? 4 : 12,
     paddingVertical: media ? 4 : 8,
     borderRadius: radii.lg,
@@ -322,7 +324,10 @@ export const Bubble = memo(function Bubble({
               : { backgroundColor: theme.incoming, borderWidth: 1, borderColor: cc.line },
           ]}
         >
-          {inner}
+          {/* While selecting, taps on photos, voice, files fall through to the bubble. */}
+          <View testID="bubble-content" pointerEvents={selecting ? 'none' : 'auto'}>
+            {inner}
+          </View>
           {runEnd && (
             <Tail
               mine={mine}
@@ -381,7 +386,7 @@ export const Bubble = memo(function Bubble({
       {receipt === 'failed' && (
         <Text
           style={{ color: cc.danger, fontSize: 12, marginTop: 3, marginRight: 4 }}
-          onPress={() => onRetry(m)}
+          onPress={() => (selecting ? onToggleSelect?.(m) : onRetry(m))}
           accessibilityRole="button"
         >
           Not sent · Tap to retry

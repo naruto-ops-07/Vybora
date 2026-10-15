@@ -48,8 +48,8 @@ export function SwipeToReply({
         runOnJS(tick)();
       } else if (armed.value && e.translationX < SWIPE_REPLY_THRESHOLD) armed.value = false;
     })
-    .onEnd((e) => {
-      runOnJS(finish)(e.translationX, e.translationY, e.velocityX);
+    .onEnd((e, success) => {
+      if (success) runOnJS(finish)(e.translationX, e.translationY, e.velocityX);
     })
     .onFinalize(() => {
       armed.value = false;

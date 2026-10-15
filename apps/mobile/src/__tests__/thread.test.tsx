@@ -222,6 +222,38 @@ describe('select mode and reply affordances', () => {
     ]);
   });
 
+  it('lets taps on inner content and the retry text toggle instead of acting', async () => {
+    const onToggle = jest.fn();
+    const onRetry = jest.fn();
+    function Failed({ selecting }: { selecting: boolean }) {
+      const theme = useThemeDef({});
+      return (
+        <Bubble
+          message={{ ...msg, senderId: 'me', status: 'failed' }}
+          mine
+          theme={theme}
+          receipt="failed"
+          showSender={false}
+          runStart
+          runEnd
+          onLongPress={jest.fn()}
+          onRetry={onRetry}
+          onOpenImage={jest.fn()}
+          nameOf={() => 'You'}
+          selecting={selecting}
+          onToggleSelect={onToggle}
+        />
+      );
+    }
+    const { rerender } = await render(<Failed selecting={false} />);
+    expect(screen.getByTestId('bubble-content').props.pointerEvents).toBe('auto');
+    await rerender(<Failed selecting />);
+    expect(screen.getByTestId('bubble-content').props.pointerEvents).toBe('none');
+    await fireEvent.press(screen.getByText('Not sent · Tap to retry'));
+    expect(onToggle).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }));
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
   it('shows an always-available reply button outside select mode', async () => {
     const onReply = jest.fn();
     const theme = { current: null as ReturnType<typeof useThemeDef> | null };

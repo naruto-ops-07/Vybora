@@ -161,6 +161,16 @@ function Chat() {
     selectedMessages.every((m) => messageActions(m, m.senderId === userId).includes('delete'));
   const startReply = (m: LocalMessage) => setReplyTo(m);
 
+  // Drop ids that left the thread (deleted, expired); keep the same Set when nothing changed.
+  useEffect(() => {
+    setSelection((s) => {
+      if (!s) return s;
+      const live = new Set(ordered.map((m) => m.id));
+      const kept = [...s].filter((x) => live.has(x));
+      return kept.length === s.size ? s : new Set(kept);
+    });
+  }, [ordered]);
+
   // Android back leaves select mode first.
   useEffect(() => {
     if (!selection) return;
@@ -435,7 +445,7 @@ function Chat() {
                     style={{ color: cc.text, fontWeight: '600', fontSize: 17 }}
                     accessibilityLiveRegion="polite"
                   >
-                    {selection.size} selected
+                    {selectedMessages.length} selected
                   </Text>
                 ),
                 headerLeft: () => (
@@ -456,6 +466,7 @@ function Chat() {
                 headerRight: () => (
                   <View style={{ flexDirection: 'row' }}>
                     <Pressable
+                      disabled={selectedMessages.length === 0}
                       onPress={() => {
                         void Clipboard.setStringAsync(
                           selectionToText(selectedMessages, { nameOf }),
@@ -464,11 +475,13 @@ function Chat() {
                       }}
                       accessibilityRole="button"
                       accessibilityLabel="Copy selected"
+                      accessibilityState={{ disabled: selectedMessages.length === 0 }}
                       style={{
                         width: 44,
                         height: 44,
                         alignItems: 'center',
                         justifyContent: 'center',
+                        opacity: selectedMessages.length ? 1 : 0.4,
                       }}
                     >
                       <Icon name="copy" size={20} color={cc.text} />
@@ -477,7 +490,9 @@ function Chat() {
                       disabled={!canBulkDelete}
                       onPress={() =>
                         Alert.alert(
-                          `Delete ${selectedMessages.length} messages for everyone?`,
+                          selectedMessages.length === 1
+                            ? 'Delete 1 message for everyone?'
+                            : `Delete ${selectedMessages.length} messages for everyone?`,
                           'They are removed on every device in this chat.',
                           [
                             { text: 'Cancel', style: 'cancel' },
