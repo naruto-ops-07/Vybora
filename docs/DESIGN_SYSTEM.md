@@ -85,6 +85,36 @@ Body text on mobile inputs is 16px (prevents iOS zoom).
 - Breakpoints: 375 (phone), 768 (tablet), 1024/1280 (laptop), 1440+ (desktop). No horizontal scrolling at any width (checked by Playwright).
 - Mobile app: header-less inbox with its own top bar; stack navigation for chat, details, verification, privacy and settings; safe areas respected.
 
+## Messenger patterns
+
+Shared by web and mobile; the grouping logic lives in `packages/core` (`layoutThread`, `chat/time`, `chat/preview`, `chat/swipe`).
+
+- **Runs.** Consecutive messages from the same sender form a run: 2 px between bubbles inside a run, 8 px between runs.
+- **Tail.** The last bubble of a run gets a flat SVG notch and a 4 px tailed corner (other corners 12 px). No curves, shadows or gradients.
+- **Date chips.** 4 px radius, IBM Plex Mono 11 px. On web the chip is sticky per day section, so it never overlaps the next day's chip; on mobile a floating chip follows the scroll.
+- **Unread divider.** A labelled rule above the first unread message. The count is frozen when the chat opens (`unreadUntilSeq` in `layoutThread`; both apps freeze `lastReadSeq` and `lastSeq` at open), so it never grows while you read.
+- **Jump to latest.** 8 px radius, 40 px on web and 44 px on mobile, with a count of new messages while you are scrolled up.
+- **Badges.** 4 px radius, Plex Mono, text capped at `99+`.
+- **Message menu.** A reaction bar plus actions (Reply, Copy, Select, Delete…). Web: hover action bar and a right-click context menu (`@radix-ui/react-context-menu`); the hover bar is hidden on coarse pointers unless "Always show message actions" is on, in which case a slim React / Reply / More bar stays visible. Mobile: long-press opens the `MessageActions` sheet.
+- **Select mode.** Entered from the menu's Select action; bubbles show a selection mark, a bar shows the count with Copy and Delete, and taps toggle selection instead of opening actions.
+- **Chat rows.** Receipt ticks, sender name in groups, typing indicator, unread badge, muted icon. Web: row context menu. Mobile: swipe actions (`ReanimatedSwipeable`, Archive button; no full-swipe). Destructive row actions show an Undo toast (web: the shared 7 s action toast; mobile: 5 s `UndoBar`, safe-area aware).
+- **Header status.** "Online", "last seen …" (minute precision), or the "end-to-end encrypted" line when neither may be shown.
+
+## Accessibility settings
+
+Settings → Accessibility on web and mobile. Preferences are stored **per device** (web `localStorage`, mobile `expo-secure-store`, both under the key `vybora.a11y`) and never leave the device.
+
+| Setting                     | Values                                            | Effect                                                                                        |
+| --------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Reduce motion               | System (default) · On · Off                       | Follows the system setting or overrides it                                                    |
+| Swipe to reply              | On (default) · Off                                | Swipe a bubble to reply                                                                       |
+| Haptics                     | On (default) · Off                                | Vibration on swipe thresholds and selection (mobile)                                          |
+| Text size                   | Small 13 · Default 15 · Large 17 · Extra large 20 | Message text size in px                                                                       |
+| High contrast               | Off (default) · On                                | Switches to the `highContrastThemes` tokens (`data-contrast="high"` on web); links underlined |
+| Always show message actions | Off (default) · On                                | Keeps the action bar visible instead of revealing it on hover                                 |
+
+High-contrast token rules (checked in core tests, light and dark): primary text ≥ 7:1 against its surface, secondary text ≥ 4.5:1, borders ≥ 3:1. The CSS values in `apps/web/src/styles/index.css` mirror `packages/config`.
+
 ## Motion and libraries (web)
 
 | Where                   | What                                                                                                                                                                                                               | Library                                                                                                    |

@@ -116,6 +116,15 @@ Staff and admins have **no** policy that lets them read conversations, envelopes
 
 Address books are never uploaded and there is no contact discovery by phone number.
 
+## Last seen and online status
+
+- Activity is recorded in `user_activity` (no client grants) by `touch_activity()`: server time, at most once per 60 s, and only while the user's own **Show when I'm online** setting is on.
+- `last_seen(uuid[])` returns a contact's last activity only if you share a chat, both of you show online status, neither has blocked the other, and the target list has at most 100 ids. Timestamps are truncated to the minute. Turning your setting off hides everyone's last seen from you, and yours from them.
+- Presence on the private `connect:presence:<user>` channels follows the same reciprocal rule, enforced by the `connect: presence read` policy.
+- Chat headers show "Online", "last seen …" (minute precision) or the "end-to-end encrypted" line when nothing may be shown. Cached last-seen values are not displayed while your own setting is off.
+- Requires migration `20261015000012_last_seen.sql`. It is additive and has not been pushed to the hosted project.
+- **Accessibility settings** (Settings → Accessibility) are stored only on the device (web `localStorage`, mobile `expo-secure-store`) and are never uploaded.
+
 ## Notifications
 
 - The database creates a body-less `message` notification per recipient; while it is unread, further messages in the same chat update it instead of creating new ones, so a busy chat produces one push until it is read.
@@ -146,7 +155,7 @@ Address books are never uploaded and there is no contact discovery by phone numb
    npx supabase@latest db push
    ```
 
-   Applies `20261010000009_connect.sql` and `20261010000010_connect_device_privacy.sql` (column-level privacy for device metadata + `my_devices()`): new tables (`devices`, `key_packages`, `mls_envelopes`, `mls_welcomes`, `conversation_preferences`, `contact_nicknames`, `contact_methods`, device audit), new columns on `conversations`, `conversation_members` and `user_settings`, RPCs, the private `connect` bucket, realtime publication entries and realtime authorization policies.
+   Applies `20261010000009_connect.sql`, `20261010000010_connect_device_privacy.sql` and, for last seen, `20261015000012_last_seen.sql`. The first two add column-level privacy for device metadata + `my_devices()`, new tables (`devices`, `key_packages`, `mls_envelopes`, `mls_welcomes`, `conversation_preferences`, `contact_nicknames`, `contact_methods`, device audit), new columns on `conversations`, `conversation_members` and `user_settings`, RPCs, the private `connect` bucket, realtime publication entries and realtime authorization policies. The last seen migration adds `user_activity`, `touch_activity()`, `last_seen()` and a reciprocal presence read policy; push it only after reviewing it.
 
 2. **Realtime authorization:** Connect uses private channels (`connect:conv:<id>`, `connect:presence:<user>`) guarded by RLS on `realtime.messages`. In the Supabase dashboard, under **Realtime → Settings**, turn off **"Allow public access"** so only authorized private channels can be joined.
 
@@ -176,6 +185,7 @@ No new variables. Existing ones are unchanged: `VITE_SUPABASE_URL`, `VITE_SUPABA
 | `packages/e2ee` — `mls.test.ts` (10)    | Group lifecycle on emulated Hermes, native↔adapter interop, tamper rejection, key substitution, sender spoofing, replay, persistence, at-rest encryption, attachments, safety numbers                                                                                                                     |
 | `supabase/tests/connect.test.ts` (23)   | RLS and RPCs: device limits/revocation, owner-only device metadata, atomic key-package claims, epoch checks, membership, joined_seq history cut-off, themes CAS, preferences, phone visibility, realtime authorization, push gating, purge                                                                |
 | `supabase/tests/e2ee-flow.test.ts` (11) | Real engines over a real Postgres: server never stores plaintext, third parties denied, concurrent creation, lost-response retry without duplicates, tampering, reactions/deletes, encrypted attachments, new device auto-add, revoked device removal + self-wipe, group removal, local history encrypted |
+| `supabase/tests/last-seen.test.ts` (10) | `last_seen()` and `touch_activity()`: shared-chat, reciprocal `show_online` and block rules, minute precision, 100-id cap including nested arrays, 60 s throttle, no client access to `user_activity`, reciprocal presence policy                                                                         |
 | `packages/api` — `connect.test.ts` (4)  | Mute presets, "always" mute, peer resolution                                                                                                                                                                                                                                                              |
 | `apps/web` — `connect.test.tsx` (8)     | Safe rendering (no HTML injection, hardened links), reactions/reply/delete permissions, undecryptable placeholder, composer keyboard + paste, single-tab lock                                                                                                                                             |
 | `apps/mobile` — `connect.test.tsx` (5)  | Bubble states, retry, safety-number screen and change warning                                                                                                                                                                                                                                             |

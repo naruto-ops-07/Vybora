@@ -1,5 +1,53 @@
 # Changelog
 
+## 2026-10-15 — Messenger layout, accessibility settings and last seen
+
+### Database
+
+- New migration `20261015000012_last_seen.sql`: table `user_activity` (RLS on, no client grants); `touch_activity()` (server time, 60 s throttle); `caller_shows_online()`; `caller_blocked_with(uuid)`; `last_seen(uuid[])` (shared chat, both sides showing online status, no block either way, minute precision, rejects more than 100 ids and multi-dimensional arrays). The presence read policy is replaced: reading someone else's presence now requires your own `show_online` on and no block either way.
+- **Not pushed** to the hosted project. Run `supabase db push` only after reviewing the migration.
+
+### Core and config
+
+- `layoutThread` (runs, date chips, unread divider; optional `unreadUntilSeq`), messenger time wording, row previews and receipts, header status, message actions, swipe rule, accessibility prefs model (`vybora.a11y`) and `highContrastThemes` tokens.
+
+### Web
+
+- New dependency: `@radix-ui/react-context-menu` 2.2.16.
+- Message runs with tails, sticky date chips per day, unread divider frozen when the chat opens, jump to latest, new-message announcements, keyboard navigation.
+- Message menu (reaction bar, right-click context menu, hover bar hidden on coarse pointers unless "Always show message actions"), select mode, swipe to reply on touch.
+- Chat rows with ticks, sender, typing, badges and a row menu with an Undo toast (the existing 7 s action toast, not the 5 s in the spec).
+- Settings → Accessibility: reduce motion, swipe to reply, text size (13/15/17/20 px), high contrast, always-visible actions.
+- Last seen in the chat header and reciprocal online status; activity is recorded only while your own online status is on, and last seen (including cached values) is hidden when it is off.
+
+### Mobile
+
+- Same runs, tails, date chips, unread divider and jump to latest; swipe to reply with haptics; `MessageActions` sheet with Select; select mode.
+- Chat rows with swipe actions (`ReanimatedSwipeable`, Archive button; no full-swipe because the installed version has no full-swipe signal) and a safe-area-aware 5 s `UndoBar`; bubble and row accessibility actions ("Open photo" is not implemented).
+- Settings → Accessibility; preferences are kept in `expo-secure-store` under `vybora.a11y` (the spec said AsyncStorage / `vybora:a11y`).
+- Last seen in the chat header, reciprocal online status.
+
+### Deviations from the spec
+
+- Undo toast lasts 7 s on web (existing toast) and 5 s on mobile.
+- Mobile preferences use `expo-secure-store`, key `vybora.a11y`.
+- The chat header fallback stays "end-to-end encrypted" instead of being empty.
+
+### Fixed
+
+- Unread divider grew as new messages arrived while a chat was open (both apps now freeze `lastReadSeq` / `lastSeq` at open).
+- `last_seen` array cap could be bypassed with a nested array (now counted with `cardinality()`); presence is no longer readable across a block.
+
+### Not verified
+
+- No real device, no hosted Supabase, no signed-in browser session (no test credentials), Hermes `Intl.DateTimeFormat.formatToParts` behaviour, the coarse-pointer CSS rule, and the visual rendering of tails and date chips were not checked.
+
+### Tests (from this session's runs)
+
+- `pnpm check`: exit 0 on the final run — DB 106/106 (incl. `last-seen.test.ts` 10), unit/component 209/209 (validation 21, core 52, api 13, e2ee 23, web 60, mobile 40), format, lint and types clean, web build OK. The first run failed once on a 5 s timeout in the mobile `a11y.test.tsx` under parallel load; the suite passes alone and on the re-run.
+- Playwright: 24 passed, 5 skipped (`messaging.spec.ts` requires `E2E_SUPABASE_*`).
+- `.prettierignore` now also skips tooling folders installed into the repo (`.github/agents`, `.github/hooks`, `.github/skills`, `.impeccable`).
+
 ## 2026-10-15 — Premium web pass
 
 ### Database
