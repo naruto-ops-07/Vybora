@@ -629,6 +629,22 @@ export async function updateConnectPrivacy(
   unwrap(await client.from('user_settings').update(patch).eq('user_id', userId));
 }
 
+/** Record that I'm active (server time; throttled to once a minute server-side). */
+export async function touchActivity(client: VyboraClient): Promise<void> {
+  const { error } = await client.rpc('touch_activity');
+  if (error) throw error;
+}
+
+/** Last-seen times the server allows me to see (reciprocal, shared chats only). */
+export async function fetchLastSeen(
+  client: VyboraClient,
+  userIds: string[],
+): Promise<Record<string, string>> {
+  if (!userIds.length) return {};
+  const rows = unwrap(await client.rpc('last_seen', { p_user_ids: userIds.slice(0, 100) }));
+  return Object.fromEntries(rows.map((r) => [r.user_id!, r.last_active_at!]));
+}
+
 // ---------------------------------------------------------------------
 // Realtime: durable change signals + ephemeral typing/presence
 // ---------------------------------------------------------------------

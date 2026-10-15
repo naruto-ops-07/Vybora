@@ -1245,6 +1245,29 @@ export type Database = {
           },
         ];
       };
+      user_activity: {
+        Row: {
+          user_id: string;
+          last_active_at: string;
+        };
+        Insert: {
+          user_id: string;
+          last_active_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          last_active_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'user_activity_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: true;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       user_roles: {
         Row: {
           user_id: string;
@@ -1420,6 +1443,10 @@ export type Database = {
           p_report?: string;
         };
         Returns: undefined;
+      };
+      caller_shows_online: {
+        Args: Record<PropertyKey, never>;
+        Returns: boolean;
       };
       can_read_media: {
         Args: {
@@ -1736,6 +1763,15 @@ export type Database = {
         };
         Returns: boolean;
       };
+      last_seen: {
+        Args: {
+          p_user_ids: string[];
+        };
+        Returns: {
+          user_id: string | null;
+          last_active_at: string | null;
+        }[];
+      };
       list_comments: {
         Args: {
           p_post: string;
@@ -2041,6 +2077,10 @@ export type Database = {
           followers_count: number | null;
           posts_count: number | null;
         }[];
+      };
+      touch_activity: {
+        Args: Record<PropertyKey, never>;
+        Returns: undefined;
       };
       try_uuid: {
         Args: {

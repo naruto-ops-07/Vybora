@@ -43,6 +43,7 @@ describe('schema', () => {
         'saved_posts',
         'stories',
         'story_views',
+        'user_activity',
         'user_roles',
         'user_settings',
       ].sort(),

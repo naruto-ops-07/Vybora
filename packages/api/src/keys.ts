@@ -45,6 +45,7 @@ export const qk = {
     myPhone: ['connect', 'my-phone'] as const,
     keys: (userId: string) => ['connect', 'keys', userId] as const,
     safety: (userId: string) => ['connect', 'safety', userId] as const,
+    lastSeen: (userId: string) => ['connect', 'last-seen', userId] as const,
   },
   admin: {
     overview: ['admin', 'overview'] as const,
