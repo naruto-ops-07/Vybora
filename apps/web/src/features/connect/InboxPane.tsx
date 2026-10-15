@@ -1,12 +1,9 @@
 import {
-  ArchiveIcon,
   BellSlashIcon,
-  DotsThreeIcon,
   LockSimpleIcon,
   MagnifyingGlassIcon,
   NotePencilIcon,
   PushPinIcon,
-  PushPinSlashIcon,
 } from '@phosphor-icons/react';
 import {
   fetchConnectPrivacy,
@@ -29,7 +26,7 @@ import { useA11y } from '@/features/a11y/A11yProvider';
 import { useMe } from '@/features/auth/AuthProvider';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
-import { ChatRowMenu, RowPreviewText } from './ChatRowParts';
+import { ChatRowActions, ChatRowMenu, RowPreviewText } from './ChatRowParts';
 import { useConnect } from './ConnectProvider';
 import {
   conversationTitle,
@@ -296,7 +293,15 @@ export function InboxPane({
             const muted = isMuted(c) || !c.notificationsEnabled;
             const active = activeId === c.id;
             return (
-              <li key={c.id} className="group relative">
+              <li
+                key={c.id}
+                className={cn(
+                  'group relative transition-colors duration-150',
+                  active ? 'bg-surface-strong' : 'hover:bg-surface-muted',
+                  // Always-visible actions sit beside the row so they never cover its time.
+                  a11y.alwaysShowActions && 'flex items-center',
+                )}
+              >
                 <ChatRowMenu
                   conv={c}
                   title={title}
@@ -308,8 +313,8 @@ export function InboxPane({
                     data-chat-link
                     aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'relative flex items-center gap-3 px-4 py-2.5 transition-colors duration-150',
-                      active ? 'bg-surface-strong' : 'hover:bg-surface-muted',
+                      'relative flex items-center gap-3 px-4 py-2.5',
+                      a11y.alwaysShowActions && 'min-w-0 flex-1 pr-2',
                     )}
                   >
                     {active && (
@@ -389,56 +394,14 @@ export function InboxPane({
                     </span>
                   </Link>
                 </ChatRowMenu>
-                <div
-                  className={cn(
-                    'absolute right-2 top-1.5 gap-0.5 rounded-md border border-line bg-surface p-0.5 group-focus-within:flex group-hover:flex',
-                    a11y.alwaysShowActions ? 'flex' : 'hidden',
-                  )}
-                >
-                  <Tip label={c.pinned ? 'Unpin' : 'Pin'} side="top">
-                    <button
-                      type="button"
-                      onClick={() => prefs(c, { pinned: !c.pinned })}
-                      className="rounded-sm p-1.5 text-muted hover:bg-surface-muted hover:text-ink"
-                      aria-label={c.pinned ? `Unpin ${title}` : `Pin ${title}`}
-                    >
-                      {c.pinned ? <PushPinSlashIcon size={14} /> : <PushPinIcon size={14} />}
-                    </button>
-                  </Tip>
-                  <Tip label={c.archived ? 'Unarchive' : 'Archive'} side="top">
-                    <button
-                      type="button"
-                      onClick={() => archive(c)}
-                      className="rounded-sm p-1.5 text-muted hover:bg-surface-muted hover:text-ink"
-                      aria-label={c.archived ? `Unarchive ${title}` : `Archive ${title}`}
-                    >
-                      <ArchiveIcon size={14} />
-                    </button>
-                  </Tip>
-                  <Tip label="More actions" side="top">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        const link = e.currentTarget
-                          .closest('li')
-                          ?.querySelector<HTMLElement>('[data-chat-link]');
-                        const r = link?.getBoundingClientRect();
-                        link?.dispatchEvent(
-                          new MouseEvent('contextmenu', {
-                            bubbles: true,
-                            cancelable: true,
-                            clientX: (r?.right ?? 0) - 40,
-                            clientY: (r?.top ?? 0) + 20,
-                          }),
-                        );
-                      }}
-                      className="touch-target rounded-sm p-1.5 text-muted hover:bg-surface-muted hover:text-ink"
-                      aria-label={`More actions for ${title}`}
-                    >
-                      <DotsThreeIcon size={14} />
-                    </button>
-                  </Tip>
-                </div>
+                <ChatRowActions
+                  title={title}
+                  pinned={c.pinned}
+                  archived={c.archived}
+                  alwaysShow={a11y.alwaysShowActions}
+                  onPin={() => prefs(c, { pinned: !c.pinned })}
+                  onArchive={() => archive(c)}
+                />
               </li>
             );
           })}

@@ -5,7 +5,8 @@ import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-li
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatRowMenu, RowPreviewText } from './ChatRowParts';
+import { TooltipProvider } from '@/components/ui/Tooltip';
+import { ChatRowActions, ChatRowMenu, RowPreviewText } from './ChatRowParts';
 import { useInboxTyping, useLastSeen } from './hooks';
 
 const { fetchLastSeen } = vi.hoisted(() => ({ fetchLastSeen: vi.fn() }));
@@ -84,6 +85,61 @@ describe('chat row menu', () => {
     fireEvent.contextMenu(screen.getByText('Maya'));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Archive' }));
     expect(onArchive).toHaveBeenCalled();
+  });
+});
+
+describe('chat row actions', () => {
+  const props = {
+    title: 'Maya',
+    pinned: false,
+    archived: false,
+    onPin: vi.fn(),
+    onArchive: vi.fn(),
+  };
+
+  it('floats over the row only on hover or focus by default', () => {
+    render(
+      <TooltipProvider>
+        <ChatRowActions {...props} alwaysShow={false} />
+      </TooltipProvider>,
+    );
+    const bar = screen.getByRole('button', { name: 'Pin Maya' }).parentElement!;
+    expect(bar).toHaveClass('absolute', 'hidden', 'group-hover:flex');
+  });
+
+  it('sits beside the row link when always shown, so the row time stays visible', async () => {
+    const onPin = vi.fn();
+    const conv = { id: 'c1', pinned: false, archived: false, mutedUntil: null };
+    render(
+      <TooltipProvider>
+        <ul>
+          <li className="flex items-center">
+            <ChatRowMenu
+              conv={conv as unknown as SecureConversation}
+              title="Maya"
+              onPrefs={vi.fn()}
+              onArchive={vi.fn()}
+            >
+              <a href="/messages/c1" data-chat-link>
+                Maya <time>14:05</time>
+              </a>
+            </ChatRowMenu>
+            <ChatRowActions {...props} onPin={onPin} alwaysShow />
+          </li>
+        </ul>
+      </TooltipProvider>,
+    );
+    const bar = screen.getByRole('button', { name: 'Pin Maya' }).parentElement!;
+    expect(bar).not.toHaveClass('absolute');
+    expect(bar).toHaveClass('flex', 'shrink-0');
+    // In flow after the link, not layered over it.
+    expect(screen.getByRole('link').nextElementSibling).toBe(bar);
+    for (const name of ['Pin Maya', 'Archive Maya', 'More actions for Maya'])
+      expect(screen.getByRole('button', { name })).toHaveClass('touch-target');
+    await userEvent.click(screen.getByRole('button', { name: 'Pin Maya' }));
+    expect(onPin).toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'More actions for Maya' }));
+    expect(await screen.findByRole('menuitem', { name: 'Archive' })).toBeInTheDocument();
   });
 });
 

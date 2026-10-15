@@ -2,6 +2,7 @@ import {
   ArchiveIcon,
   BellIcon,
   BellSlashIcon,
+  DotsThreeIcon,
   PushPinIcon,
   PushPinSlashIcon,
 } from '@phosphor-icons/react';
@@ -9,6 +10,7 @@ import * as ContextMenu from '@radix-ui/react-context-menu';
 import { isMuted, muteUntil, type PreferencePatch, type SecureConversation } from '@vybora/api';
 import type { RowPreview } from '@vybora/core';
 import type { ReactElement, ReactNode } from 'react';
+import { Tip } from '@/components/ui/Tooltip';
 import { cn } from '@/lib/cn';
 import { Ticks } from './Bubble';
 
@@ -114,5 +116,85 @@ export function ChatRowMenu({
         </ContextMenu.Content>
       </ContextMenu.Portal>
     </ContextMenu.Root>
+  );
+}
+
+const ROW_ACTION =
+  'touch-target flex items-center justify-center rounded-sm p-1.5 text-muted hover:bg-surface-muted hover:text-ink';
+
+/**
+ * Pin, archive and more for a chat row. On hover/focus it floats over the row's
+ * top-right corner; with "Always show actions" it sits in the row's flow beside the
+ * link, so it never covers the row time.
+ */
+export function ChatRowActions({
+  title,
+  pinned,
+  archived,
+  alwaysShow,
+  onPin,
+  onArchive,
+}: {
+  title: string;
+  pinned: boolean;
+  archived: boolean;
+  alwaysShow: boolean;
+  onPin: () => void;
+  onArchive: () => void;
+}) {
+  return (
+    <div
+      data-row-actions
+      className={cn(
+        'gap-0.5',
+        alwaysShow
+          ? 'flex shrink-0 items-center pr-2'
+          : 'absolute right-2 top-1.5 hidden rounded-md border border-line bg-surface p-0.5 group-focus-within:flex group-hover:flex',
+      )}
+    >
+      <Tip label={pinned ? 'Unpin' : 'Pin'} side="top">
+        <button
+          type="button"
+          onClick={onPin}
+          className={ROW_ACTION}
+          aria-label={pinned ? `Unpin ${title}` : `Pin ${title}`}
+        >
+          {pinned ? <PushPinSlashIcon size={14} /> : <PushPinIcon size={14} />}
+        </button>
+      </Tip>
+      <Tip label={archived ? 'Unarchive' : 'Archive'} side="top">
+        <button
+          type="button"
+          onClick={onArchive}
+          className={ROW_ACTION}
+          aria-label={archived ? `Unarchive ${title}` : `Archive ${title}`}
+        >
+          <ArchiveIcon size={14} />
+        </button>
+      </Tip>
+      <Tip label="More actions" side="top">
+        <button
+          type="button"
+          onClick={(e) => {
+            const link = e.currentTarget
+              .closest('li')
+              ?.querySelector<HTMLElement>('[data-chat-link]');
+            const r = link?.getBoundingClientRect();
+            link?.dispatchEvent(
+              new MouseEvent('contextmenu', {
+                bubbles: true,
+                cancelable: true,
+                clientX: (r?.right ?? 0) - 40,
+                clientY: (r?.top ?? 0) + 20,
+              }),
+            );
+          }}
+          className={ROW_ACTION}
+          aria-label={`More actions for ${title}`}
+        >
+          <DotsThreeIcon size={14} />
+        </button>
+      </Tip>
+    </div>
   );
 }
