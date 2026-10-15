@@ -55,6 +55,64 @@
   color-scheme: dark;
 }
 
+/* Accessibility → High contrast (values mirror highContrastThemes in packages/config). */
+:root[data-contrast='high'] {
+  --vy-bg: #ffffff;
+  --vy-surface: #ffffff;
+  --vy-surface-muted: #f1f5f5;
+  --vy-surface-strong: #e2eaea;
+  --vy-border: #5f7173;
+  --vy-border-strong: #2e3d41;
+  --vy-text: #0b1416;
+  --vy-text-muted: #2e3d41;
+  --vy-text-subtle: #3e4f52;
+  --vy-accent: #115e59;
+  --vy-accent-hover: #0f4c47;
+  --vy-accent-soft: #cdedea;
+  --vy-on-accent: #ffffff;
+  --vy-bubble-in: #e2eaea;
+  --vy-danger: #8f1b12;
+  --vy-success: #065f46;
+  --vy-warning: #7c3a06;
+}
+:root[data-theme='dark'][data-contrast='high'] {
+  --vy-bg: #000000;
+  --vy-surface: #0a0e0f;
+  --vy-surface-muted: #151d1f;
+  --vy-surface-strong: #1f2a2d;
+  --vy-border: #75898b;
+  --vy-border-strong: #9aacad;
+  --vy-text: #ffffff;
+  --vy-text-muted: #c9d6d6;
+  --vy-text-subtle: #afc0c1;
+  --vy-accent: #5eead4;
+  --vy-accent-hover: #99f6e4;
+  --vy-accent-soft: #0e2b2a;
+  --vy-on-accent: #04201d;
+  --vy-bubble-in: #1f2a2d;
+  --vy-danger: #fca5a5;
+  --vy-success: #6ee7b7;
+  --vy-warning: #fcd34d;
+}
+:root[data-contrast='high'] a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Accessibility → Text size (message text, chat rows, composer). */
+:root {
+  --vy-msg-size: 15px;
+}
+:root[data-text-size='sm'] {
+  --vy-msg-size: 13px;
+}
+:root[data-text-size='lg'] {
+  --vy-msg-size: 17px;
+}
+:root[data-text-size='xl'] {
+  --vy-msg-size: 20px;
+}
+
 @theme inline {
   --color-bg: var(--vy-bg);
   --color-surface: var(--vy-surface);
@@ -143,6 +201,20 @@
 }
 
 @layer utilities {
+  .text-msg {
+    font-size: var(--vy-msg-size);
+    line-height: 1.45;
+  }
+  .text-msg-sm {
+    font-size: calc(var(--vy-msg-size) - 2px);
+    line-height: 1.4;
+  }
+  @media (pointer: coarse) {
+    .touch-target {
+      min-width: 44px;
+      min-height: 44px;
+    }
+  }
   .scrollbar-none {
     scrollbar-width: none;
   }
@@ -219,20 +291,32 @@
   }
 }
 
+/* Reduced motion: the system setting unless overridden in Accessibility (data-reduce-motion). */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  :root:not([data-reduce-motion='false']) *,
+  :root:not([data-reduce-motion='false']) *::before,
+  :root:not([data-reduce-motion='false']) *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
 }
+:root[data-reduce-motion='true'] *,
+:root[data-reduce-motion='true'] *::before,
+:root[data-reduce-motion='true'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
 
 /* Radix Tooltip: opacity only, no movement. */
 .tip[data-state='delayed-open'],
 .tip[data-state='instant-open'] {
+  animation: tip-in 120ms ease-out;
+}
+.menu[data-state='open'] {
   animation: tip-in 120ms ease-out;
 }
 @keyframes tip-in {

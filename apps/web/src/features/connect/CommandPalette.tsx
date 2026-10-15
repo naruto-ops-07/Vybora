@@ -1,6 +1,7 @@
 import {
   ChatCircleIcon,
   DesktopIcon,
+  EyeIcon,
   GearSixIcon,
   MoonIcon,
   NotePencilIcon,
@@ -129,6 +130,13 @@ export function CommandPalette({
             onSelect={() => run(() => navigate('/settings'))}
           >
             Settings
+          </Item>
+          <Item
+            value="accessibility text size contrast motion"
+            icon={<EyeIcon size={18} />}
+            onSelect={() => run(() => navigate('/settings/accessibility'))}
+          >
+            Accessibility
           </Item>
           <Item
             value="theme dark"

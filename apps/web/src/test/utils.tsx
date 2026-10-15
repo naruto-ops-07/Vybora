@@ -3,6 +3,7 @@ import { render } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { MemoryRouter } from 'react-router';
 import { ToastProvider } from '@/components/ui/Toast';
+import { A11yProvider } from '@/features/a11y/A11yProvider';
 import { TooltipProvider } from '@/components/ui/Tooltip';
 import type { PostCard } from '@vybora/types';
 
@@ -18,9 +19,11 @@ export function renderWithProviders(
     ...render(
       <QueryClientProvider client={qc}>
         <ToastProvider>
-          <TooltipProvider>
-            <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
-          </TooltipProvider>
+          <A11yProvider>
+            <TooltipProvider>
+              <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+            </TooltipProvider>
+          </A11yProvider>
         </ToastProvider>
       </QueryClientProvider>,
     ),

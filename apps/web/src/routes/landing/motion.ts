@@ -2,13 +2,19 @@ import Lenis from 'lenis';
 import 'lenis/dist/lenis.css';
 import { useEffect, useRef, useState } from 'react';
 
-const prefersReducedMotion = () =>
-  typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const prefersReducedMotion = () => {
+  const attr =
+    typeof document !== 'undefined' ? document.documentElement.dataset.reduceMotion : undefined;
+  if (attr) return attr === 'true';
+  return (
+    typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+};
 
 /** Smooth scrolling for the marketing page only; off with reduced motion. */
-export function useSmoothScroll() {
+export function useSmoothScroll(enabled: boolean) {
   useEffect(() => {
-    if (prefersReducedMotion()) return;
+    if (!enabled) return;
     const lenis = new Lenis({ lerp: 0.12, smoothWheel: true, anchors: { offset: -88 } });
     let frame = 0;
     const raf = (time: number) => {
@@ -20,7 +26,7 @@ export function useSmoothScroll() {
       cancelAnimationFrame(frame);
       lenis.destroy();
     };
-  }, []);
+  }, [enabled]);
 }
 
 const GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';

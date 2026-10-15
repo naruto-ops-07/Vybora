@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { RouterProvider } from 'react-router';
 import { ToastProvider } from '@/components/ui/Toast';
 import { TooltipProvider } from '@/components/ui/Tooltip';
+import { A11yProvider } from '@/features/a11y/A11yProvider';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import { envResult } from '@/lib/env';
 import { createQueryClient } from '@/lib/queryClient';
@@ -18,11 +19,13 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
-        <TooltipProvider>
-          <AuthProvider>
-            <RouterProvider router={router} />
-          </AuthProvider>
-        </TooltipProvider>
+        <A11yProvider>
+          <TooltipProvider>
+            <AuthProvider>
+              <RouterProvider router={router} />
+            </AuthProvider>
+          </TooltipProvider>
+        </A11yProvider>
       </ToastProvider>
     </QueryClientProvider>
   );

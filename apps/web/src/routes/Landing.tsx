@@ -11,6 +11,7 @@ import { MotionConfig } from 'motion/react';
 import { Link } from 'react-router';
 import { ButtonLink } from '@/components/ui/Button';
 import { Logo } from '@/components/ui/Logo';
+import { useA11y } from '@/features/a11y/A11yProvider';
 import { Faq } from './landing/Faq';
 import { Hero } from './landing/Hero';
 import { Journey } from './landing/Journey';
@@ -61,9 +62,10 @@ const SERVER = {
 };
 
 export default function Landing() {
-  useSmoothScroll();
+  const { reduceMotion } = useA11y();
+  useSmoothScroll(!reduceMotion);
   return (
-    <MotionConfig reducedMotion="user">
+    <MotionConfig reducedMotion={reduceMotion ? 'always' : 'never'}>
       <div className="min-h-dvh bg-bg">
         <header className="sticky top-0 z-30 border-b border-line bg-bg/90 backdrop-blur-md">
           <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
