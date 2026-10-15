@@ -5,11 +5,19 @@ import {
   WaveformIcon,
 } from '@phosphor-icons/react';
 import type { ReduceMotionPref, TextSize } from '@vybora/core';
+import type { KeyboardEvent } from 'react';
 import { Toggle } from '@/components/ui/Field';
 import { Row, Section } from '@/features/connect/ui';
 import { SettingsPage } from '@/features/settings/SettingsNav';
 import { cn } from '@/lib/cn';
 import { useA11y } from './A11yProvider';
+
+const ARROW_STEP: Record<string, number> = {
+  ArrowRight: 1,
+  ArrowDown: 1,
+  ArrowLeft: -1,
+  ArrowUp: -1,
+};
 
 function Segmented<T extends string>({
   label,
@@ -22,10 +30,24 @@ function Segmented<T extends string>({
   options: { value: T; label: string }[];
   onChange: (v: T) => void;
 }) {
+  // ARIA radio pattern: only the checked radio is tabbable; arrows move and select.
+  const at = Math.max(
+    0,
+    options.findIndex((o) => o.value === value),
+  );
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const step = ARROW_STEP[e.key];
+    if (!step) return;
+    e.preventDefault();
+    const next = (at + step + options.length) % options.length;
+    onChange(options[next]!.value);
+    e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
+  };
   return (
     <div
       role="radiogroup"
       aria-label={label}
+      onKeyDown={onKeyDown}
       className="grid overflow-hidden rounded-md border border-line-strong"
       style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
     >
@@ -35,6 +57,7 @@ function Segmented<T extends string>({
           type="button"
           role="radio"
           aria-checked={value === o.value}
+          tabIndex={i === at ? 0 : -1}
           onClick={() => onChange(o.value)}
           className={cn(
             'touch-target flex h-10 items-center justify-center px-2 text-sm font-medium transition-colors duration-150',

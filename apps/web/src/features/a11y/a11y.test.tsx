@@ -1,7 +1,7 @@
 import type { ChatTheme } from '@vybora/api';
 import { highContrastThemes } from '@vybora/config';
 import { A11Y_STORAGE_KEY } from '@vybora/core';
-import { renderHook, screen } from '@testing-library/react';
+import { renderHook, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
 import { renderWithProviders } from '@/test/utils';
@@ -48,6 +48,36 @@ describe('Accessibility settings', () => {
       'aria-checked',
       'true',
     );
+  });
+});
+
+describe('Accessibility radio groups', () => {
+  it('follow the ARIA radio pattern: one tab stop, arrows move and select', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AccessibilityPage />);
+    const group = screen.getByRole('radiogroup', { name: 'Message text size' });
+    const radios = within(group).getAllByRole('radio');
+    const checked = radios.find((r) => r.getAttribute('aria-checked') === 'true')!;
+    expect(radios.filter((r) => r.tabIndex === 0)).toEqual([checked]);
+
+    checked.focus();
+    await user.keyboard('{ArrowRight}');
+    const next = radios[radios.indexOf(checked) + 1]!;
+    expect(next).toHaveFocus();
+    expect(next).toHaveAttribute('aria-checked', 'true');
+    expect(next.tabIndex).toBe(0);
+    expect(checked.tabIndex).toBe(-1);
+
+    await user.keyboard('{ArrowLeft}{ArrowUp}');
+    const prev = radios[radios.indexOf(checked) - 1]!;
+    expect(prev).toHaveFocus();
+    expect(prev).toHaveAttribute('aria-checked', 'true');
+    expect(document.documentElement.dataset.textSize).toBe('sm');
+
+    // Wraps around from the first option to the last.
+    await user.keyboard('{ArrowUp}');
+    expect(radios.at(-1)).toHaveFocus();
+    expect(radios.at(-1)).toHaveAttribute('aria-checked', 'true');
   });
 });
 
