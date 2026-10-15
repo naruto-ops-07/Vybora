@@ -21,7 +21,7 @@ import {
   type Receipt,
 } from '@vybora/core';
 import type { LocalMessage } from '@vybora/e2ee';
-import { memo, useRef, useState, type ReactNode } from 'react';
+import { memo, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { useA11y } from '@/features/a11y/A11yProvider';
 import { cn } from '@/lib/cn';
@@ -210,14 +210,14 @@ export const Bubble = memo(function Bubble({
     else if (a === 'delete') onDelete(m);
   };
   const senderLabel = mine ? 'You' : nameOf(m.senderId);
-  const label = [
-    senderLabel,
-    formatClock(m.createdAt),
-    messageSummary(m),
-    receipt ? RECEIPT_LABEL[receipt] : null,
-  ]
-    .filter(Boolean)
-    .join(', ');
+  const time = useMemo(() => formatClock(m.createdAt), [m.createdAt]);
+  const label = useMemo(
+    () =>
+      [senderLabel, time, messageSummary(m), receipt ? RECEIPT_LABEL[receipt] : null]
+        .filter(Boolean)
+        .join(', '),
+    [senderLabel, time, m, receipt],
+  );
   const filled = mine && !m.deleted && m.kind !== 'undecryptable';
   const media =
     m.kind === 'attachment' &&
@@ -382,7 +382,7 @@ export const Bubble = memo(function Bubble({
                 )}
               >
                 {m.expiresAt && <TimerIcon size={11} aria-label="Disappearing message" />}
-                <time dateTime={m.createdAt}>{formatClock(m.createdAt)}</time>
+                <time dateTime={m.createdAt}>{time}</time>
                 {mine && receipt && <Ticks receipt={receipt} />}
               </span>
               {runEnd && <Tail mine={mine} fill={filled ? theme.bubble : undefined} />}

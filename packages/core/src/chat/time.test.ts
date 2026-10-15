@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { dayKey, dayLabel, formatLastSeen, formatRowTime, formatUnread } from './time';
+import { describe, expect, it, vi } from 'vitest';
+import { dayKey, dayLabel, formatClock, formatLastSeen, formatRowTime, formatUnread } from './time';
 
 const utc = { timeZone: 'UTC', locale: 'en-GB' };
 // 2026-10-15 is a Thursday.
@@ -60,5 +60,23 @@ describe('formatUnread', () => {
     expect(formatUnread(5)).toBe('5');
     expect(formatUnread(99)).toBe('99');
     expect(formatUnread(100)).toBe('99+');
+  });
+});
+
+describe('formatter cache', () => {
+  it('builds each formatter once for repeated calls', () => {
+    const opts = { timeZone: 'Asia/Kolkata', locale: 'en-GB' };
+    const now = new Date('2026-10-15T12:00:00Z');
+    // Warm the cache, then count constructions across many messages.
+    formatClock('2026-10-15T08:00:00Z', opts);
+    formatRowTime('2026-10-10T08:00:00Z', now, opts);
+    const spy = vi.spyOn(Intl, 'DateTimeFormat');
+    for (let i = 0; i < 50; i++) {
+      formatClock(new Date(Date.UTC(2026, 9, 15, 8, i)), opts);
+      formatRowTime(new Date(Date.UTC(2026, 9, 10, 8, i)), now, opts);
+    }
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+    expect(formatClock('2026-10-15T08:05:00Z', opts)).toBe('13:35');
   });
 });

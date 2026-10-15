@@ -1,5 +1,5 @@
 import type { LocalMessage } from '@vybora/e2ee';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { formatClock, messageSummary, type Receipt } from '@vybora/core';
 import { Pressable, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
@@ -107,6 +107,15 @@ export const Bubble = memo(function Bubble({
   nameOf,
 }: BubbleProps) {
   const cc = useCc();
+  const senderLabel = mine ? 'You' : nameOf(m.senderId);
+  const time = useMemo(() => formatClock(m.createdAt), [m.createdAt]);
+  const label = useMemo(
+    () =>
+      [senderLabel, time, messageSummary(m), receipt ? RECEIPT_LABEL[receipt] : null]
+        .filter(Boolean)
+        .join(', '),
+    [senderLabel, time, m, receipt],
+  );
   const filled = mine && !m.deleted && m.kind !== 'undecryptable';
   const textColor = filled ? theme.outgoingText : theme.incomingText;
   const meta = filled ? 'rgba(255,255,255,0.75)' : cc.textSubtle;
@@ -211,7 +220,7 @@ export const Bubble = memo(function Bubble({
           <Icon name="timer" size={11} color={meta} accessibilityLabel="Disappearing message" />
         )}
         <Text mono style={{ color: meta, fontSize: 11 }}>
-          {formatClock(m.createdAt)}
+          {time}
         </Text>
         {mine && receipt && <Ticks receipt={receipt} color={meta} />}
       </View>
@@ -249,14 +258,7 @@ export const Bubble = memo(function Bubble({
             ? 'Tap to retry sending'
             : 'Long press for reactions and actions'
       }
-      accessibilityLabel={[
-        mine ? 'You' : nameOf(m.senderId),
-        formatClock(m.createdAt),
-        messageSummary(m),
-        receipt ? RECEIPT_LABEL[receipt] : null,
-      ]
-        .filter(Boolean)
-        .join(', ')}
+      accessibilityLabel={label}
       style={{
         alignItems: mine ? 'flex-end' : 'flex-start',
         paddingHorizontal: 12,

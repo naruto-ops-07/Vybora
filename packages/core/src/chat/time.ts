@@ -7,10 +7,24 @@ export interface TimeOpts {
 
 const MINUTE = 60_000;
 
+/**
+ * Formatters are expensive to build and these helpers run per message per render,
+ * so they are cached by locale, zone and options (a handful of combinations in practice).
+ */
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+function formatter(opts: TimeOpts, fmt: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `${opts.locale ?? ''}|${opts.timeZone ?? ''}|${JSON.stringify(fmt)}`;
+  let f = formatters.get(key);
+  if (!f) {
+    f = new Intl.DateTimeFormat(opts.locale, { ...fmt, timeZone: opts.timeZone });
+    formatters.set(key, f);
+  }
+  return f;
+}
+
 function parts(date: Date, opts: TimeOpts, fmt: Intl.DateTimeFormatOptions) {
-  return new Intl.DateTimeFormat(opts.locale, { ...fmt, timeZone: opts.timeZone }).formatToParts(
-    date,
-  );
+  return formatter(opts, fmt).formatToParts(date);
 }
 
 function part(ps: Intl.DateTimeFormatPart[], type: Intl.DateTimeFormatPartTypes) {
@@ -33,17 +47,11 @@ function dayDiff(a: string, b: string): number {
 }
 
 export function formatClock(date: Date | string, opts: TimeOpts = {}): string {
-  return new Intl.DateTimeFormat(opts.locale, {
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: opts.timeZone,
-  }).format(new Date(date));
+  return formatter(opts, { hour: '2-digit', minute: '2-digit' }).format(new Date(date));
 }
 
 function weekday(date: Date, opts: TimeOpts, style: 'long' | 'short') {
-  return new Intl.DateTimeFormat(opts.locale, { weekday: style, timeZone: opts.timeZone }).format(
-    date,
-  );
+  return formatter(opts, { weekday: style }).format(date);
 }
 
 /** "Mon 12 Oct" (or "12 Oct"), with the year only when it isn't the current one. */
