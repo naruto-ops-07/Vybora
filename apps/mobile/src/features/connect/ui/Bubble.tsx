@@ -78,6 +78,11 @@ export interface BubbleProps {
   onRetry: (m: LocalMessage) => void;
   onOpenImage: (uri: string) => void;
   onReplyPress?: (id: string) => void;
+  selecting?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (m: LocalMessage) => void;
+  showReplyButton?: boolean;
+  onReply?: (m: LocalMessage) => void;
   nameOf: (userId: string) => string;
 }
 
@@ -94,6 +99,11 @@ export const Bubble = memo(function Bubble({
   onLongPress,
   onRetry,
   onOpenImage,
+  selecting,
+  selected,
+  onToggleSelect,
+  showReplyButton,
+  onReply,
   nameOf,
 }: BubbleProps) {
   const cc = useCc();
@@ -210,21 +220,32 @@ export const Bubble = memo(function Bubble({
   // The merged label hides the inner Pressable from screen readers, so its
   // gestures are re-exposed as accessibility actions. Opening a photo is not:
   // the decrypted image URI lives inside ImageAttachment, not here.
-  const actions = [
-    ...(receipt === 'failed' ? [{ name: 'activate', label: 'Retry sending' }] : []),
-    ...(actionable ? [{ name: 'longpress', label: 'Message actions' }] : []),
-  ];
+  // While selecting, activating toggles the message and the menu is unavailable.
+  const actions = selecting
+    ? [{ name: 'activate', label: selected ? 'Deselect message' : 'Select message' }]
+    : [
+        ...(receipt === 'failed' ? [{ name: 'activate', label: 'Retry sending' }] : []),
+        ...(actionable ? [{ name: 'longpress', label: 'Message actions' }] : []),
+      ];
 
   return (
     <View
       accessible
       accessibilityActions={actions}
       onAccessibilityAction={(e) => {
-        if (e.nativeEvent.actionName === 'activate' && receipt === 'failed') onRetry(m);
-        else if (e.nativeEvent.actionName === 'longpress' && actionable) onLongPress(m);
+        const name = e.nativeEvent.actionName;
+        if (selecting) {
+          if (name === 'activate') onToggleSelect?.(m);
+        } else if (name === 'activate' && receipt === 'failed') onRetry(m);
+        else if (name === 'longpress' && actionable) onLongPress(m);
       }}
+      accessibilityState={selecting ? { selected: !!selected } : undefined}
       accessibilityHint={
-        receipt === 'failed' ? 'Tap to retry sending' : 'Long press for reactions and actions'
+        selecting
+          ? undefined
+          : receipt === 'failed'
+            ? 'Tap to retry sending'
+            : 'Long press for reactions and actions'
       }
       accessibilityLabel={[
         mine ? 'You' : nameOf(m.senderId),
@@ -262,6 +283,25 @@ export const Bubble = memo(function Bubble({
           maxWidth: '100%',
         }}
       >
+        {selecting && (
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: radii.sm,
+              borderWidth: 1,
+              borderColor: selected ? cc.accent : cc.lineStrong,
+              backgroundColor: selected ? cc.accent : 'transparent',
+              alignItems: 'center',
+              justifyContent: 'center',
+              alignSelf: 'center',
+            }}
+          >
+            {selected && <Icon name="check" size={14} color={cc.onAccent} />}
+          </View>
+        )}
         {avatar &&
           !mine &&
           (runEnd ? (
@@ -270,8 +310,10 @@ export const Bubble = memo(function Bubble({
             <View style={{ width: 28 }} />
           ))}
         <Pressable
-          onLongPress={() => !m.deleted && m.kind !== 'undecryptable' && onLongPress(m)}
-          onPress={() => receipt === 'failed' && onRetry(m)}
+          onLongPress={
+            selecting ? undefined : () => !m.deleted && m.kind !== 'undecryptable' && onLongPress(m)
+          }
+          onPress={() => (selecting ? onToggleSelect?.(m) : receipt === 'failed' && onRetry(m))}
           delayLongPress={280}
           style={[
             bubbleStyle,
@@ -289,6 +331,16 @@ export const Bubble = memo(function Bubble({
             />
           )}
         </Pressable>
+        {showReplyButton && !selecting && (
+          <Pressable
+            onPress={() => onReply?.(m)}
+            accessibilityRole="button"
+            accessibilityLabel="Reply"
+            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Icon name="corner-up-left" size={18} color={cc.textMuted} />
+          </Pressable>
+        )}
       </View>
       {reactions.length > 0 && (
         <View

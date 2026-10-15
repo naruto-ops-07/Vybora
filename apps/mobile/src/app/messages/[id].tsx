@@ -1,6 +1,15 @@
 import { Icon } from '@/components/Icon';
 import { fetchConnectPrivacy, isMuted, peerOf, qk, watchPresence } from '@vybora/api';
-import { dayLabel, friendlyError, layoutThread, messageSummary, receiptOf } from '@vybora/core';
+import {
+  dayLabel,
+  friendlyError,
+  layoutThread,
+  messageActions,
+  messageSummary,
+  receiptOf,
+  selectionToText,
+  type MessageAction,
+} from '@vybora/core';
 import { MAX_ATTACHMENT_BYTES, type LocalMessage } from '@vybora/e2ee';
 import { useQuery } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
@@ -15,6 +24,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  BackHandler,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -47,8 +57,10 @@ import {
   useCc,
   useThemeDef,
 } from '@/features/connect/ui/primitives';
+import { SwipeToReply } from '@/features/connect/ui/SwipeToReply';
 import { DateChip, JumpToLatest, UnreadDivider } from '@/features/connect/ui/ThreadParts';
 import { useA11y } from '@/lib/a11y';
+import { useHaptics } from '@/lib/haptics';
 import { radii } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
 
@@ -90,6 +102,17 @@ function Chat() {
   const [selected, setSelected] = useState<LocalMessage | null>(null);
   const [viewer, setViewer] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const haptic = useHaptics();
+  const { prefs: a11y } = useA11y();
+  const [selection, setSelection] = useState<Set<string> | null>(null);
+  useEffect(() => setSelection(null), [id]);
+  const toggle = (mid: string) =>
+    setSelection((s) => {
+      const next = new Set(s ?? []);
+      if (next.has(mid)) next.delete(mid);
+      else next.add(mid);
+      return next;
+    });
   const [online, setOnline] = useState(false);
 
   const theme = effectiveTheme(
@@ -131,6 +154,22 @@ function Chat() {
       ),
     [messages.data],
   );
+
+  const selectedMessages = [...ordered].reverse().filter((m) => selection?.has(m.id));
+  const canBulkDelete =
+    selectedMessages.length > 0 &&
+    selectedMessages.every((m) => messageActions(m, m.senderId === userId).includes('delete'));
+  const startReply = (m: LocalMessage) => setReplyTo(m);
+
+  // Android back leaves select mode first.
+  useEffect(() => {
+    if (!selection) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setSelection(null);
+      return true;
+    });
+    return () => sub.remove();
+  }, [selection]);
 
   // The unread divider uses the read position from when the chat was opened,
   // so it neither vanishes when the messages are acknowledged nor grows when
@@ -389,65 +428,159 @@ function Chat() {
         options={{
           headerStyle: { backgroundColor: cc.panel },
           headerTintColor: cc.text,
-          headerTitle: () => (
-            <Pressable
-              onPress={() => router.push({ pathname: '/messages/details/[id]', params: { id } })}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}
-              accessibilityRole="button"
-              accessibilityLabel={`${title}, chat details`}
-            >
-              {conv?.kind === 'group' ? (
-                <View
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 17,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: cc.strong,
-                  }}
-                >
-                  <Icon name="users" size={16} color={cc.accent} />
-                </View>
-              ) : (
-                <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={34} />
-              )}
-              <View>
-                <Text style={{ color: cc.text, fontWeight: '600', fontSize: 16 }} numberOfLines={1}>
-                  {title}
-                </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                  {typingNames.length ? (
-                    <TypingDots color={def.accent} />
-                  ) : (
-                    <Icon
-                      name={online ? 'circle' : 'lock'}
-                      size={9}
-                      color={online ? cc.success : cc.textSubtle}
-                    />
-                  )}
+          ...(selection
+            ? {
+                headerTitle: () => (
                   <Text
-                    mono
-                    style={{ color: typingNames.length ? def.accent : cc.textSubtle, fontSize: 11 }}
+                    style={{ color: cc.text, fontWeight: '600', fontSize: 17 }}
+                    accessibilityLiveRegion="polite"
                   >
-                    {subtitle}
+                    {selection.size} selected
                   </Text>
-                </View>
-              </View>
-            </Pressable>
-          ),
-          headerRight: () =>
-            conv?.disappearingSeconds ? (
-              <View
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                accessibilityLabel="Disappearing messages on"
-              >
-                <Icon name="timer" size={15} color={cc.textMuted} />
-                <Text mono style={{ color: cc.textMuted, fontSize: 12 }}>
-                  {TTL_LABEL(conv.disappearingSeconds)}
-                </Text>
-              </View>
-            ) : null,
+                ),
+                headerLeft: () => (
+                  <Pressable
+                    onPress={() => setSelection(null)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel selection"
+                    style={{
+                      width: 44,
+                      height: 44,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Icon name="x" size={22} color={cc.text} />
+                  </Pressable>
+                ),
+                headerRight: () => (
+                  <View style={{ flexDirection: 'row' }}>
+                    <Pressable
+                      onPress={() => {
+                        void Clipboard.setStringAsync(
+                          selectionToText(selectedMessages, { nameOf }),
+                        );
+                        setSelection(null);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Copy selected"
+                      style={{
+                        width: 44,
+                        height: 44,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Icon name="copy" size={20} color={cc.text} />
+                    </Pressable>
+                    <Pressable
+                      disabled={!canBulkDelete}
+                      onPress={() =>
+                        Alert.alert(
+                          `Delete ${selectedMessages.length} messages for everyone?`,
+                          'They are removed on every device in this chat.',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Delete',
+                              style: 'destructive',
+                              onPress: () => {
+                                const targets = selectedMessages.map((m) => m.id);
+                                setSelection(null);
+                                void run(async () => {
+                                  for (const target of targets)
+                                    await engine!.send(id, { t: 'delete', target });
+                                });
+                              },
+                            },
+                          ],
+                        )
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel="Delete selected for everyone"
+                      accessibilityState={{ disabled: !canBulkDelete }}
+                      style={{
+                        width: 44,
+                        height: 44,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: canBulkDelete ? 1 : 0.4,
+                      }}
+                    >
+                      <Icon name="trash" size={20} color={cc.danger} />
+                    </Pressable>
+                  </View>
+                ),
+              }
+            : {
+                headerTitle: () => (
+                  <Pressable
+                    onPress={() =>
+                      router.push({ pathname: '/messages/details/[id]', params: { id } })
+                    }
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${title}, chat details`}
+                  >
+                    {conv?.kind === 'group' ? (
+                      <View
+                        style={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: 17,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: cc.strong,
+                        }}
+                      >
+                        <Icon name="users" size={16} color={cc.accent} />
+                      </View>
+                    ) : (
+                      <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={34} />
+                    )}
+                    <View>
+                      <Text
+                        style={{ color: cc.text, fontWeight: '600', fontSize: 16 }}
+                        numberOfLines={1}
+                      >
+                        {title}
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        {typingNames.length ? (
+                          <TypingDots color={def.accent} />
+                        ) : (
+                          <Icon
+                            name={online ? 'circle' : 'lock'}
+                            size={9}
+                            color={online ? cc.success : cc.textSubtle}
+                          />
+                        )}
+                        <Text
+                          mono
+                          style={{
+                            color: typingNames.length ? def.accent : cc.textSubtle,
+                            fontSize: 11,
+                          }}
+                        >
+                          {subtitle}
+                        </Text>
+                      </View>
+                    </View>
+                  </Pressable>
+                ),
+                headerRight: () =>
+                  conv?.disappearingSeconds ? (
+                    <View
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                      accessibilityLabel="Disappearing messages on"
+                    >
+                      <Icon name="timer" size={15} color={cc.textMuted} />
+                      <Text mono style={{ color: cc.textMuted, fontSize: 12 }}>
+                        {TTL_LABEL(conv.disappearingSeconds)}
+                      </Text>
+                    </View>
+                  ) : null,
+              }),
         }}
       />
       <ChatBackground theme={theme}>
@@ -525,26 +658,41 @@ function Chat() {
               const m = item.message;
               const group = conv?.kind === 'group';
               const sender = conv?.members.find((x) => x.id === m.senderId);
+              const canReply = messageActions(m, item.mine).includes('reply');
               return (
-                <Bubble
-                  message={m}
-                  mine={item.mine}
-                  theme={def}
-                  senderName={group ? nameOf(m.senderId) : undefined}
-                  showSender={!!group && item.runStart}
-                  runStart={item.runStart}
-                  runEnd={item.runEnd}
-                  avatar={
-                    group && !item.mine
-                      ? { path: sender?.avatar_path ?? null, name: sender?.username ?? '?' }
-                      : undefined
-                  }
-                  receipt={receiptOf(m, userId, conv?.members ?? [])}
-                  onLongPress={setSelected}
-                  onRetry={(x) => void run(() => engine!.retry(id, x.id))}
-                  onOpenImage={setViewer}
-                  nameOf={nameOf}
-                />
+                <SwipeToReply
+                  enabled={!selection && canReply}
+                  onReply={() => startReply(m)}
+                  color={def.accent}
+                >
+                  <Bubble
+                    message={m}
+                    mine={item.mine}
+                    theme={def}
+                    senderName={group ? nameOf(m.senderId) : undefined}
+                    showSender={!!group && item.runStart}
+                    runStart={item.runStart}
+                    runEnd={item.runEnd}
+                    avatar={
+                      group && !item.mine
+                        ? { path: sender?.avatar_path ?? null, name: sender?.username ?? '?' }
+                        : undefined
+                    }
+                    receipt={receiptOf(m, userId, conv?.members ?? [])}
+                    onLongPress={(x) => {
+                      haptic('medium');
+                      setSelected(x);
+                    }}
+                    onRetry={(x) => void run(() => engine!.retry(id, x.id))}
+                    onOpenImage={setViewer}
+                    nameOf={nameOf}
+                    selecting={!!selection}
+                    selected={!!selection?.has(m.id)}
+                    onToggleSelect={(x) => toggle(x.id)}
+                    showReplyButton={a11y.alwaysShowActions && canReply}
+                    onReply={startReply}
+                  />
+                </SwipeToReply>
               );
             }}
             ListFooterComponent={
@@ -626,7 +774,7 @@ function Chat() {
 
       <MessageActions
         message={selected}
-        mine={selected?.senderId === userId}
+        actions={selected ? messageActions(selected, selected.senderId === userId) : []}
         myReaction={
           selected
             ? (Object.entries(selected.reactions).find(([, u]) => u.includes(userId))?.[0] ?? null)
@@ -636,32 +784,29 @@ function Chat() {
         onReact={(emoji) => {
           const m = selected!;
           const mine = m.reactions[emoji]?.includes(userId);
+          haptic('selection');
           setSelected(null);
           void run(() => engine!.send(id, { t: 'reaction', target: m.id, emoji, remove: mine }));
         }}
-        onReply={() => {
-          setReplyTo(selected);
-          setSelected(null);
-        }}
-        onCopy={() => {
-          void Clipboard.setStringAsync(selected?.body ?? '');
-          setSelected(null);
-        }}
-        onDelete={() => {
+        onAction={(a: MessageAction) => {
           const m = selected!;
           setSelected(null);
-          Alert.alert(
-            'Delete for everyone?',
-            'This removes the message on every device in this chat.',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Delete',
-                style: 'destructive',
-                onPress: () => void run(() => engine!.send(id, { t: 'delete', target: m.id })),
-              },
-            ],
-          );
+          if (a === 'reply') startReply(m);
+          else if (a === 'copy') void Clipboard.setStringAsync(m.body ?? '');
+          else if (a === 'select') setSelection(new Set([m.id]));
+          else if (a === 'delete')
+            Alert.alert(
+              'Delete for everyone?',
+              'This removes the message on every device in this chat.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: () => void run(() => engine!.send(id, { t: 'delete', target: m.id })),
+                },
+              ],
+            );
         }}
       />
 

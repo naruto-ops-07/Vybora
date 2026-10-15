@@ -1,5 +1,9 @@
 import type { LocalMessage } from '@vybora/e2ee';
+import 'react-native-gesture-handler/jestSetup';
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Text as RNText } from 'react-native';
+jest.mock('react-native-worklets', () => require('react-native-worklets/src/mock'));
+jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 jest.mock('@/lib/supabase', () => ({
   supabase: {},
   supabaseConfig: { url: 'http://x', anonKey: 'k' },
@@ -12,6 +16,8 @@ jest.mock('@/features/connect/ui/Attachment', () => ({
 }));
 
 import { Bubble } from '@/features/connect/ui/Bubble';
+import { MessageActions } from '@/features/connect/ui/MessageActions';
+import { SwipeToReply } from '@/features/connect/ui/SwipeToReply';
 import { useThemeDef } from '@/features/connect/ui/primitives';
 import { DateChip, JumpToLatest, UnreadDivider } from '@/features/connect/ui/ThreadParts';
 
@@ -134,5 +140,121 @@ describe('mobile conversation layout', () => {
     await fireEvent(el, 'accessibilityAction', act('longpress'));
     expect(onRetry).not.toHaveBeenCalled();
     expect(onLongPress).not.toHaveBeenCalled();
+  });
+});
+
+function Selecting({
+  selected,
+  onToggleSelect,
+  onLongPress = jest.fn(),
+  showReplyButton,
+  onReply,
+}: {
+  selected: boolean;
+  onToggleSelect: (m: LocalMessage) => void;
+  onLongPress?: (m: LocalMessage) => void;
+  showReplyButton?: boolean;
+  onReply?: (m: LocalMessage) => void;
+}) {
+  const theme = useThemeDef({});
+  return (
+    <Bubble
+      message={msg}
+      mine={false}
+      theme={theme}
+      showSender={false}
+      runStart
+      runEnd
+      onLongPress={onLongPress}
+      onRetry={jest.fn()}
+      onOpenImage={jest.fn()}
+      nameOf={() => 'Maya'}
+      selecting
+      selected={selected}
+      onToggleSelect={onToggleSelect}
+      showReplyButton={showReplyButton}
+      onReply={onReply}
+    />
+  );
+}
+
+describe('message actions sheet', () => {
+  it('lists the allowed actions under the reaction bar', async () => {
+    const onAction = jest.fn();
+    await render(
+      <MessageActions
+        message={msg}
+        myReaction={null}
+        actions={['reply', 'copy', 'select']}
+        onClose={jest.fn()}
+        onReact={jest.fn()}
+        onAction={onAction}
+      />,
+    );
+    expect(screen.getAllByRole('menuitem').length).toBeGreaterThan(3);
+    await fireEvent.press(screen.getByText('Select'));
+    expect(onAction).toHaveBeenCalledWith('select');
+    expect(screen.queryByText('Delete for everyone')).toBeNull();
+  });
+});
+
+describe('select mode and reply affordances', () => {
+  it('toggles on press, drops the long-press action and carries selected state', async () => {
+    const onToggle = jest.fn();
+    const onLongPress = jest.fn();
+    const { rerender } = await render(
+      <Selecting selected={false} onToggleSelect={onToggle} onLongPress={onLongPress} />,
+    );
+    const el = screen.getByLabelText(/^Maya, .+, See you at 7$/);
+    expect(el.props.accessibilityState).toEqual({ selected: false });
+    expect(el.props.accessibilityActions).toEqual([{ name: 'activate', label: 'Select message' }]);
+    await fireEvent(el, 'accessibilityAction', act('activate'));
+    expect(onToggle).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }));
+    await fireEvent(el, 'accessibilityAction', act('longpress'));
+    expect(onLongPress).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByText('See you at 7'));
+    expect(onToggle).toHaveBeenCalledTimes(2);
+    await rerender(<Selecting selected onToggleSelect={onToggle} onLongPress={onLongPress} />);
+    const on = screen.getByLabelText(/^Maya, .+, See you at 7$/);
+    expect(on.props.accessibilityState).toEqual({ selected: true });
+    expect(on.props.accessibilityActions).toEqual([
+      { name: 'activate', label: 'Deselect message' },
+    ]);
+  });
+
+  it('shows an always-available reply button outside select mode', async () => {
+    const onReply = jest.fn();
+    const theme = { current: null as ReturnType<typeof useThemeDef> | null };
+    function Plain() {
+      theme.current = useThemeDef({});
+      return (
+        <Bubble
+          message={msg}
+          mine={false}
+          theme={theme.current}
+          showSender={false}
+          runStart
+          runEnd
+          onLongPress={jest.fn()}
+          onRetry={jest.fn()}
+          onOpenImage={jest.fn()}
+          nameOf={() => 'Maya'}
+          showReplyButton
+          onReply={onReply}
+        />
+      );
+    }
+    await render(<Plain />);
+    await fireEvent.press(screen.getByLabelText('Reply'));
+    expect(onReply).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }));
+  });
+
+  it('renders the swipe wrapper around its content', async () => {
+    await render(
+      <SwipeToReply enabled onReply={jest.fn()} color="#000">
+        <RNText>child</RNText>
+      </SwipeToReply>,
+    );
+    expect(screen.getByText('child')).toBeTruthy();
   });
 });
