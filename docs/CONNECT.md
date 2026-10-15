@@ -48,6 +48,7 @@ persist ratchet + outbox first        epoch == current? rate limit → INSERT
 ```
 
 - **Postgres is the source of truth.** Realtime only signals "something changed"; clients always fetch from the table, so a missed event just means the next sync catches up.
+- **Typing and presence channels are shared per topic.** `packages/api/src/realtime.ts` keeps one reference-counted channel per topic, so the chat list and the open chat can both use `connect:conv:<id>` or watch the same person's presence without tearing the channel down for each other.
 - **Exactly-once sending.** Ratchet state and the ciphertext are persisted before posting. A retry re-sends the identical ciphertext under the same `client_id` (unique per device), so a lost response cannot create duplicates or desynchronize ratchets.
 - **Membership changes** go through `post_commit()`, which takes a per-conversation row lock and compares epochs; concurrent commits lose cleanly (`epoch_conflict`), resync and retry. Devices are claimed through `claim_key_packages()` (`FOR UPDATE SKIP LOCKED`, one-time key packages).
 - **Self-healing membership.** Every client reconciles on sync: new devices of members are added, revoked devices and departed users are removed.
@@ -118,9 +119,9 @@ Address books are never uploaded and there is no contact discovery by phone numb
 
 ## Last seen and online status
 
-- Activity is recorded in `user_activity` (no client grants) by `touch_activity()`: server time, at most once per 60 s, and only while the user's own **Show when I'm online** setting is on.
+- Activity is recorded in `user_activity` (no client grants) by `touch_activity()`: server time, at most once per 60 s. Clients call it only while the user's own **Show when I'm online** setting is on; the function itself does not check the setting, but `last_seen()` never returns activity for someone whose setting is off.
 - `last_seen(uuid[])` returns a contact's last activity only if you share a chat, both of you show online status, neither has blocked the other, and the target list has at most 100 ids. Timestamps are truncated to the minute. Turning your setting off hides everyone's last seen from you, and yours from them.
-- Presence on the private `connect:presence:<user>` channels follows the same reciprocal rule, enforced by the `connect: presence read` policy.
+- Presence on the private `connect:presence:<user>` channels follows the same reciprocal rule, enforced by the `connect: presence read` policy. Realtime checks that policy when a channel is joined (and when the access token refreshes), so after a block or a settings change an already-joined client can keep seeing presence until it rejoins. `last_seen()` applies the rules on every call.
 - Chat headers show "Online", "last seen …" (minute precision) or the "end-to-end encrypted" line when nothing may be shown. Cached last-seen values are not displayed while your own setting is off.
 - Requires migration `20261015000012_last_seen.sql`. It is additive and has not been pushed to the hosted project.
 - **Accessibility settings** (Settings → Accessibility) are stored only on the device (web `localStorage`, mobile `expo-secure-store`) and are never uploaded.
