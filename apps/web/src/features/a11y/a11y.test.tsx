@@ -1,8 +1,12 @@
+import type { ChatTheme } from '@vybora/api';
+import { highContrastThemes } from '@vybora/config';
 import { A11Y_STORAGE_KEY } from '@vybora/core';
-import { screen } from '@testing-library/react';
+import { renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
 import { renderWithProviders } from '@/test/utils';
+import { chatBackground, useChatTheme } from '@/features/connect/ui';
+import { A11yProvider } from './A11yProvider';
 import AccessibilityPage from './AccessibilityPage';
 
 afterEach(() => localStorage.clear());
@@ -44,5 +48,28 @@ describe('Accessibility settings', () => {
       'aria-checked',
       'true',
     );
+  });
+});
+
+describe('High contrast in chats', () => {
+  const theme: ChatTheme = { preset: 'rose', wallpaper: 'stars' };
+
+  it('overrides the chat theme with the high-contrast accent and drops the wallpaper', () => {
+    localStorage.setItem(A11Y_STORAGE_KEY, JSON.stringify({ highContrast: true }));
+    const { result } = renderHook(() => useChatTheme(theme), { wrapper: A11yProvider });
+    const hc = highContrastThemes.light;
+    expect(result.current).toMatchObject({
+      bubble: hc.accent,
+      bubbleText: hc.onAccent,
+      accent: hc.accent,
+      highContrast: true,
+    });
+    expect(chatBackground(theme, result.current)).toEqual({});
+  });
+
+  it('keeps the chat theme and wallpaper otherwise', () => {
+    const { result } = renderHook(() => useChatTheme(theme), { wrapper: A11yProvider });
+    expect(result.current.bubble).not.toBe(highContrastThemes.light.accent);
+    expect(chatBackground(theme, result.current)).toHaveProperty('backgroundImage');
   });
 });

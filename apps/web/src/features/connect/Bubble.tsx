@@ -223,7 +223,8 @@ export const Bubble = memo(function Bubble({
     m.kind === 'attachment' &&
     (m.attachment?.kind === 'image' || m.attachment?.kind === 'video') &&
     !m.deleted;
-  const metaColor = filled ? 'text-white/75' : 'text-subtle';
+  // High contrast: meta text keeps the bubble's own (on-accent) colour at full strength.
+  const metaColor = filled ? (theme.highContrast ? '' : 'text-white/75') : 'text-subtle';
 
   let content: ReactNode;
   if (m.kind === 'undecryptable') {
@@ -359,7 +360,7 @@ export const Bubble = memo(function Bubble({
                   onClick={() => !selecting && onJumpTo?.(m.replyTo!.id)}
                   className={cn(
                     'mb-1.5 block w-full border-l-2 py-0.5 pl-2 text-left',
-                    filled ? 'border-white/70' : '',
+                    filled ? (theme.highContrast ? 'border-current' : 'border-white/70') : '',
                     media && 'mx-1 mt-1 w-[calc(100%-8px)]',
                   )}
                   style={filled ? undefined : { borderColor: theme.accent }}

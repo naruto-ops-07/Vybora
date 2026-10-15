@@ -433,7 +433,7 @@ export default function ChatPane() {
     <div className="flex h-full min-w-0 flex-1">
       <div
         className="relative flex h-full min-w-0 flex-1 flex-col bg-bg"
-        style={chatBackground(theme, def.accent)}
+        style={chatBackground(theme, def)}
         onDragOver={(e) => {
           if (composerDisabled || !e.dataTransfer.types.includes('Files')) return;
           e.preventDefault();

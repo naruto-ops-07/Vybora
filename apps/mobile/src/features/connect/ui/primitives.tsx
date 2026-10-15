@@ -13,6 +13,7 @@ import {
 import { SvgXml } from 'react-native-svg';
 import { Icon, type IconName } from '@/components/Icon';
 import { Text } from '@/components/Text';
+import { useA11y } from '@/lib/a11y';
 import { radii, useTheme } from '@/lib/theme';
 
 /**
@@ -63,36 +64,43 @@ export interface ResolvedTheme extends ChatThemeDef {
   outgoingText: string;
   incoming: string;
   incomingText: string;
+  /** Accessibility → High contrast: chat colours follow the high-contrast accent. */
+  highContrast?: boolean;
 }
 
 /** A shared chat theme resolved against the current light/dark mode. */
 export function useThemeDef(theme: ChatTheme): ResolvedTheme {
   const cc = useCc();
+  const { highContrast } = useA11y().prefs;
   return useMemo(() => {
     const def = resolveChatTheme(theme);
+    // In high contrast `cc` already carries the high-contrast tokens.
+    const accent = highContrast ? cc.accent : chatAccent(def, cc.dark);
     return {
       ...def,
-      accent: chatAccent(def, cc.dark),
+      accent,
       background: cc.night,
-      outgoing: def.bubble,
-      outgoingText: def.bubbleText,
+      outgoing: highContrast ? cc.accent : def.bubble,
+      outgoingText: highContrast ? cc.onAccent : def.bubbleText,
       incoming: cc.bubbleIn,
       incomingText: cc.text,
+      highContrast,
     };
-  }, [theme, cc]);
+  }, [theme, cc, highContrast]);
 }
 
 /** Chat background: app background + optional flat wallpaper (identical on every device). */
 export function ChatBackground({ theme, children }: { theme: ChatTheme; children: ReactNode }) {
   const def = useThemeDef(theme);
+  // High contrast: plain background, no wallpaper pattern.
   const svg = useMemo(
-    () => wallpaperSvg(theme.wallpaper ?? 'none', def.accent),
-    [theme.wallpaper, def.accent],
+    () => (def.highContrast ? null : wallpaperSvg(theme.wallpaper ?? 'none', def.accent)),
+    [theme.wallpaper, def.accent, def.highContrast],
   );
   return (
     <View style={{ flex: 1, backgroundColor: def.background }}>
       {svg && (
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <View testID="chat-wallpaper" style={StyleSheet.absoluteFill} pointerEvents="none">
           <SvgXml xml={svg} width="100%" height="100%" preserveAspectRatio="xMidYMid slice" />
         </View>
       )}

@@ -118,7 +118,12 @@ export const Bubble = memo(function Bubble({
   );
   const filled = mine && !m.deleted && m.kind !== 'undecryptable';
   const textColor = filled ? theme.outgoingText : theme.incomingText;
-  const meta = filled ? 'rgba(255,255,255,0.75)' : cc.textSubtle;
+  // High contrast: meta text keeps the bubble's own (on-accent) colour at full strength.
+  const meta = filled
+    ? theme.highContrast
+      ? theme.outgoingText
+      : 'rgba(255,255,255,0.75)'
+    : cc.textSubtle;
   const media =
     m.kind === 'attachment' && m.attachment?.kind !== 'voice' && m.attachment?.kind !== 'file';
 
@@ -185,7 +190,11 @@ export const Bubble = memo(function Bubble({
         <View
           style={{
             borderLeftWidth: 2,
-            borderLeftColor: filled ? 'rgba(255,255,255,0.7)' : theme.accent,
+            borderLeftColor: filled
+              ? theme.highContrast
+                ? meta
+                : 'rgba(255,255,255,0.7)'
+              : theme.accent,
             paddingLeft: 8,
             marginBottom: 6,
           }}
