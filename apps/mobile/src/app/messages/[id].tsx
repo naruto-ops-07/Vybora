@@ -57,6 +57,7 @@ import {
   useTyping,
 } from '@/features/connect/hooks';
 import { copyText } from '@/features/connect/copy';
+import { useToday } from '@/features/connect/useToday';
 import { Bubble } from '@/features/connect/ui/Bubble';
 import { Composer } from '@/features/connect/ui/Composer';
 import { MessageActions } from '@/features/connect/ui/MessageActions';
@@ -207,15 +208,16 @@ function Chat() {
     if (conv && readMark?.id !== id)
       setReadMark({ id, seq: conv.lastReadSeq, until: conv.lastSeq });
   }, [conv, id, readMark?.id]);
+  const today = useToday();
   const rows = useMemo(
     () =>
       layoutThread([...ordered].reverse(), {
         myUserId: userId,
         lastReadSeq: readMark?.id === id ? readMark.seq : Number.MAX_SAFE_INTEGER,
         unreadUntilSeq: readMark?.id === id ? readMark.until : undefined,
-        now: new Date(),
+        now: today,
       }).reverse(),
-    [ordered, userId, readMark, id],
+    [ordered, userId, readMark, id, today],
   );
 
   const { reduceMotion } = useA11y();

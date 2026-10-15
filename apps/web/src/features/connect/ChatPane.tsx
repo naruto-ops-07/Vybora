@@ -55,6 +55,7 @@ import {
 } from './hooks';
 import { DateChip, groupByDay, JumpToLatest, UnreadDivider } from './ThreadParts';
 import { useCopyText } from './copy';
+import { useToday } from './useToday';
 import { BulkDeleteDialog, SelectBar } from './SelectBar';
 import { threadKeyDown } from './threadKeys';
 import { chatBackground, effectiveTheme, GroupAvatar, TypingDots, useChatTheme } from './ui';
@@ -201,15 +202,16 @@ export default function ChatPane() {
       setReadMark({ id, seq: conv.lastReadSeq, until: conv.lastSeq });
   }, [conv, id, readMark?.id]);
 
+  const today = useToday();
   const items = useMemo(
     () =>
       layoutThread(ordered, {
         myUserId: userId,
         lastReadSeq: readMark?.id === id ? readMark.seq : Number.MAX_SAFE_INTEGER,
         unreadUntilSeq: readMark?.id === id ? readMark.until : undefined,
-        now: new Date(),
+        now: today,
       }),
-    [ordered, userId, readMark, id],
+    [ordered, userId, readMark, id, today],
   );
   const days = useMemo(() => groupByDay(items), [items]);
   const newestId = ordered.at(-1)?.id;
