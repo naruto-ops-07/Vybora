@@ -1,10 +1,20 @@
-import { iconSizes, radii, spacing, themes, type ThemeTokens } from '@vybora/config';
+import {
+  highContrastThemes,
+  iconSizes,
+  radii,
+  spacing,
+  themes,
+  type ThemeTokens,
+} from '@vybora/config';
 import { useColorScheme } from 'react-native';
+import { useA11y } from './a11y';
 
 export function useTheme(): ThemeTokens & { dark: boolean } {
   const scheme = useColorScheme();
+  const { prefs } = useA11y();
   const dark = scheme === 'dark';
-  return { ...(dark ? themes.dark : themes.light), dark };
+  const set = prefs.highContrast ? highContrastThemes : themes;
+  return { ...(dark ? set.dark : set.light), dark };
 }
 
 export { iconSizes, radii, spacing };

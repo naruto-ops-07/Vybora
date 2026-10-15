@@ -6,6 +6,7 @@ import {
   type TextInputProps,
   type TextProps,
 } from 'react-native';
+import { useA11y } from '@/lib/a11y';
 import { font } from '@/lib/theme';
 
 const WEIGHT_FAMILY: Record<string, string> = {
@@ -35,18 +36,36 @@ function withFamily(style: TextProps['style'], mono?: boolean) {
   return { ...flat, fontFamily, fontWeight: undefined };
 }
 
-/** Drop-in replacement for React Native's Text that uses Archivo (or IBM Plex Mono). */
-export const Text = forwardRef<RNText, TextProps & { mono?: boolean }>(function Text(
-  { style, mono, ...rest },
-  ref,
+/** Apply the user's message text scale to fontSize/lineHeight (opt-in via `scale`). */
+function withScale(
+  flat: ReturnType<typeof withFamily>,
+  scale: boolean | undefined,
+  factor: number,
 ) {
-  return <RNText ref={ref} {...rest} style={withFamily(style, mono)} />;
-});
+  if (!scale || factor === 1) return flat;
+  return {
+    ...flat,
+    fontSize: flat.fontSize ? flat.fontSize * factor : undefined,
+    lineHeight: flat.lineHeight ? flat.lineHeight * factor : undefined,
+  };
+}
+
+/** Drop-in replacement for React Native's Text that uses Archivo (or IBM Plex Mono). */
+export const Text = forwardRef<RNText, TextProps & { mono?: boolean; scale?: boolean }>(
+  function Text({ style, mono, scale, ...rest }, ref) {
+    const { textScale } = useA11y();
+    return (
+      <RNText ref={ref} {...rest} style={withScale(withFamily(style, mono), scale, textScale)} />
+    );
+  },
+);
 
 /** Drop-in TextInput that uses Archivo. */
-export const TextInput = forwardRef<RNTextInput, TextInputProps>(function TextInput(
-  { style, ...rest },
-  ref,
-) {
-  return <RNTextInput ref={ref} {...rest} style={withFamily(style)} />;
-});
+export const TextInput = forwardRef<RNTextInput, TextInputProps & { scale?: boolean }>(
+  function TextInput({ style, scale, ...rest }, ref) {
+    const { textScale } = useA11y();
+    return (
+      <RNTextInput ref={ref} {...rest} style={withScale(withFamily(style), scale, textScale)} />
+    );
+  },
+);

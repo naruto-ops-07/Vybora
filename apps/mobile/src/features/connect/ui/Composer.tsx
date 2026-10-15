@@ -208,6 +208,7 @@ export function Composer({
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
           <SquareButton icon="paperclip" label="Attach photo, video or file" onPress={onAttach} />
           <TextInput
+            scale
             value={text}
             onChangeText={(v) => {
               setText(v);

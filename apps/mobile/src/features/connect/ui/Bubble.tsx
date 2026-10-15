@@ -88,6 +88,7 @@ export const Bubble = memo(function Bubble({
         {a.kind === 'file' && <FileAttachment attachment={a} tint={textColor} />}
         {!!m.caption && (
           <Text
+            scale
             style={{
               color: textColor,
               fontSize: 15,
@@ -101,7 +102,11 @@ export const Bubble = memo(function Bubble({
       </View>
     );
   } else {
-    content = <Text style={{ color: textColor, fontSize: 15, lineHeight: 22 }}>{m.body}</Text>;
+    content = (
+      <Text scale style={{ color: textColor, fontSize: 15, lineHeight: 22 }}>
+        {m.body}
+      </Text>
+    );
   }
 
   const reactions = Object.entries(m.reactions).filter(([, users]) => users.length);

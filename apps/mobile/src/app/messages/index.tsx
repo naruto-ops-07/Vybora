@@ -153,6 +153,7 @@ function ChatRow({
       <View style={{ flex: 1, gap: 2 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Text
+            scale
             style={{
               color: cc.text,
               fontSize: 16,
@@ -174,6 +175,7 @@ function ChatRow({
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Text
+            scale
             style={{ color: unread ? cc.text : cc.textMuted, fontSize: 14, flex: 1 }}
             numberOfLines={1}
           >
