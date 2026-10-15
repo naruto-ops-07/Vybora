@@ -224,3 +224,41 @@ export function useTyping(conversationId: string, enabled: boolean) {
 
   return { typingUsers, notifyTyping };
 }
+
+/** Typing users per conversation for the chat list (max 20 chats; 5 s expiry). */
+export function useInboxTyping(conversationIds: readonly string[], enabled: boolean) {
+  const { userId } = useMe();
+  const [typing, setTyping] = useState<Record<string, string[]>>({});
+  const key = conversationIds.slice(0, 20).join(',');
+
+  useEffect(() => {
+    setTyping({});
+    if (!enabled || !key) return;
+    const timers = new Map<string, ReturnType<typeof setTimeout>>();
+    const update = (conv: string, who: string, on: boolean) =>
+      setTyping((prev) => {
+        const cur = prev[conv] ?? [];
+        const next = on ? (cur.includes(who) ? cur : [...cur, who]) : cur.filter((x) => x !== who);
+        return { ...prev, [conv]: next };
+      });
+    const channels = key.split(',').map((conv) =>
+      joinTypingChannel(supabase, conv, userId, (who, on) => {
+        const t = `${conv}:${who}`;
+        const old = timers.get(t);
+        if (old) clearTimeout(old);
+        update(conv, who, on);
+        if (on)
+          timers.set(
+            t,
+            setTimeout(() => update(conv, who, false), 5000),
+          );
+      }),
+    );
+    return () => {
+      channels.forEach((c) => c.leave());
+      timers.forEach(clearTimeout);
+    };
+  }, [key, enabled, userId]);
+
+  return typing;
+}

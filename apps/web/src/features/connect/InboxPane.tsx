@@ -1,6 +1,7 @@
 import {
   ArchiveIcon,
   BellSlashIcon,
+  DotsThreeIcon,
   LockSimpleIcon,
   MagnifyingGlassIcon,
   NotePencilIcon,
@@ -15,7 +16,7 @@ import {
   watchPresence,
   type SecureConversation,
 } from '@vybora/api';
-import { truncate } from '@vybora/core';
+import { chatRowPreview, formatRowTime, formatUnread, receiptOf } from '@vybora/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
@@ -23,13 +24,15 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Tip } from '@/components/ui/Tooltip';
 import { useToast } from '@/components/ui/Toast';
+import { useA11y } from '@/features/a11y/A11yProvider';
 import { useMe } from '@/features/auth/AuthProvider';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
+import { ChatRowMenu, RowPreviewText } from './ChatRowParts';
 import { useConnect } from './ConnectProvider';
 import {
   conversationTitle,
-  messagePreview,
+  useInboxTyping,
   useNicknames,
   usePreviews,
   useSecureInbox,
@@ -88,6 +91,21 @@ export function InboxPane({
 
   const convs = useMemo(() => inbox.data ?? [], [inbox.data]);
   const previews = usePreviews(convs.map((c) => c.id));
+  const { prefs: a11y } = useA11y();
+  const recentIds = useMemo(
+    () =>
+      [...convs]
+        .filter((c) => c.id !== activeId && !c.archived)
+        .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt))
+        .slice(0, 20)
+        .map((c) => c.id),
+    [convs, activeId],
+  );
+  const typing = useInboxTyping(recentIds, !!engine);
+  const memberName = (c: SecureConversation, uid: string) => {
+    const m = c.members.find((x) => x.id === uid);
+    return nicknames.data?.[uid] ?? (m?.display_name || m?.username || 'Someone');
+  };
   const peersKey = useMemo(
     () =>
       [...new Set(convs.flatMap((c) => (c.kind === 'direct' ? [peerOf(c, userId)?.id ?? ''] : [])))]
@@ -134,6 +152,16 @@ export function InboxPane({
       () => qc.invalidateQueries({ queryKey: qk.connect.inbox }),
       () => toast.show('Couldn’t update this chat. Check your connection and try again.', 'error'),
     );
+
+  const archive = (c: SecureConversation) => {
+    const next = !c.archived;
+    prefs(c, { archived: next });
+    if (next)
+      toast.show('Archived', 'success', {
+        label: 'Undo',
+        onClick: () => prefs(c, { archived: false }),
+      });
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -244,106 +272,149 @@ export function InboxPane({
             const peer = peerOf(c, userId);
             const title = conversationTitle(c, userId, nicknames.data);
             const last = previews.data?.[c.id];
-            const mine = last?.senderId === userId;
             const unread = c.unreadCount > 0;
+            const preview = chatRowPreview(last, {
+              myUserId: userId,
+              isGroup: c.kind === 'group',
+              typingUserIds: typing[c.id] ?? [],
+              nameOf: (uid) => memberName(c, uid),
+              receipt: last ? receiptOf(last, userId, c.members) : undefined,
+            });
+            const muted = isMuted(c) || !c.notificationsEnabled;
             const active = activeId === c.id;
             return (
               <li key={c.id} className="group relative">
-                <Link
-                  to={`/messages/${c.id}`}
-                  data-chat-link
-                  aria-current={active ? 'page' : undefined}
-                  className={cn(
-                    'relative flex items-center gap-3 px-4 py-2.5 transition-colors duration-150',
-                    active ? 'bg-surface-strong' : 'hover:bg-surface-muted',
-                  )}
+                <ChatRowMenu
+                  conv={c}
+                  title={title}
+                  onPrefs={(p) => prefs(c, p)}
+                  onArchive={() => archive(c)}
                 >
-                  {active && (
-                    <span
-                      className="absolute inset-y-0 left-0 w-0.5 bg-accent"
-                      aria-hidden="true"
-                    />
-                  )}
-                  <span className="relative">
-                    {c.kind === 'group' ? (
-                      <GroupAvatar size={44} />
-                    ) : (
-                      <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={44} />
+                  <Link
+                    to={`/messages/${c.id}`}
+                    data-chat-link
+                    aria-current={active ? 'page' : undefined}
+                    className={cn(
+                      'relative flex items-center gap-3 px-4 py-2.5 transition-colors duration-150',
+                      active ? 'bg-surface-strong' : 'hover:bg-surface-muted',
                     )}
-                    {peer && online.has(peer.id) && (
+                  >
+                    {active && (
                       <span
-                        className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-surface bg-success"
-                        aria-label="Online"
+                        className="absolute inset-y-0 left-0 w-0.5 bg-accent"
+                        aria-hidden="true"
                       />
                     )}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5">
-                      <span
-                        className={cn(
-                          'truncate text-[15px]',
-                          unread ? 'font-semibold' : 'font-medium',
-                        )}
-                      >
-                        {title}
-                      </span>
-                      {c.pinned && (
-                        <PushPinIcon
-                          size={12}
-                          className="shrink-0 text-subtle"
-                          aria-label="Pinned"
+                    <span className="relative">
+                      {c.kind === 'group' ? (
+                        <GroupAvatar size={44} />
+                      ) : (
+                        <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={44} />
+                      )}
+                      {peer && online.has(peer.id) && (
+                        <span
+                          className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-surface bg-success"
+                          aria-label="Online"
                         />
                       )}
-                      {isMuted(c) && (
-                        <BellSlashIcon
-                          size={12}
-                          className="shrink-0 text-subtle"
-                          aria-label="Muted"
-                        />
-                      )}
-                      <Meta className={cn('ml-auto shrink-0', unread && 'text-accent')}>
-                        {listTime(last?.createdAt ?? c.lastMessageAt)}
-                      </Meta>
                     </span>
-                    <span className="mt-0.5 flex items-center gap-2">
-                      <span
-                        className={cn('truncate text-[13px]', unread ? 'text-ink' : 'text-muted')}
-                      >
-                        {engine ? (
-                          `${mine ? 'You: ' : ''}${truncate(messagePreview(last), 70)}`
-                        ) : (
-                          <span className="inline-flex items-center gap-1">
-                            <LockSimpleIcon size={11} aria-hidden="true" /> Encrypted
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1.5">
+                        <span
+                          className={cn(
+                            'truncate text-msg',
+                            unread ? 'font-semibold' : 'font-medium',
+                          )}
+                        >
+                          {title}
+                        </span>
+                        {c.pinned && (
+                          <PushPinIcon
+                            size={12}
+                            className="shrink-0 text-subtle"
+                            aria-label="Pinned"
+                          />
+                        )}
+                        {isMuted(c) && (
+                          <BellSlashIcon
+                            size={12}
+                            className="shrink-0 text-subtle"
+                            aria-label="Muted"
+                          />
+                        )}
+                        <Meta className={cn('ml-auto shrink-0', unread && 'text-accent')}>
+                          {formatRowTime(last?.createdAt ?? c.lastMessageAt, new Date())}
+                        </Meta>
+                      </span>
+                      <span className="mt-0.5 flex items-center gap-2">
+                        <span
+                          className={cn('truncate text-[13px]', unread ? 'text-ink' : 'text-muted')}
+                        >
+                          {engine ? (
+                            <RowPreviewText preview={preview} unread={unread} />
+                          ) : (
+                            <span className="inline-flex items-center gap-1">
+                              <LockSimpleIcon size={11} aria-hidden="true" /> Encrypted
+                            </span>
+                          )}
+                        </span>
+                        {unread && (
+                          <span
+                            className={cn(
+                              'ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-sm px-1 font-mono text-[11px] font-medium',
+                              muted ? 'bg-surface-strong text-ink' : 'bg-accent text-on-accent',
+                            )}
+                          >
+                            {formatUnread(c.unreadCount)}
+                            <span className="sr-only"> unread</span>
                           </span>
                         )}
                       </span>
-                      {unread && (
-                        <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-sm bg-accent px-1 font-mono text-[11px] font-medium text-on-accent">
-                          {c.unreadCount > 99 ? '99+' : c.unreadCount}
-                          <span className="sr-only"> unread</span>
-                        </span>
-                      )}
                     </span>
-                  </span>
-                </Link>
-                <div className="absolute right-2 top-1.5 hidden gap-0.5 rounded-md border border-line bg-surface p-0.5 group-focus-within:flex group-hover:flex">
+                  </Link>
+                </ChatRowMenu>
+                <div
+                  className={cn(
+                    'absolute right-2 top-1.5 gap-0.5 rounded-md border border-line bg-surface p-0.5 group-focus-within:flex group-hover:flex',
+                    a11y.alwaysShowActions ? 'flex' : 'hidden',
+                  )}
+                >
                   <button
                     type="button"
                     onClick={() => prefs(c, { pinned: !c.pinned })}
                     className="rounded-sm p-1.5 text-muted hover:bg-surface-muted hover:text-ink"
                     aria-label={c.pinned ? `Unpin ${title}` : `Pin ${title}`}
-                    title={c.pinned ? 'Unpin' : 'Pin'}
                   >
                     {c.pinned ? <PushPinSlashIcon size={14} /> : <PushPinIcon size={14} />}
                   </button>
                   <button
                     type="button"
-                    onClick={() => prefs(c, { archived: !c.archived })}
+                    onClick={() => archive(c)}
                     className="rounded-sm p-1.5 text-muted hover:bg-surface-muted hover:text-ink"
                     aria-label={c.archived ? `Unarchive ${title}` : `Archive ${title}`}
-                    title={c.archived ? 'Unarchive' : 'Archive'}
                   >
                     <ArchiveIcon size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      const link = e.currentTarget
+                        .closest('li')
+                        ?.querySelector<HTMLElement>('[data-chat-link]');
+                      const r = link?.getBoundingClientRect();
+                      link?.dispatchEvent(
+                        new MouseEvent('contextmenu', {
+                          bubbles: true,
+                          cancelable: true,
+                          clientX: (r?.right ?? 0) - 40,
+                          clientY: (r?.top ?? 0) + 20,
+                        }),
+                      );
+                    }}
+                    className="touch-target rounded-sm p-1.5 text-muted hover:bg-surface-muted hover:text-ink"
+                    aria-label={`More actions for ${title}`}
+                  >
+                    <DotsThreeIcon size={14} />
                   </button>
                 </div>
               </li>
