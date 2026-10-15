@@ -5,3 +5,4 @@ export * from './media';
 export * from './errors';
 export * from './permissions';
 export * from './stories';
+export * from './chat';
