@@ -138,7 +138,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             }}
             placeholder="Message"
             aria-label="Message"
-            className="max-h-[180px] w-full resize-none bg-transparent py-2 text-[15px] leading-6 outline-none placeholder:text-subtle"
+            className="max-h-[180px] w-full resize-none bg-transparent py-2 text-msg outline-none placeholder:text-subtle"
           />
         </div>
         <Button size="icon" onClick={send} disabled={!text.trim()} aria-label="Send">

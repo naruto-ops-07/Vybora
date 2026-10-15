@@ -107,6 +107,14 @@ describe('Composer', () => {
     expect(box).toHaveValue('');
   });
 
+  it('follows the message text size setting', () => {
+    render(<Composer {...props} draftKey="c4" onSend={vi.fn()} />, { wrapper: TooltipProvider });
+    const box = screen.getByRole('textbox', { name: 'Message' });
+    // .text-msg reads --vy-msg-size, which Accessibility → Text size sets.
+    expect(box).toHaveClass('text-msg');
+    expect(box.className).not.toMatch(/text-\[\d+px\]/);
+  });
+
   it('explains why sending is unavailable while the device joins the group', () => {
     render(
       <Composer
