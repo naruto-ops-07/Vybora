@@ -138,6 +138,8 @@ export interface BubbleProps {
   myUserId: string;
   nameOf: (userId: string) => string;
   onReact: (m: LocalMessage, emoji: string) => void;
+  /** Copy the text with feedback; without it the copy is silent (errors ignored). */
+  onCopy?: (m: LocalMessage) => void;
   onReply: (m: LocalMessage) => void;
   onDelete: (m: LocalMessage) => void;
   onRetry: (m: LocalMessage) => void;
@@ -165,6 +167,7 @@ export const Bubble = memo(function Bubble({
   myUserId,
   nameOf,
   onReact,
+  onCopy,
   onReply,
   onDelete,
   onRetry,
@@ -203,9 +206,13 @@ export const Bubble = memo(function Bubble({
       }),
     );
   };
+  const copy = () => {
+    if (onCopy) onCopy(m);
+    else void navigator.clipboard?.writeText(m.body ?? '').catch(() => undefined);
+  };
   const onAction = (a: MessageAction) => {
     if (a === 'reply') onReply(m);
-    else if (a === 'copy') void navigator.clipboard?.writeText(m.body ?? '');
+    else if (a === 'copy') copy();
     else if (a === 'select') onSelect(m);
     else if (a === 'delete') onDelete(m);
   };
@@ -408,10 +415,7 @@ export const Bubble = memo(function Bubble({
                   <ArrowBendUpLeftIcon size={16} />
                 </ActionButton>
                 {!prefs.alwaysShowActions && m.kind === 'text' && (
-                  <ActionButton
-                    label="Copy text"
-                    onClick={() => void navigator.clipboard?.writeText(m.body ?? '')}
-                  >
+                  <ActionButton label="Copy text" onClick={copy}>
                     <CopyIcon size={15} />
                   </ActionButton>
                 )}

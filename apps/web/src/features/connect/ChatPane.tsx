@@ -54,6 +54,7 @@ import {
   useTyping,
 } from './hooks';
 import { DateChip, groupByDay, JumpToLatest, UnreadDivider } from './ThreadParts';
+import { useCopyText } from './copy';
 import { BulkDeleteDialog, SelectBar } from './SelectBar';
 import { threadKeyDown } from './threadKeys';
 import { chatBackground, effectiveTheme, GroupAvatar, TypingDots, useChatTheme } from './ui';
@@ -232,21 +233,16 @@ export default function ChatPane() {
       return kept.length === s.size ? s : new Set(kept);
     });
   }, [ordered]);
+  const copyText = useCopyText();
   const copySelection = async () => {
     if (!selectedMessages.length) return;
-    try {
-      if (!navigator.clipboard) throw new Error('no clipboard');
-      await navigator.clipboard.writeText(selectionToText(selectedMessages, { nameOf }));
-    } catch {
-      toast.show('Couldn’t copy. Your browser blocked clipboard access.', 'error');
-      return;
-    }
-    toast.show(
+    const copied = await copyText(
+      selectionToText(selectedMessages, { nameOf }),
       selectedMessages.length === 1
         ? 'Message copied'
         : `${selectedMessages.length} messages copied`,
-      'success',
     );
+    if (!copied) return;
     setSelection(null);
   };
 
@@ -624,6 +620,7 @@ export default function ChatPane() {
                       receipt={receiptOf(m, userId, conv?.members ?? [])}
                       myUserId={userId}
                       nameOf={nameOf}
+                      onCopy={(msg) => void copyText(msg.body ?? '')}
                       onReact={(msg, emoji) =>
                         void run(() =>
                           engine!.send(id, {

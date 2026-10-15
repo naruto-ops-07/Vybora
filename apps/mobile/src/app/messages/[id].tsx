@@ -22,7 +22,6 @@ import {
 } from '@vybora/core';
 import { MAX_ATTACHMENT_BYTES, type LocalMessage } from '@vybora/e2ee';
 import { useQuery } from '@tanstack/react-query';
-import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -57,6 +56,7 @@ import {
   useSecureMessages,
   useTyping,
 } from '@/features/connect/hooks';
+import { copyText } from '@/features/connect/copy';
 import { Bubble } from '@/features/connect/ui/Bubble';
 import { Composer } from '@/features/connect/ui/Composer';
 import { MessageActions } from '@/features/connect/ui/MessageActions';
@@ -485,9 +485,7 @@ function Chat() {
                     <Pressable
                       disabled={selectedMessages.length === 0}
                       onPress={() => {
-                        void Clipboard.setStringAsync(
-                          selectionToText(selectedMessages, { nameOf }),
-                        );
+                        void copyText(selectionToText(selectedMessages, { nameOf }));
                         setSelection(null);
                       }}
                       accessibilityRole="button"
@@ -824,7 +822,7 @@ function Chat() {
           const m = selected!;
           setSelected(null);
           if (a === 'reply') startReply(m);
-          else if (a === 'copy') void Clipboard.setStringAsync(m.body ?? '');
+          else if (a === 'copy') void copyText(m.body ?? '');
           else if (a === 'select') setSelection(new Set([m.id]));
           else if (a === 'delete')
             Alert.alert(
