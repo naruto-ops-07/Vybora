@@ -32,51 +32,58 @@ export function MessageMenu({
   onReact: (emoji: string) => void;
   onAction: (a: MessageAction) => void;
 }) {
-  if (!actions.length) return children;
+  // Always the same tree: swapping Root for bare children (select mode, sending → sent)
+  // would remount the message and drop keyboard focus. With no actions the trigger is
+  // disabled and there is no content.
+  const enabled = actions.length > 0;
   return (
     <ContextMenu.Root>
-      <ContextMenu.Trigger asChild>{children}</ContextMenu.Trigger>
-      <ContextMenu.Portal>
-        <ContextMenu.Content
-          collisionPadding={8}
-          className="menu z-50 min-w-52 rounded-md border border-line-strong bg-surface p-1"
-        >
-          <ContextMenu.Group
-            aria-label="Reactions"
-            className="flex gap-0.5 border-b border-line p-1"
+      <ContextMenu.Trigger asChild disabled={!enabled}>
+        {children}
+      </ContextMenu.Trigger>
+      {enabled && (
+        <ContextMenu.Portal>
+          <ContextMenu.Content
+            collisionPadding={8}
+            className="menu z-50 min-w-52 rounded-md border border-line-strong bg-surface p-1"
           >
-            {QUICK_REACTIONS.map((emoji) => {
-              const on = myReactions.includes(emoji);
-              return (
-                <ContextMenu.Item
-                  key={emoji}
-                  onSelect={() => onReact(emoji)}
-                  aria-label={`${on ? 'Remove' : 'React with'} ${emoji}`}
-                  className={cn(
-                    'touch-target flex h-9 w-9 cursor-pointer items-center justify-center rounded-sm text-lg outline-none data-[highlighted]:bg-surface-muted',
-                    on && 'bg-accent-soft',
-                  )}
-                >
-                  {emoji}
-                </ContextMenu.Item>
-              );
-            })}
-          </ContextMenu.Group>
-          {actions.map((a) => (
-            <ContextMenu.Item
-              key={a}
-              onSelect={() => onAction(a)}
-              className={cn(
-                'touch-target flex h-9 cursor-pointer items-center gap-3 rounded-sm px-2 text-sm outline-none data-[highlighted]:bg-surface-muted',
-                a === 'delete' && 'text-danger data-[highlighted]:bg-danger-soft',
-              )}
+            <ContextMenu.Group
+              aria-label="Reactions"
+              className="flex gap-0.5 border-b border-line p-1"
             >
-              {ICON[a]}
-              {LABEL[a]}
-            </ContextMenu.Item>
-          ))}
-        </ContextMenu.Content>
-      </ContextMenu.Portal>
+              {QUICK_REACTIONS.map((emoji) => {
+                const on = myReactions.includes(emoji);
+                return (
+                  <ContextMenu.Item
+                    key={emoji}
+                    onSelect={() => onReact(emoji)}
+                    aria-label={`${on ? 'Remove' : 'React with'} ${emoji}`}
+                    className={cn(
+                      'touch-target flex h-9 w-9 cursor-pointer items-center justify-center rounded-sm text-lg outline-none data-[highlighted]:bg-surface-muted',
+                      on && 'bg-accent-soft',
+                    )}
+                  >
+                    {emoji}
+                  </ContextMenu.Item>
+                );
+              })}
+            </ContextMenu.Group>
+            {actions.map((a) => (
+              <ContextMenu.Item
+                key={a}
+                onSelect={() => onAction(a)}
+                className={cn(
+                  'touch-target flex h-9 cursor-pointer items-center gap-3 rounded-sm px-2 text-sm outline-none data-[highlighted]:bg-surface-muted',
+                  a === 'delete' && 'text-danger data-[highlighted]:bg-danger-soft',
+                )}
+              >
+                {ICON[a]}
+                {LABEL[a]}
+              </ContextMenu.Item>
+            ))}
+          </ContextMenu.Content>
+        </ContextMenu.Portal>
+      )}
     </ContextMenu.Root>
   );
 }

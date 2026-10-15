@@ -87,6 +87,52 @@ describe('conversation layout', () => {
     expect(onJumpTo).not.toHaveBeenCalled();
   });
 
+  it('does not react or retry while selecting, toggling the message instead', async () => {
+    const onToggleSelect = vi.fn();
+    const onReact = vi.fn();
+    const onRetry = vi.fn();
+    render(
+      <Harness
+        message={{ ...msg, senderId: 'me', status: 'failed', reactions: { '👍': ['maya'] } }}
+        mine
+        receipt="failed"
+        selecting
+        selected={false}
+        onToggleSelect={onToggleSelect}
+        onReact={onReact}
+        onRetry={onRetry}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /^👍 1/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Not sent · Retry' }));
+    expect(onReact).not.toHaveBeenCalled();
+    expect(onRetry).not.toHaveBeenCalled();
+    expect(onToggleSelect).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the focused message mounted when select mode or its status changes', () => {
+    const mine = { ...msg, senderId: 'me', status: 'sending' as const };
+    const { rerender } = render(<Harness message={mine} mine receipt="sending" tabbable />);
+    const row = screen.getByRole('article');
+    act(() => row.focus());
+    rerender(<Harness message={{ ...mine, status: 'sent' }} mine receipt="sent" tabbable />);
+    expect(screen.getByRole('article')).toBe(row);
+    rerender(
+      <Harness
+        message={{ ...mine, status: 'sent' }}
+        mine
+        receipt="sent"
+        tabbable
+        selecting
+        onToggleSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('article')).toBe(row);
+    rerender(<Harness message={{ ...mine, status: 'sent' }} mine receipt="sent" tabbable />);
+    expect(screen.getByRole('article')).toBe(row);
+    expect(document.activeElement).toBe(row);
+  });
+
   it('marks the selected row without invalid article ARIA', () => {
     render(<Harness selecting selected onToggleSelect={vi.fn()} />);
     const row = screen.getByRole('article');

@@ -467,7 +467,8 @@ export const Bubble = memo(function Bubble({
               <button
                 key={emoji}
                 type="button"
-                onClick={() => onReact(m, emoji)}
+                // While selecting, the click falls through to the row and toggles selection.
+                onClick={selecting ? undefined : () => onReact(m, emoji)}
                 title={users.map(nameOf).join(', ')}
                 aria-label={`${emoji} ${users.length}, ${users.includes(myUserId) ? 'remove your reaction' : 'react'}`}
                 className={cn(
@@ -489,7 +490,7 @@ export const Bubble = memo(function Bubble({
         {receipt === 'failed' && (
           <button
             type="button"
-            onClick={() => onRetry(m)}
+            onClick={selecting ? undefined : () => onRetry(m)}
             className="mr-1 mt-0.5 text-xs font-medium text-danger underline-offset-2 hover:underline"
           >
             Not sent · Retry
