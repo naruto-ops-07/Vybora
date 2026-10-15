@@ -1,8 +1,16 @@
 import { Icon } from '@/components/Icon';
-import { fetchConnectPrivacy, isMuted, peerOf, qk, watchPresence } from '@vybora/api';
+import {
+  fetchConnectPrivacy,
+  isMuted,
+  peerOf,
+  qk,
+  touchActivity,
+  watchPresence,
+} from '@vybora/api';
 import {
   dayLabel,
   friendlyError,
+  headerStatus,
   layoutThread,
   messageActions,
   messageSummary,
@@ -42,6 +50,7 @@ import { ConnectGate } from '@/features/connect/ConnectGate';
 import {
   conversationTitle,
   useConversation,
+  useLastSeen,
   useNicknames,
   useSecureMessages,
   useTyping,
@@ -133,10 +142,17 @@ function Chat() {
   );
 
   const peerId = peer?.id;
+  const showOnline = !!privacy.data?.show_online;
   useEffect(
-    () => (peerId ? watchPresence(supabase, [peerId], (s) => setOnline(s.has(peerId))) : undefined),
-    [peerId],
+    () =>
+      peerId && showOnline
+        ? watchPresence(supabase, [peerId], (s) => setOnline(s.has(peerId)))
+        : undefined,
+    [peerId, showOnline],
   );
+  // Derived so the "online" state never outlives the toggle, even for one render.
+  const shownOnline = showOnline && online;
+  const lastSeen = useLastSeen(peerId, showOnline && conv?.kind === 'direct' && !shownOnline);
 
   // Safety-number change warning (direct chats).
   const keys = useQuery({
@@ -345,6 +361,7 @@ function Chat() {
       : undefined;
     setReplyTo(null);
     void run(() => engine!.send(id, { t: 'text', body, replyTo: r }));
+    if (showOnline) void touchActivity(supabase).catch(() => undefined);
   };
 
   const sendFile = async (
@@ -419,13 +436,14 @@ function Chat() {
   };
 
   const typingNames = typingUsers.map(nameOf);
-  const subtitle = typingNames.length
-    ? `${typingNames.join(', ')} typing…`
-    : conv?.kind === 'group'
-      ? `${conv.members.length} members`
-      : online
-        ? 'Online'
-        : 'End-to-end encrypted';
+  const subtitle = headerStatus({
+    isGroup: conv?.kind === 'group',
+    memberCount: conv?.members.length ?? 0,
+    typingNames,
+    online: shownOnline,
+    lastSeenAt: lastSeen.data ?? null,
+    now: new Date(),
+  });
   const composerDisabled = syncState === 'waiting_for_access' || syncState === 'broken';
 
   return (
@@ -565,9 +583,9 @@ function Chat() {
                           <TypingDots color={def.accent} />
                         ) : (
                           <Icon
-                            name={online ? 'circle' : 'lock'}
+                            name={shownOnline ? 'circle' : 'lock'}
                             size={9}
-                            color={online ? cc.success : cc.textSubtle}
+                            color={shownOnline ? cc.success : cc.textSubtle}
                           />
                         )}
                         <Text

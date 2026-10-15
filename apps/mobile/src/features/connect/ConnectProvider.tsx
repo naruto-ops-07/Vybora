@@ -8,6 +8,7 @@ import {
   qk,
   signOut,
   subscribeToSecureInbox,
+  touchActivity,
   type SecureConversation,
 } from '@vybora/api';
 import { ConnectEngine, cryptoBackend, type LocalMessage } from '@vybora/e2ee';
@@ -162,6 +163,21 @@ export function ConnectProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!engine || !userId || !privacy.data?.show_online) return;
     return announcePresence(supabase, userId);
+  }, [engine, userId, privacy.data?.show_online]);
+
+  // "Last seen": only recorded while the user shows their online status.
+  useEffect(() => {
+    if (!engine || !userId || !privacy.data?.show_online) return;
+    const touch = () => {
+      if (AppState.currentState === 'active') void touchActivity(supabase).catch(() => undefined);
+    };
+    touch();
+    const timer = setInterval(touch, 120_000);
+    const sub = AppState.addEventListener('change', (s) => s === 'active' && touch());
+    return () => {
+      clearInterval(timer);
+      sub.remove();
+    };
   }, [engine, userId, privacy.data?.show_online]);
 
   const value = useMemo<ConnectState>(

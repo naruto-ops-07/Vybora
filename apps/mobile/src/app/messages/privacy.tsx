@@ -162,8 +162,8 @@ function Privacy() {
         )}
         {toggle(
           'show_online',
-          'Show when I’m online',
-          'Only to people you share a chat with.',
+          'Show when I’m online and last seen',
+          'Only people you share a chat with can see it. If you turn this off, you won’t see other people’s either.',
           'circle',
         )}
         {/* Follow-based limits came from the old social features; only offer the way back. */}

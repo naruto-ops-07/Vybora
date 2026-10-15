@@ -1,4 +1,5 @@
 import {
+  fetchConnectPrivacy,
   fetchConversations,
   isMuted,
   muteUntil,
@@ -87,9 +88,22 @@ function Inbox() {
   );
   // Re-subscribe only when the set of people changes, not on every inbox refetch.
   const peersKey = directPeers.join(',');
-  useEffect(
-    () => (peersKey ? watchPresence(supabase, peersKey.split(','), setOnline) : undefined),
-    [peersKey],
+  const privacy = useQuery({
+    queryKey: qk.connect.privacy,
+    queryFn: () => fetchConnectPrivacy(supabase, userId),
+  });
+  const showOnline = !!privacy.data?.show_online;
+  useEffect(() => {
+    if (!peersKey || !showOnline) {
+      setOnline(new Set());
+      return;
+    }
+    return watchPresence(supabase, peersKey.split(','), setOnline);
+  }, [peersKey, showOnline]);
+  // Derived so dots never outlive the toggle, even for one render.
+  const shownOnline = useMemo(
+    () => (showOnline ? online : new Set<string>()),
+    [showOnline, online],
   );
 
   const shown = convs
@@ -335,7 +349,7 @@ function Inbox() {
                 title={conversationTitle(c, userId, nicknames.data)}
                 preview={preview}
                 time={formatRowTime(last?.createdAt ?? c.lastMessageAt, new Date())}
-                online={c.kind === 'direct' && online.has(peerOf(c, userId)?.id ?? '')}
+                online={c.kind === 'direct' && shownOnline.has(peerOf(c, userId)?.id ?? '')}
                 onPress={() => router.push({ pathname: '/messages/[id]', params: { id: c.id } })}
                 onLongPress={() => actions(c)}
                 onTogglePin={() => setPrefs(c, { pinned: !c.pinned })}
