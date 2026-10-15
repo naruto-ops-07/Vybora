@@ -27,12 +27,12 @@ import { useA11y } from '@/features/a11y/A11yProvider';
 import { cn } from '@/lib/cn';
 import { FileAttachment, ImageAttachment, VideoAttachment, VoiceAttachment } from './Attachment';
 import { MessageMenu } from './MessageMenu';
+import { QUICK_REACTIONS } from './reactions';
 import type { ResolvedChatTheme } from './ui';
 import { useSwipeReply } from './useSwipeReply';
 
 export type { Receipt } from '@vybora/core';
-/** Reactions are message content (shown as emoji), not interface icons. */
-export const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '🔥', '👍'];
+export { QUICK_REACTIONS };
 
 export function Ticks({ receipt }: { receipt: Receipt }) {
   if (receipt === 'sending') return <ClockIcon size={12} aria-label="Sending" />;
@@ -356,8 +356,13 @@ export const Bubble = memo(function Bubble({
             {actions.length > 0 && (
               <div
                 className={cn(
-                  'flex shrink-0 items-center transition-opacity duration-150 focus-within:opacity-100 group-hover:opacity-100',
-                  prefs.alwaysShowActions || picker ? 'opacity-100' : 'opacity-0',
+                  'flex shrink-0 items-center transition-opacity duration-150',
+                  prefs.alwaysShowActions
+                    ? 'opacity-100'
+                    : cn(
+                        'hover-actions focus-within:opacity-100 group-hover:opacity-100',
+                        picker ? 'opacity-100' : 'opacity-0',
+                      ),
                 )}
               >
                 <ActionButton label="React" onClick={() => setPicker((p) => !p)} expanded={picker}>
@@ -366,7 +371,7 @@ export const Bubble = memo(function Bubble({
                 <ActionButton label="Reply" onClick={() => onReply(m)}>
                   <ArrowBendUpLeftIcon size={16} />
                 </ActionButton>
-                {m.kind === 'text' && (
+                {!prefs.alwaysShowActions && m.kind === 'text' && (
                   <ActionButton
                     label="Copy text"
                     onClick={() => void navigator.clipboard?.writeText(m.body ?? '')}
@@ -374,7 +379,7 @@ export const Bubble = memo(function Bubble({
                     <CopyIcon size={15} />
                   </ActionButton>
                 )}
-                {mine && (
+                {!prefs.alwaysShowActions && mine && (
                   <ActionButton label="Delete for everyone" onClick={() => onDelete(m)} danger>
                     <TrashIcon size={15} />
                   </ActionButton>

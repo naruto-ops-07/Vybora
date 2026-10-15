@@ -3,7 +3,8 @@ import type { LocalMessage } from '@vybora/e2ee';
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { PointerEvent } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { A11yProvider } from '@/features/a11y/A11yProvider';
 import { TooltipProvider } from '@/components/ui/Tooltip';
 import { Bubble } from './Bubble';
 import { MessageMenu } from './MessageMenu';
@@ -60,30 +61,34 @@ describe('message menu on a real bubble', () => {
     reactions: {},
   };
 
+  afterEach(() => localStorage.clear());
+
   function Thread({ onReply }: { onReply: (id: string) => void }) {
     const theme = { ...resolveChatTheme(null), accent: '#0F766E' };
     return (
-      <TooltipProvider>
-        <div onKeyDown={(e) => threadKeyDown(e, { onReply })}>
-          <Bubble
-            message={msg}
-            mine
-            theme={theme}
-            showSender={false}
-            runStart
-            runEnd
-            tabbable
-            myUserId="me"
-            nameOf={() => 'You'}
-            onReact={vi.fn()}
-            onReply={vi.fn()}
-            onDelete={vi.fn()}
-            onRetry={vi.fn()}
-            onOpenImage={vi.fn()}
-            onSelect={vi.fn()}
-          />
-        </div>
-      </TooltipProvider>
+      <A11yProvider>
+        <TooltipProvider>
+          <div onKeyDown={(e) => threadKeyDown(e, { onReply })}>
+            <Bubble
+              message={msg}
+              mine
+              theme={theme}
+              showSender={false}
+              runStart
+              runEnd
+              tabbable
+              myUserId="me"
+              nameOf={() => 'You'}
+              onReact={vi.fn()}
+              onReply={vi.fn()}
+              onDelete={vi.fn()}
+              onRetry={vi.fn()}
+              onOpenImage={vi.fn()}
+              onSelect={vi.fn()}
+            />
+          </div>
+        </TooltipProvider>
+      </A11yProvider>
     );
   }
 
@@ -100,6 +105,70 @@ describe('message menu on a real bubble', () => {
     const { container } = render(<Thread onReply={vi.fn()} />);
     fireEvent.contextMenu(container.querySelector('[data-message-id]')!);
     expect(await screen.findByRole('menuitem', { name: 'Reply' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Delete for everyone' })).toBeInTheDocument();
+  });
+});
+
+describe('always-visible actions', () => {
+  const msg: LocalMessage = {
+    id: 'm2',
+    conversationId: 'c1',
+    seq: 4,
+    senderId: 'me',
+    senderDeviceId: 'd1',
+    createdAt: '2026-10-15T14:05:00Z',
+    expiresAt: null,
+    status: 'sent',
+    kind: 'text',
+    body: 'Hello',
+    reactions: {},
+  };
+  afterEach(() => localStorage.clear());
+
+  function renderBubble() {
+    localStorage.setItem('vybora.a11y', JSON.stringify({ alwaysShowActions: true }));
+    const theme = { ...resolveChatTheme(null), accent: '#0F766E' };
+    return render(
+      <A11yProvider>
+        <TooltipProvider>
+          <Bubble
+            message={msg}
+            mine
+            theme={theme}
+            showSender={false}
+            runStart
+            runEnd
+            myUserId="me"
+            nameOf={() => 'You'}
+            onReact={vi.fn()}
+            onReply={vi.fn()}
+            onDelete={vi.fn()}
+            onRetry={vi.fn()}
+            onOpenImage={vi.fn()}
+            onSelect={vi.fn()}
+          />
+        </TooltipProvider>
+      </A11yProvider>,
+    );
+  }
+
+  it('shows only React, Reply and More in the always-visible bar', () => {
+    renderBubble();
+    for (const name of ['More actions', 'Reply', 'React']) {
+      const btn = screen.getByRole('button', { name });
+      expect(btn).toBeVisible();
+      expect(btn.closest('.opacity-100')).not.toBeNull();
+      expect(btn.closest('.hover-actions')).toBeNull();
+    }
+    expect(screen.queryByRole('button', { name: 'Copy text' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete for everyone' })).toBeNull();
+  });
+
+  it('opens the menu from More actions', async () => {
+    renderBubble();
+    await userEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    expect(await screen.findByRole('menuitem', { name: 'Reply' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Copy text' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Delete for everyone' })).toBeInTheDocument();
   });
 });

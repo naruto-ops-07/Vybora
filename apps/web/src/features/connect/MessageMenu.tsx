@@ -3,7 +3,7 @@ import * as ContextMenu from '@radix-ui/react-context-menu';
 import type { MessageAction } from '@vybora/core';
 import type { ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
-import { QUICK_REACTIONS } from './Bubble';
+import { QUICK_REACTIONS } from './reactions';
 
 const LABEL: Record<MessageAction, string> = {
   reply: 'Reply',
