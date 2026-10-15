@@ -38,6 +38,9 @@ function renderBubble(m: Partial<LocalMessage> = {}, mine = true) {
       mine={mine}
       theme={{ ...resolveChatTheme(null), accent: '#0F766E' }}
       showSender={false}
+      runStart
+      runEnd
+      onSelect={vi.fn()}
       receipt={mine ? 'read' : undefined}
       myUserId="me"
       nameOf={(id) => (id === 'me' ? 'You' : 'Maya')}

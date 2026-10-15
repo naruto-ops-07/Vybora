@@ -10,7 +10,7 @@ import {
   XIcon,
 } from '@phosphor-icons/react';
 import { fetchConnectPrivacy, peerOf, qk, watchPresence } from '@vybora/api';
-import { friendlyError } from '@vybora/core';
+import { friendlyError, layoutThread, receiptOf } from '@vybora/core';
 import { MAX_ATTACHMENT_BYTES, type AttachmentRef, type LocalMessage } from '@vybora/e2ee';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -23,7 +23,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useMe } from '@/features/auth/AuthProvider';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
-import { Bubble, type Receipt } from './Bubble';
+import { Bubble } from './Bubble';
 import { Composer, type ComposerHandle, type ReplyDraft } from './Composer';
 import { useConnect } from './ConnectProvider';
 import { DetailsPanel } from './DetailsPanel';
@@ -36,7 +36,8 @@ import {
   useSecureMessages,
   useTyping,
 } from './hooks';
-import { chatBackground, effectiveTheme, GroupAvatar, Meta, TypingDots, useChatTheme } from './ui';
+import { DateChip, UnreadDivider } from './ThreadParts';
+import { chatBackground, effectiveTheme, GroupAvatar, TypingDots, useChatTheme } from './ui';
 import { VerifyDialog } from './VerifyDialog';
 
 export const ttlLabel = (s: number) =>
@@ -47,20 +48,6 @@ export const ttlLabel = (s: number) =>
       : s >= 3600
         ? `${Math.round(s / 3600)}h`
         : `${Math.round(s / 60)}m`;
-
-const dayLabel = (iso: string) => {
-  const d = new Date(iso);
-  const today = new Date();
-  const yesterday = new Date(Date.now() - 86_400_000);
-  if (d.toDateString() === today.toDateString()) return 'Today';
-  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return d.toLocaleDateString([], {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric',
-  });
-};
 
 type AttachmentMeta = Omit<AttachmentRef, 'path' | 'key' | 'nonce' | 'sha256' | 'size'>;
 
@@ -174,6 +161,24 @@ export default function ChatPane() {
     [messages.data],
   );
 
+  // The unread divider uses the read position from when the chat was opened,
+  // so it doesn't vanish the moment this tab acknowledges the messages.
+  const [readMark, setReadMark] = useState<{ id: string; seq: number } | null>(null);
+  useEffect(() => {
+    if (conv && readMark?.id !== id) setReadMark({ id, seq: conv.lastReadSeq });
+  }, [conv, id, readMark?.id]);
+
+  const items = useMemo(
+    () =>
+      layoutThread(ordered, {
+        myUserId: userId,
+        lastReadSeq: readMark?.id === id ? readMark.seq : Number.MAX_SAFE_INTEGER,
+        now: new Date(),
+      }),
+    [ordered, userId, readMark, id],
+  );
+  const newestId = ordered.at(-1)?.id;
+
   // Stay pinned to the newest message unless the reader scrolled up; keep the
   // reading position when older messages are prepended.
   useLayoutEffect(() => {
@@ -187,22 +192,22 @@ export default function ChatPane() {
     } else if (stick.current) el.scrollTop = el.scrollHeight;
   }, [ordered.length, typingUsers.length, id, messages.isFetching]);
 
+  const positioned = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    if (positioned.current === id || readMark?.id !== id || !ordered.length) return;
+    positioned.current = id;
+    const divider = scroller.current?.querySelector<HTMLElement>('[data-unread-divider]');
+    if (divider) {
+      divider.scrollIntoView({ block: 'start' });
+      stick.current = false;
+    }
+  }, [id, readMark, ordered.length]);
+
   const loadEarlier = () => {
     const el = scroller.current;
     if (el) restoreFrom.current = el.scrollHeight - el.scrollTop;
     stick.current = false;
     setLimit((l) => l + MESSAGE_PAGE);
-  };
-
-  const receiptFor = (m: LocalMessage): Receipt | undefined => {
-    if (m.senderId !== userId) return undefined;
-    if (m.status === 'sending') return 'sending';
-    if (m.status === 'failed') return 'failed';
-    const others = conv?.members.filter((x) => x.id !== userId) ?? [];
-    if (!m.seq || !others.length) return 'sent';
-    if (others.every((o) => o.read_seq >= m.seq!)) return 'read';
-    if (others.every((o) => o.delivered_seq >= m.seq!)) return 'delivered';
-    return 'sent';
   };
 
   const run = async (fn: () => Promise<unknown>) => {
@@ -446,49 +451,51 @@ export default function ChatPane() {
               No messages yet. Say hello — it’s encrypted.
             </p>
           )}
-          {ordered.map((m, i) => {
-            const prev = ordered[i - 1];
-            const newDay =
-              !prev ||
-              new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString();
+          {items.map((it) => {
+            if (it.type === 'date') return <DateChip key={it.key} label={it.label} />;
+            if (it.type === 'unread') return <UnreadDivider key={it.key} count={it.count} />;
+            const m = it.message;
+            const group = conv?.kind === 'group';
+            const sender = conv?.members.find((x) => x.id === m.senderId);
             return (
-              <div key={m.id}>
-                {newDay && (
-                  <div className="my-4 flex items-center gap-3 px-6" role="separator">
-                    <span className="h-px flex-1 bg-line" />
-                    <Meta>{dayLabel(m.createdAt)}</Meta>
-                    <span className="h-px flex-1 bg-line" />
-                  </div>
-                )}
-                <Bubble
-                  message={m}
-                  mine={m.senderId === userId}
-                  theme={def}
-                  senderName={conv?.kind === 'group' ? nameOf(m.senderId) : undefined}
-                  showSender={conv?.kind === 'group' && (newDay || prev?.senderId !== m.senderId)}
-                  receipt={receiptFor(m)}
-                  myUserId={userId}
-                  nameOf={nameOf}
-                  onReact={(msg, emoji) =>
-                    void run(() =>
-                      engine!.send(id, {
-                        t: 'reaction',
-                        target: msg.id,
-                        emoji,
-                        remove: !!msg.reactions[emoji]?.includes(userId),
-                      }),
-                    )
-                  }
-                  onReply={(msg) => {
-                    setReplyTo(msg);
-                    composer.current?.focus();
-                  }}
-                  onDelete={setDeleting}
-                  onRetry={(msg) => void run(() => engine!.retry(id, msg.id))}
-                  onOpenImage={setViewer}
-                  onJumpTo={jumpTo}
-                />
-              </div>
+              <Bubble
+                key={it.key}
+                message={m}
+                mine={it.mine}
+                theme={def}
+                senderName={group ? nameOf(m.senderId) : undefined}
+                showSender={!!group && it.runStart}
+                runStart={it.runStart}
+                runEnd={it.runEnd}
+                avatar={
+                  group && !it.mine
+                    ? { path: sender?.avatar_path ?? null, name: sender?.username ?? '?' }
+                    : undefined
+                }
+                tabbable={m.id === newestId}
+                receipt={receiptOf(m, userId, conv?.members ?? [])}
+                myUserId={userId}
+                nameOf={nameOf}
+                onReact={(msg, emoji) =>
+                  void run(() =>
+                    engine!.send(id, {
+                      t: 'reaction',
+                      target: msg.id,
+                      emoji,
+                      remove: !!msg.reactions[emoji]?.includes(userId),
+                    }),
+                  )
+                }
+                onReply={(msg) => {
+                  setReplyTo(msg);
+                  composer.current?.focus();
+                }}
+                onDelete={setDeleting}
+                onRetry={(msg) => void run(() => engine!.retry(id, msg.id))}
+                onOpenImage={setViewer}
+                onJumpTo={jumpTo}
+                onSelect={() => undefined}
+              />
             );
           })}
           {uploads > 0 && (
