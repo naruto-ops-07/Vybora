@@ -1,16 +1,20 @@
 import type * as Api from '@vybora/api';
 import type { SecureConversation } from '@vybora/api';
-import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatRowMenu, RowPreviewText } from './ChatRowParts';
-import { useInboxTyping } from './hooks';
+import { useInboxTyping, useLastSeen } from './hooks';
 
+const { fetchLastSeen } = vi.hoisted(() => ({ fetchLastSeen: vi.fn() }));
 const listeners = new Map<string, (who: string, typing: boolean) => void>();
 const joins: string[] = [];
 const leaves: string[] = [];
 vi.mock('@vybora/api', async (orig) => ({
   ...(await orig<typeof Api>()),
+  fetchLastSeen: (...a: unknown[]) => fetchLastSeen(...a),
   joinTypingChannel: (
     _c: unknown,
     conv: string,
@@ -135,5 +139,32 @@ describe('typing in the chat list', () => {
   it('joins nothing when disabled', () => {
     renderHook(() => useInboxTyping(['c1'], false));
     expect(listeners.size).toBe(0);
+  });
+});
+
+const wrapper = ({ children }: { children: ReactNode }) => (
+  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    {children}
+  </QueryClientProvider>
+);
+
+describe('last seen in the header', () => {
+  it('returns the allowed time for a peer', async () => {
+    fetchLastSeen.mockResolvedValue({ maya: '2026-10-15T09:12:00Z' });
+    const { result } = renderHook(() => useLastSeen('maya', true), { wrapper });
+    await waitFor(() => expect(result.current.data).toBe('2026-10-15T09:12:00Z'));
+  });
+
+  it('falls back quietly when the request fails (offline)', async () => {
+    fetchLastSeen.mockRejectedValue(new TypeError('Failed to fetch'));
+    const { result } = renderHook(() => useLastSeen('maya', true), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.data).toBeUndefined();
+  });
+
+  it('does not ask when my own online status is off', () => {
+    fetchLastSeen.mockClear();
+    renderHook(() => useLastSeen('maya', false), { wrapper });
+    expect(fetchLastSeen).not.toHaveBeenCalled();
   });
 });

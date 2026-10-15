@@ -9,9 +9,17 @@ import {
   WifiSlashIcon,
   XIcon,
 } from '@phosphor-icons/react';
-import { fetchConnectPrivacy, isMuted, peerOf, qk, watchPresence } from '@vybora/api';
+import {
+  fetchConnectPrivacy,
+  isMuted,
+  peerOf,
+  qk,
+  touchActivity,
+  watchPresence,
+} from '@vybora/api';
 import {
   friendlyError,
+  headerStatus,
   layoutThread,
   messageActions,
   receiptOf,
@@ -40,6 +48,7 @@ import {
   MESSAGE_PAGE,
   messagePreview,
   useConversation,
+  useLastSeen,
   useNicknames,
   useSecureMessages,
   useTyping,
@@ -153,10 +162,18 @@ export default function ChatPane() {
   }, [id]);
 
   const peerId = peer?.id;
+  const showOnline = !!privacy.data?.show_online;
   useEffect(
-    () => (peerId ? watchPresence(supabase, [peerId], (s) => setOnline(s.has(peerId))) : undefined),
-    [peerId],
+    () =>
+      peerId && showOnline
+        ? watchPresence(supabase, [peerId], (s) => setOnline(s.has(peerId)))
+        : undefined,
+    [peerId, showOnline],
   );
+  useEffect(() => {
+    if (!showOnline) setOnline(false);
+  }, [showOnline]);
+  const lastSeen = useLastSeen(peerId, showOnline && conv?.kind === 'direct' && !online);
 
   const keys = useQuery({
     queryKey: qk.connect.keys(peerId ?? ''),
@@ -342,6 +359,7 @@ export default function ChatPane() {
     setReplyTo(null);
     stick.current = true;
     void run(() => engine!.send(id, { t: 'text', body, replyTo: r }));
+    if (showOnline) void touchActivity(supabase).catch(() => undefined);
   };
 
   const sendFiles = async (files: File[]) => {
@@ -402,13 +420,14 @@ export default function ChatPane() {
     return <Navigate to={`/messages/legacy/${id}`} replace />;
 
   const typingNames = typingUsers.map(nameOf);
-  const subtitle = typingNames.length
-    ? `${typingNames.join(', ')} ${typingNames.length > 1 ? 'are' : 'is'} typing`
-    : conv?.kind === 'group'
-      ? `${conv.members.length} members, encrypted`
-      : online
-        ? 'online'
-        : 'end-to-end encrypted';
+  const subtitle = headerStatus({
+    isGroup: conv?.kind === 'group',
+    memberCount: conv?.members.length ?? 0,
+    typingNames,
+    online,
+    lastSeenAt: lastSeen.data ?? null,
+    now: new Date(),
+  });
   const composerDisabled = syncState === 'waiting_for_access' || syncState === 'broken';
 
   return (

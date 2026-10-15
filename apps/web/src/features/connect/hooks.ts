@@ -1,5 +1,6 @@
 import {
   acknowledgeConversation,
+  fetchLastSeen,
   fetchNicknames,
   fetchSecureInbox,
   joinTypingChannel,
@@ -28,6 +29,18 @@ export function useNicknames() {
     queryKey: qk.connect.nicknames,
     queryFn: () => fetchNicknames(supabase),
     staleTime: 60_000,
+  });
+}
+
+/** A peer's last seen (null when hidden). Disabled while my own online status is off. */
+export function useLastSeen(peerId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: qk.connect.lastSeen(peerId ?? ''),
+    enabled: enabled && !!peerId,
+    queryFn: async () => (await fetchLastSeen(supabase, [peerId!]))[peerId!] ?? null,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+    retry: false,
   });
 }
 

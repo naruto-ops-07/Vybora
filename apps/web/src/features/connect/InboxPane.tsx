@@ -9,6 +9,7 @@ import {
   PushPinSlashIcon,
 } from '@phosphor-icons/react';
 import {
+  fetchConnectPrivacy,
   isMuted,
   peerOf,
   qk,
@@ -17,7 +18,7 @@ import {
   type SecureConversation,
 } from '@vybora/api';
 import { chatRowPreview, formatRowTime, formatUnread, receiptOf } from '@vybora/core';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Avatar } from '@/components/ui/Avatar';
@@ -113,11 +114,19 @@ export function InboxPane({
         .join(','),
     [convs, userId],
   );
+  const privacy = useQuery({
+    queryKey: qk.connect.privacy,
+    queryFn: () => fetchConnectPrivacy(supabase, userId),
+  });
   // Re-subscribe only when the set of people changes, not on every inbox refetch.
-  useEffect(
-    () => (peersKey ? watchPresence(supabase, peersKey.split(','), setOnline) : undefined),
-    [peersKey],
-  );
+  const showOnline = !!privacy.data?.show_online;
+  useEffect(() => {
+    if (!peersKey || !showOnline) {
+      setOnline(new Set());
+      return;
+    }
+    return watchPresence(supabase, peersKey.split(','), setOnline);
+  }, [peersKey, showOnline]);
 
   const visible = useMemo(() => {
     const t = term.trim().toLowerCase();
