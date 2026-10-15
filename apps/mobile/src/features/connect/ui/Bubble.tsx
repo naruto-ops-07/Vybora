@@ -1,18 +1,26 @@
 import type { LocalMessage } from '@vybora/e2ee';
 import { memo } from 'react';
+import { formatClock, messageSummary, type Receipt } from '@vybora/core';
 import { Pressable, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { Icon } from '@/components/Icon';
 import { Text } from '@/components/Text';
+import { Avatar } from '@/components/ui';
 import { radii } from '@/lib/theme';
 import { FileAttachment, ImageAttachment, VideoAttachment, VoiceAttachment } from './Attachment';
 import { useCc, type ResolvedTheme } from './primitives';
 
-export type Receipt = 'sending' | 'failed' | 'sent' | 'delivered' | 'read';
+export type { Receipt } from '@vybora/core';
 
-const time = (iso: string) =>
-  new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const RECEIPT_LABEL: Record<Receipt, string> = {
+  sending: 'sending',
+  failed: 'not sent',
+  sent: 'sent',
+  delivered: 'delivered',
+  read: 'read',
+};
 
-function Ticks({ receipt, color }: { receipt: Receipt; color: string }) {
+export function Ticks({ receipt, color }: { receipt: Receipt; color: string }) {
   const cc = useCc();
   if (receipt === 'sending')
     return <Icon name="clock" size={11} color={color} accessibilityLabel="Sending" />;
@@ -31,6 +39,28 @@ function Ticks({ receipt, color }: { receipt: Receipt; color: string }) {
   );
 }
 
+/** Flat notch on the last bubble of a run, in the bubble's own colour. */
+function Tail({ mine, fill, stroke }: { mine: boolean; fill: string; stroke?: string }) {
+  return (
+    <Svg
+      testID="bubble-tail"
+      width={8}
+      height={10}
+      viewBox="0 0 8 10"
+      style={{
+        position: 'absolute',
+        bottom: 0,
+        ...(mine ? { right: -7 } : { left: -7, transform: [{ scaleX: -1 }] }),
+      }}
+    >
+      <Path d="M0 0C0.5 6 3.5 9 8 10H0Z" fill={fill} />
+      {stroke ? (
+        <Path d="M0 0C0.5 6 3.5 9 8 10H0" fill="none" stroke={stroke} strokeWidth={1} />
+      ) : null}
+    </Svg>
+  );
+}
+
 export interface BubbleProps {
   message: LocalMessage;
   mine: boolean;
@@ -38,6 +68,9 @@ export interface BubbleProps {
   senderName?: string;
   receipt?: Receipt;
   showSender: boolean;
+  runStart: boolean;
+  runEnd: boolean;
+  avatar?: { path: string | null; name: string };
   onLongPress: (m: LocalMessage) => void;
   onRetry: (m: LocalMessage) => void;
   onOpenImage: (uri: string) => void;
@@ -52,6 +85,9 @@ export const Bubble = memo(function Bubble({
   senderName,
   receipt,
   showSender,
+  runStart,
+  runEnd,
+  avatar,
   onLongPress,
   onRetry,
   onOpenImage,
@@ -115,8 +151,8 @@ export const Bubble = memo(function Bubble({
     paddingHorizontal: media ? 4 : 12,
     paddingVertical: media ? 4 : 8,
     borderRadius: radii.lg,
-    borderBottomRightRadius: mine ? radii.sm : radii.lg,
-    borderBottomLeftRadius: mine ? radii.lg : radii.sm,
+    borderBottomRightRadius: mine && runEnd ? radii.sm : radii.lg,
+    borderBottomLeftRadius: !mine && runEnd ? radii.sm : radii.lg,
   };
 
   const inner = (
@@ -160,7 +196,7 @@ export const Bubble = memo(function Bubble({
           <Icon name="timer" size={11} color={meta} accessibilityLabel="Disappearing message" />
         )}
         <Text mono style={{ color: meta, fontSize: 11 }}>
-          {time(m.createdAt)}
+          {formatClock(m.createdAt)}
         </Text>
         {mine && receipt && <Ticks receipt={receipt} color={meta} />}
       </View>
@@ -169,10 +205,20 @@ export const Bubble = memo(function Bubble({
 
   return (
     <View
+      accessible
+      accessibilityLabel={[
+        mine ? 'You' : nameOf(m.senderId),
+        formatClock(m.createdAt),
+        messageSummary(m),
+        receipt ? RECEIPT_LABEL[receipt] : null,
+      ]
+        .filter(Boolean)
+        .join(', ')}
       style={{
         alignItems: mine ? 'flex-end' : 'flex-start',
         paddingHorizontal: 12,
-        marginVertical: 2,
+        marginTop: runStart ? 8 : 2,
+        marginBottom: 0,
       }}
     >
       {showSender && !mine && senderName && (
@@ -188,22 +234,45 @@ export const Bubble = memo(function Bubble({
           {senderName}
         </Text>
       )}
-      <Pressable
-        onLongPress={() => !m.deleted && m.kind !== 'undecryptable' && onLongPress(m)}
-        onPress={() => receipt === 'failed' && onRetry(m)}
-        delayLongPress={280}
-        accessibilityHint={
-          receipt === 'failed' ? 'Tap to retry sending' : 'Long press for reactions and actions'
-        }
-        style={[
-          bubbleStyle,
-          filled
-            ? { backgroundColor: theme.outgoing }
-            : { backgroundColor: theme.incoming, borderWidth: 1, borderColor: cc.line },
-        ]}
+      <View
+        style={{
+          flexDirection: mine ? 'row-reverse' : 'row',
+          alignItems: 'flex-end',
+          gap: 8,
+          maxWidth: '100%',
+        }}
       >
-        {inner}
-      </Pressable>
+        {avatar &&
+          !mine &&
+          (runEnd ? (
+            <Avatar path={avatar.path} name={avatar.name} size={28} />
+          ) : (
+            <View style={{ width: 28 }} />
+          ))}
+        <Pressable
+          onLongPress={() => !m.deleted && m.kind !== 'undecryptable' && onLongPress(m)}
+          onPress={() => receipt === 'failed' && onRetry(m)}
+          delayLongPress={280}
+          accessibilityHint={
+            receipt === 'failed' ? 'Tap to retry sending' : 'Long press for reactions and actions'
+          }
+          style={[
+            bubbleStyle,
+            filled
+              ? { backgroundColor: theme.outgoing }
+              : { backgroundColor: theme.incoming, borderWidth: 1, borderColor: cc.line },
+          ]}
+        >
+          {inner}
+          {runEnd && (
+            <Tail
+              mine={mine}
+              fill={filled ? theme.outgoing : theme.incoming}
+              stroke={filled ? undefined : cc.line}
+            />
+          )}
+        </Pressable>
+      </View>
       {reactions.length > 0 && (
         <View style={{ flexDirection: 'row', gap: 4, marginTop: 4, marginHorizontal: 4 }}>
           {reactions.map(([emoji, users]) => (

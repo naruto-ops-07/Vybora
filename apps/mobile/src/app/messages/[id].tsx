@@ -1,6 +1,6 @@
 import { Icon } from '@/components/Icon';
-import { fetchConnectPrivacy, peerOf, qk, watchPresence } from '@vybora/api';
-import { friendlyError } from '@vybora/core';
+import { fetchConnectPrivacy, isMuted, peerOf, qk, watchPresence } from '@vybora/api';
+import { dayLabel, friendlyError, layoutThread, messageSummary, receiptOf } from '@vybora/core';
 import { MAX_ATTACHMENT_BYTES, type LocalMessage } from '@vybora/e2ee';
 import { useQuery } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
@@ -8,9 +8,10 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, Stack, useIsFocused, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionSheetIOS,
+  AccessibilityInfo,
   ActivityIndicator,
   Alert,
   FlatList,
@@ -19,6 +20,7 @@ import {
   Platform,
   Pressable,
   View,
+  type ViewToken,
 } from 'react-native';
 import { Text } from '@/components/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -33,7 +35,7 @@ import {
   useSecureMessages,
   useTyping,
 } from '@/features/connect/hooks';
-import { Bubble, type Receipt } from '@/features/connect/ui/Bubble';
+import { Bubble } from '@/features/connect/ui/Bubble';
 import { Composer } from '@/features/connect/ui/Composer';
 import { MessageActions } from '@/features/connect/ui/MessageActions';
 import {
@@ -44,6 +46,8 @@ import {
   useCc,
   useThemeDef,
 } from '@/features/connect/ui/primitives';
+import { DateChip, JumpToLatest, UnreadDivider } from '@/features/connect/ui/ThreadParts';
+import { useA11y } from '@/lib/a11y';
 import { radii } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
 
@@ -127,16 +131,103 @@ function Chat() {
     [messages.data],
   );
 
-  const receiptFor = (m: LocalMessage): Receipt | undefined => {
-    if (m.senderId !== userId) return undefined;
-    if (m.status === 'sending') return 'sending';
-    if (m.status === 'failed') return 'failed';
-    const others = conv?.members.filter((x) => x.id !== userId) ?? [];
-    if (!m.seq || !others.length) return 'sent';
-    if (others.every((o) => o.read_seq >= m.seq!)) return 'read';
-    if (others.every((o) => o.delivered_seq >= m.seq!)) return 'delivered';
-    return 'sent';
+  // The unread divider uses the read position from when the chat was opened,
+  // so it neither vanishes when the messages are acknowledged nor grows when
+  // new ones arrive live.
+  const [readMark, setReadMark] = useState<{ id: string; seq: number; until: number } | null>(null);
+  useEffect(() => {
+    if (conv && readMark?.id !== id)
+      setReadMark({ id, seq: conv.lastReadSeq, until: conv.lastSeq });
+  }, [conv, id, readMark?.id]);
+  const rows = useMemo(
+    () =>
+      layoutThread([...ordered].reverse(), {
+        myUserId: userId,
+        lastReadSeq: readMark?.id === id ? readMark.seq : Number.MAX_SAFE_INTEGER,
+        unreadUntilSeq: readMark?.id === id ? readMark.until : undefined,
+        now: new Date(),
+      }).reverse(),
+    [ordered, userId, readMark, id],
+  );
+
+  const { reduceMotion } = useA11y();
+  const list = useRef<FlatList<(typeof rows)[number]>>(null);
+  const [floatingDay, setFloatingDay] = useState<string | null>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [away, setAway] = useState(false);
+  const [newCount, setNewCount] = useState(0);
+  const lastSeenSeq = useRef(0);
+  const onViewable = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    // Inverted list: the highest index on screen is the oldest (top) row.
+    const top = viewableItems.reduce<ViewToken | null>(
+      (a, b) => ((b.index ?? 0) > (a?.index ?? -1) ? b : a),
+      null,
+    );
+    const item = top?.item as (typeof rows)[number] | undefined;
+    if (!item) return;
+    setFloatingDay(
+      item.type === 'message'
+        ? dayLabel(item.message.createdAt, new Date())
+        : item.type === 'date'
+          ? item.label
+          : null,
+    );
+  }).current;
+  const scheduleHide = () => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setFloatingDay(null), reduceMotion ? 0 : 1500);
   };
+  useEffect(
+    () => () => {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    lastSeenSeq.current = 0;
+    setNewCount(0);
+  }, [id]);
+  useEffect(() => {
+    const newest = ordered[0]?.seq ?? 0;
+    if (!away || !lastSeenSeq.current) {
+      lastSeenSeq.current = Math.max(lastSeenSeq.current, newest);
+      setNewCount(0);
+      return;
+    }
+    // Only newer messages from others count; older pages (lower seq) and my own never do.
+    const fresh = ordered.filter(
+      (m) => (m.seq ?? 0) > lastSeenSeq.current && m.senderId !== userId,
+    ).length;
+    if (fresh) setNewCount((c) => c + fresh);
+    lastSeenSeq.current = Math.max(lastSeenSeq.current, newest);
+  }, [ordered, userId, away]);
+
+  const announced = useRef<{ conv: string; id: string } | null>(null);
+  useEffect(() => {
+    if (!messages.isSuccess) return;
+    const newest = ordered.find((m) => m.senderId !== userId);
+    if (announced.current?.conv !== id) {
+      announced.current = { conv: id, id: newest?.id ?? '' };
+      return;
+    }
+    if (!newest || newest.id === announced.current.id) return;
+    announced.current = { conv: id, id: newest.id };
+    const muted = conv ? isMuted(conv) || !conv.notificationsEnabled : true;
+    if (!muted)
+      AccessibilityInfo.announceForAccessibility(
+        `${nameOf(newest.senderId)}: ${messageSummary(newest)}`,
+      );
+  }, [ordered, messages.isSuccess, userId, id, conv, nameOf]);
+
+  // Open at the unread divider once per chat.
+  const positioned = useRef<string | null>(null);
+  useEffect(() => {
+    if (positioned.current === id || readMark?.id !== id || !rows.length) return;
+    positioned.current = id;
+    const index = rows.findIndex((r) => r.type === 'unread');
+    if (index > 0) list.current?.scrollToIndex({ index, viewPosition: 1, animated: false });
+  }, [rows, id, readMark]);
 
   const run = async (fn: () => Promise<unknown>) => {
     try {
@@ -371,52 +462,95 @@ function Chat() {
             </Text>
           </Pressable>
         )}
-        <FlatList
-          inverted
-          data={ordered}
-          keyExtractor={(m) => m.id}
-          contentContainerStyle={{ paddingVertical: 12 }}
-          renderItem={({ item, index }) => {
-            const older = ordered[index + 1];
-            return (
-              <Bubble
-                message={item}
-                mine={item.senderId === userId}
-                theme={def}
-                senderName={conv?.kind === 'group' ? nameOf(item.senderId) : undefined}
-                showSender={conv?.kind === 'group' && older?.senderId !== item.senderId}
-                receipt={receiptFor(item)}
-                onLongPress={setSelected}
-                onRetry={(m) => void run(() => engine!.retry(id, m.id))}
-                onOpenImage={setViewer}
-                nameOf={nameOf}
-              />
-            );
-          }}
-          ListFooterComponent={
-            <View style={{ paddingVertical: 18, gap: 8, alignItems: 'center' }}>
-              <EncryptionBadge />
-              <Text
-                style={{
-                  color: cc.textSubtle,
-                  fontSize: 12,
-                  textAlign: 'center',
-                  paddingHorizontal: 40,
-                }}
-              >
-                Messages and attachments are secured with end-to-end encryption (MLS). Not even
-                VYBORA can read them.
-              </Text>
-            </View>
-          }
-          ListEmptyComponent={
-            messages.isPending || syncState === 'syncing' ? (
-              <View style={{ padding: 30, transform: [{ scaleY: -1 }] }}>
-                <ActivityIndicator color={def.accent} />
+        <View style={{ flex: 1 }}>
+          <FlatList
+            ref={list}
+            inverted
+            data={rows}
+            keyExtractor={(r) => r.key}
+            contentContainerStyle={{ paddingVertical: 12 }}
+            onViewableItemsChanged={onViewable}
+            viewabilityConfig={{ itemVisiblePercentThreshold: 10 }}
+            onScroll={(e) => {
+              const { contentOffset, layoutMeasurement } = e.nativeEvent;
+              setAway(contentOffset.y > layoutMeasurement.height);
+            }}
+            scrollEventThrottle={100}
+            onScrollEndDrag={scheduleHide}
+            onMomentumScrollEnd={scheduleHide}
+            onScrollToIndexFailed={(info) =>
+              list.current?.scrollToOffset({
+                offset: info.averageItemLength * info.index,
+                animated: false,
+              })
+            }
+            renderItem={({ item }) => {
+              if (item.type === 'date') return <DateChip label={item.label} />;
+              if (item.type === 'unread') return <UnreadDivider count={item.count} />;
+              const m = item.message;
+              const group = conv?.kind === 'group';
+              const sender = conv?.members.find((x) => x.id === m.senderId);
+              return (
+                <Bubble
+                  message={m}
+                  mine={item.mine}
+                  theme={def}
+                  senderName={group ? nameOf(m.senderId) : undefined}
+                  showSender={!!group && item.runStart}
+                  runStart={item.runStart}
+                  runEnd={item.runEnd}
+                  avatar={
+                    group && !item.mine
+                      ? { path: sender?.avatar_path ?? null, name: sender?.username ?? '?' }
+                      : undefined
+                  }
+                  receipt={receiptOf(m, userId, conv?.members ?? [])}
+                  onLongPress={setSelected}
+                  onRetry={(x) => void run(() => engine!.retry(id, x.id))}
+                  onOpenImage={setViewer}
+                  nameOf={nameOf}
+                />
+              );
+            }}
+            ListFooterComponent={
+              <View style={{ paddingVertical: 18, gap: 8, alignItems: 'center' }}>
+                <EncryptionBadge />
+                <Text
+                  style={{
+                    color: cc.textSubtle,
+                    fontSize: 12,
+                    textAlign: 'center',
+                    paddingHorizontal: 40,
+                  }}
+                >
+                  Messages and attachments are secured with end-to-end encryption (MLS). Not even
+                  VYBORA can read them.
+                </Text>
               </View>
-            ) : null
-          }
-        />
+            }
+            ListEmptyComponent={
+              messages.isPending || syncState === 'syncing' ? (
+                <View style={{ padding: 30, transform: [{ scaleY: -1 }] }}>
+                  <ActivityIndicator color={def.accent} />
+                </View>
+              ) : null
+            }
+          />
+          {floatingDay && (
+            <View style={{ position: 'absolute', top: 8, left: 0, right: 0 }} pointerEvents="none">
+              <DateChip label={floatingDay} floating />
+            </View>
+          )}
+          {away && (
+            <JumpToLatest
+              count={newCount}
+              onPress={() => {
+                setNewCount(0);
+                list.current?.scrollToOffset({ offset: 0, animated: !reduceMotion });
+              }}
+            />
+          )}
+        </View>
         {busy && (
           <View
             style={{

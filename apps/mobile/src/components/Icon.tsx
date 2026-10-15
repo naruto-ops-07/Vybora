@@ -7,6 +7,7 @@
 import { ArchiveIcon } from 'phosphor-react-native/src/icons/Archive';
 import { ArrowBendUpLeftIcon } from 'phosphor-react-native/src/icons/ArrowBendUpLeft';
 import { ArrowClockwiseIcon } from 'phosphor-react-native/src/icons/ArrowClockwise';
+import { ArrowDownIcon } from 'phosphor-react-native/src/icons/ArrowDown';
 import { ArrowLeftIcon } from 'phosphor-react-native/src/icons/ArrowLeft';
 import { BellIcon } from 'phosphor-react-native/src/icons/Bell';
 import { BellSlashIcon } from 'phosphor-react-native/src/icons/BellSlash';
@@ -79,6 +80,7 @@ const ICONS = {
   archive: ArchiveIcon,
   'alert-circle': WarningCircleIcon,
   'alert-triangle': WarningIcon,
+  'arrow-down': ArrowDownIcon,
   'arrow-left': ArrowLeftIcon,
   bell: BellIcon,
   'bell-off': BellSlashIcon,
