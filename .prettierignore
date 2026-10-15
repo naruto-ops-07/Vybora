@@ -10,4 +10,8 @@ supabase/.temp
 
 # Tooling installed into the repo (not project source)
 .claude/
+.github/agents/
+.github/hooks/
+.github/skills/
+.impeccable/
 apps/mobile/expo-env.d.ts
