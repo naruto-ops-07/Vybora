@@ -50,6 +50,22 @@ as $$
   );
 $$;
 
+-- Block check for policies: RLS on public.blocks hides the other party's rows
+-- from the caller, so this must read it as the definer.
+create or replace function public.caller_blocked_with(p_user uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.blocks b
+    where (b.blocker_id = auth.uid() and b.blocked_id = p_user)
+       or (b.blocker_id = p_user and b.blocked_id = auth.uid())
+  );
+$$;
+
 create or replace function public.last_seen(p_user_ids uuid[])
 returns table (user_id uuid, last_active_at timestamptz)
 language plpgsql
@@ -62,7 +78,12 @@ begin
   if auth.uid() is null then
     raise exception 'not_authenticated' using errcode = '42501';
   end if;
-  if coalesce(array_length(p_user_ids, 1), 0) > 100 then
+  -- cardinality() counts every element; array_length(.., 1) would only see the
+  -- first dimension of a nested array and let a 2-D array slip past the cap.
+  if coalesce(array_ndims(p_user_ids), 1) > 1 then
+    raise exception 'invalid_user_ids' using errcode = '22023';
+  end if;
+  if coalesce(cardinality(p_user_ids), 0) > 100 then
     raise exception 'too_many_users' using errcode = '22023';
   end if;
   if not public.caller_shows_online() then
@@ -85,13 +106,16 @@ $$;
 
 revoke execute on function public.touch_activity() from public, anon;
 revoke execute on function public.caller_shows_online() from public, anon;
+revoke execute on function public.caller_blocked_with(uuid) from public, anon;
 revoke execute on function public.last_seen(uuid[]) from public, anon;
 grant execute on function public.touch_activity() to authenticated;
 grant execute on function public.caller_shows_online() to authenticated;
+grant execute on function public.caller_blocked_with(uuid) to authenticated;
 grant execute on function public.last_seen(uuid[]) to authenticated;
 
 -- Presence is reciprocal too: you can read others' presence only while your
--- own "show when I'm online" is on. Your own topic stays readable.
+-- own "show when I'm online" is on and no block exists either way. Your own
+-- topic stays readable.
 do $$
 begin
   if to_regclass('realtime.messages') is not null then
@@ -106,6 +130,7 @@ begin
             or (
               public.shares_conversation_with(public.try_uuid(substr(realtime.topic(), 18)))
               and public.caller_shows_online()
+              and not public.caller_blocked_with(public.try_uuid(substr(realtime.topic(), 18)))
             )
           )
         )

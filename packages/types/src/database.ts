@@ -1444,6 +1444,12 @@ export type Database = {
         };
         Returns: undefined;
       };
+      caller_blocked_with: {
+        Args: {
+          p_user: string;
+        };
+        Returns: boolean;
+      };
       caller_shows_online: {
         Args: Record<PropertyKey, never>;
         Returns: boolean;

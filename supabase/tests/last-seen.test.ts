@@ -81,6 +81,14 @@ describe('last seen', () => {
     const a = await db.createUser('ls_lim_a');
     const ids = Array.from({ length: 101 }, () => a.id);
     await expectDenied(lastSeen(a, ids), /too_many_users/);
+    await expectDenied(
+      db.as(
+        a,
+        `select * from public.last_seen(array[[$1::uuid, $1::uuid, $1::uuid], [$1::uuid, $1::uuid, $1::uuid]])`,
+        [a.id],
+      ),
+      /invalid_user_ids/,
+    );
     await expectDenied(db.as(a, `select * from user_activity`), /permission denied/);
     await expectDenied(
       db.as(a, `insert into user_activity (user_id) values ($1)`, [a.id]),
@@ -125,7 +133,7 @@ describe('touch_activity', () => {
     );
     expect(Date.now() - fresh!.last_active_at.getTime()).toBeLessThan(10_000);
 
-    await expectDenied(db.as('anon', `select public.touch_activity()`));
+    await expectDenied(db.as('anon', `select public.touch_activity()`), /permission denied/);
   });
 });
 
@@ -150,4 +158,39 @@ describe('presence channel reciprocity', () => {
         .length,
     ).toBeGreaterThan(0);
   });
+
+  for (const [label, blocker] of [
+    ['the reader blocks the owner', 'reader'],
+    ['the owner blocks the reader', 'owner'],
+  ] as const) {
+    it(`denies presence once a block exists (${label})`, async () => {
+      const tag = blocker === 'reader' ? 'rb' : 'ob';
+      const owner = await db.createUser(`pb_${tag}_owner`);
+      const reader = await db.createUser(`pb_${tag}_reader`);
+      await chat(owner, reader);
+      const topic = `connect:presence:${owner.id}`;
+      await db.admin(`insert into realtime.messages (topic, payload) values ($1, '{}')`, [topic]);
+      const canRead = async () =>
+        (
+          await db.asOnTopic(reader, topic, `select id from realtime.messages where topic = $1`, [
+            topic,
+          ])
+        ).length > 0;
+      expect(await canRead()).toBe(true);
+      const [by, target] = blocker === 'reader' ? [reader, owner] : [owner, reader];
+      await db.as(by, `insert into blocks (blocker_id, blocked_id) values ($1, $2)`, [
+        by.id,
+        target.id,
+      ]);
+      expect(await canRead()).toBe(false);
+      // The owner always keeps their own topic.
+      expect(
+        (
+          await db.asOnTopic(owner, topic, `select id from realtime.messages where topic = $1`, [
+            topic,
+          ])
+        ).length,
+      ).toBeGreaterThan(0);
+    });
+  }
 });
