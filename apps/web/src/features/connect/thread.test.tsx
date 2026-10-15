@@ -8,7 +8,7 @@ import { TooltipProvider } from '@/components/ui/Tooltip';
 import { Bubble } from './Bubble';
 import { useIncomingAnnouncement } from './announce';
 import { threadKeyDown } from './threadKeys';
-import { DateChip, groupByDay, JumpToLatest, UnreadDivider } from './ThreadParts';
+import { DateChip, groupByDay, JumpToLatest, ThreadDay, UnreadDivider } from './ThreadParts';
 
 vi.mock('./ConnectProvider', () => ({ useConnect: () => ({ engine: null }) }));
 
@@ -138,6 +138,24 @@ describe('conversation layout', () => {
     const row = screen.getByRole('article');
     expect(row).not.toHaveAttribute('aria-selected');
     expect(row).toHaveAttribute('data-selected', 'true');
+  });
+
+  it('groups a day without adding a landmark per day', () => {
+    render(
+      <>
+        <ThreadDay>
+          <DateChip label="Yesterday" />
+        </ThreadDay>
+        <ThreadDay>
+          <DateChip label="Today" />
+        </ThreadDay>
+      </>,
+    );
+    expect(screen.queryAllByRole('region')).toEqual([]);
+    expect(screen.getAllByRole('heading').map((h) => h.textContent)).toEqual([
+      'Yesterday',
+      'Today',
+    ]);
   });
 
   it('omits the tail inside a run', () => {

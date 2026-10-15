@@ -1,5 +1,6 @@
 import { ArrowDownIcon } from '@phosphor-icons/react';
 import { formatUnread, type ThreadItem, type ThreadMessageLike } from '@vybora/core';
+import type { ReactNode } from 'react';
 
 /** Day separator; sticks to the top of the thread while its day is on screen. */
 export function DateChip({ label }: { label: string }) {
@@ -10,6 +11,15 @@ export function DateChip({ label }: { label: string }) {
       </h2>
     </div>
   );
+}
+
+/**
+ * One day of the thread: bounds the sticky date chip. A plain container, not a
+ * labelled section — the chip's heading already names the day, and a landmark per
+ * day would flood the landmark list.
+ */
+export function ThreadDay({ children }: { children: ReactNode }) {
+  return <div>{children}</div>;
 }
 
 export function UnreadDivider({ count }: { count: number }) {

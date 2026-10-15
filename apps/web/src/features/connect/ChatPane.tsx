@@ -53,7 +53,7 @@ import {
   useSecureMessages,
   useTyping,
 } from './hooks';
-import { DateChip, groupByDay, JumpToLatest, UnreadDivider } from './ThreadParts';
+import { DateChip, groupByDay, JumpToLatest, ThreadDay, UnreadDivider } from './ThreadParts';
 import { useCopyText } from './copy';
 import { useToday } from './useToday';
 import { BulkDeleteDialog, SelectBar } from './SelectBar';
@@ -596,7 +596,7 @@ export default function ChatPane() {
               </p>
             )}
             {days.map((day) => (
-              <section key={day.key} aria-label={day.label}>
+              <ThreadDay key={day.key}>
                 {day.items.map((it) => {
                   if (it.type === 'date') return <DateChip key={it.key} label={it.label} />;
                   if (it.type === 'unread') return <UnreadDivider key={it.key} count={it.count} />;
@@ -648,7 +648,7 @@ export default function ChatPane() {
                     />
                   );
                 })}
-              </section>
+              </ThreadDay>
             ))}
             {uploads > 0 && (
               <div className="flex items-center justify-end gap-2 px-6 py-2 font-mono text-[11px] text-muted">
