@@ -1,0 +1,102 @@
+{
+  "expo": {
+    "name": "VYBORA",
+    "slug": "vybora",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "vybora",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "app.vybora.mobile",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "app.vybora.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#0F4C47",
+        "foregroundImage": "./assets/images/adaptive-foreground.png",
+        "monochromeImage": "./assets/images/adaptive-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "vybora.app",
+              "pathPrefix": "/messages/"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0A0E0F",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 96
+        }
+      ],
+      "expo-sqlite",
+      "expo-video",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "VYBORA uses your photo library only when you choose a photo or video to send in an encrypted chat, or to set your profile photo.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#0F766E",
+          "sounds": [
+            "./assets/tones/soft_chime.wav",
+            "./assets/tones/pop.wav",
+            "./assets/tones/bell.wav",
+            "./assets/tones/electronic.wav"
+          ]
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "VYBORA uses the microphone only while you record a voice message."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "VYBORA uses Face ID to lock your messages when you turn on App lock."
+        }
+      ],
+      "expo-sharing",
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": ""
+      }
+    }
+  }
+}

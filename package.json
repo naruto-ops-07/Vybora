@@ -1,0 +1,40 @@
+{
+  "name": "vybora",
+  "private": true,
+  "version": "0.1.0",
+  "description": "VYBORA — Your world. Your vibe. A creator-focused social platform (web + iOS + Android) on Supabase.",
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @vybora/web dev",
+    "dev:mobile": "pnpm --filter @vybora/mobile start",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:db": "pnpm --filter @vybora/db-tests test",
+    "test:e2e": "pnpm --filter @vybora/web test:e2e",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "db:types": "node scripts/gen-db-types.mjs",
+    "seed:demo": "node scripts/seed-demo.mjs",
+    "brand:assets": "node scripts/generate-brand-assets.mjs",
+    "brand:tones": "node scripts/generate-tones.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.4",
+    "@eslint/js": "^9.30.0",
+    "@playwright/test": "^1.64.1",
+    "@supabase/supabase-js": "^2.57.4",
+    "eslint": "^9.30.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^16.3.0",
+    "prettier": "^3.6.2",
+    "turbo": "^2.5.4",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.35.0"
+  }
+}

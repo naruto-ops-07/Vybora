@@ -1,0 +1,13 @@
+node_modules
+dist
+coverage
+pnpm-lock.yaml
+apps/mobile/.expo
+apps/web/test-results
+apps/web/playwright-report
+supabase/.temp
+*.sql
+
+# Tooling installed into the repo (not project source)
+.claude/
+apps/mobile/expo-env.d.ts

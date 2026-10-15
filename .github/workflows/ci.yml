@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Format · Lint · Types · Unit/RLS tests · Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      # Includes the database/RLS/Storage-policy suite (real Postgres via PGlite).
+      - run: pnpm test
+      - name: Generated DB types match migrations
+        run: |
+          pnpm db:types
+          git diff --exit-code packages/types/src/database.ts
+      - run: pnpm build
+
+  e2e-smoke:
+    name: Web E2E (smoke, no backend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @vybora/web exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+
+  e2e-supabase:
+    name: Web E2E against local Supabase (full social flows)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: pnpm install --frozen-lockfile
+      # Applies supabase/migrations to a fresh local stack (Docker is available on GitHub runners).
+      - run: supabase start -x studio,inbucket,imgproxy,vector,logflare
+      - name: Export local credentials
+        run: |
+          supabase status -o env > .supabase.env
+          echo "E2E_SUPABASE_URL=$(grep '^API_URL=' .supabase.env | cut -d= -f2- | tr -d '\"')" >> $GITHUB_ENV
+          echo "E2E_SUPABASE_ANON_KEY=$(grep '^ANON_KEY=' .supabase.env | cut -d= -f2- | tr -d '\"')" >> $GITHUB_ENV
+      - run: supabase db lint --level error
+      - run: pnpm --filter @vybora/web exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - run: supabase stop
+        if: always()

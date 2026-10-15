@@ -1,0 +1,11 @@
+-- VYBORA local seed.
+--
+-- Intentionally empty of user content: demo accounts, media and posts are
+-- created through the real Auth/Storage/RPC APIs by `pnpm seed:demo`
+-- (scripts/seed-demo.mjs), so every trigger, RLS policy and counter runs
+-- exactly as it does in production. Never run the demo seeder against
+-- production.
+--
+-- Granting the first administrator is a deliberate, manual, server-side step:
+--   insert into public.user_roles (user_id, role) values ('<auth user uuid>', 'admin');
+select 1;
