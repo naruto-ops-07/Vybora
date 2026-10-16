@@ -12,6 +12,7 @@ import {
   ProhibitIcon,
   SignOutIcon,
   UserIcon,
+  UsersThreeIcon,
 } from '@phosphor-icons/react';
 import {
   fetchBlocked,
@@ -31,6 +32,7 @@ import { useNavigate } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/Dialog';
 import { Input, Toggle } from '@/components/ui/Field';
+import { Segmented } from '@/components/ui/Segmented';
 import { useToast } from '@/components/ui/Toast';
 import { useMe } from '@/features/auth/AuthProvider';
 import { SettingsPage } from '@/features/settings/SettingsNav';
@@ -41,6 +43,11 @@ import { Meta, Row, Section } from './ui';
 
 const E164 = /^\+[1-9]\d{6,14}$/;
 type Visibility = 'nobody' | 'contacts' | 'everyone';
+type WhoCanMessage = ConnectPrivacy['message_privacy'];
+const WHO_CAN_MESSAGE: { value: WhoCanMessage; label: string }[] = [
+  { value: 'everyone', label: 'Everyone' },
+  { value: 'friends', label: 'Friends only' },
+];
 
 export default function PrivacyPage() {
   const { userId } = useMe();
@@ -78,11 +85,24 @@ export default function PrivacyPage() {
   }, [contact.data?.phone_e164, contact.data?.visibility]);
 
   const p = privacy.data;
-  const set = (patch: Partial<ConnectPrivacy>) =>
+  // Applied at once so switches and radios answer immediately; undone on failure.
+  const set = (patch: Partial<ConnectPrivacy>) => {
+    const before = qc.getQueryData<ConnectPrivacy>(qk.connect.privacy);
+    if (before) qc.setQueryData<ConnectPrivacy>(qk.connect.privacy, { ...before, ...patch });
     void updateConnectPrivacy(supabase, userId, patch).then(
       () => qc.invalidateQueries({ queryKey: qk.connect.privacy }),
-      (e) => toast.show(friendlyError(e), 'error'),
+      (e) => {
+        const now = qc.getQueryData<ConnectPrivacy>(qk.connect.privacy);
+        if (before && now) {
+          const undo = Object.fromEntries(
+            Object.keys(patch).map((k) => [k, before[k as keyof ConnectPrivacy]]),
+          );
+          qc.setQueryData<ConnectPrivacy>(qk.connect.privacy, { ...now, ...undo });
+        }
+        toast.show(friendlyError(e), 'error');
+      },
     );
+  };
   const toggle = (
     key: keyof ConnectPrivacy,
     label: string,
@@ -228,12 +248,23 @@ export default function PrivacyPage() {
           'Only people you share a chat with can see it. If you turn this off, you won’t see other people’s either.',
           <CircleIcon size={18} />,
         )}
-        {p?.message_privacy === 'following' && (
-          <Row
-            icon={<UserIcon size={18} />}
+        <div className="space-y-2 px-4 py-3">
+          <p className="flex items-center gap-3 text-sm font-medium">
+            <UsersThreeIcon size={18} className="text-muted" aria-hidden="true" /> Who can start
+            chats with me
+          </p>
+          <Segmented
             label="Who can start chats with me"
-            description="Currently limited to people you followed before VYBORA became messaging-only."
-            right={
+            value={p?.message_privacy}
+            options={WHO_CAN_MESSAGE}
+            onChange={(message_privacy) => set({ message_privacy })}
+            disabled={!p}
+          />
+          {p?.message_privacy === 'following' ? (
+            <div className="flex items-center gap-3">
+              <p className="flex-1 text-xs leading-snug text-muted">
+                Currently limited to people you followed before VYBORA became messaging-only.
+              </p>
               <Button
                 variant="outline"
                 size="sm"
@@ -241,9 +272,14 @@ export default function PrivacyPage() {
               >
                 Allow everyone
               </Button>
-            }
-          />
-        )}
+            </div>
+          ) : (
+            <p className="text-xs leading-snug text-muted">
+              With Friends only, people who aren’t your friends can’t start a chat with you or add
+              you to a group. Chats you’re already in aren’t affected.
+            </p>
+          )}
+        </div>
       </Section>
 
       <Section
