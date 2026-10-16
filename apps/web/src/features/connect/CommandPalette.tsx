@@ -8,6 +8,7 @@ import {
   NotePencilIcon,
   ShieldCheckIcon,
   SunIcon,
+  UserPlusIcon,
   UsersThreeIcon,
 } from '@phosphor-icons/react';
 import { Command } from 'cmdk';
@@ -127,6 +128,13 @@ export function CommandPalette({
             onSelect={() => run(onNewChat)}
           >
             New message
+          </Item>
+          <Item
+            value="add a friend username request friends"
+            icon={<UserPlusIcon size={18} />}
+            onSelect={() => run(() => navigate('/friends', { state: { focusAddFriend: true } }))}
+          >
+            Add a friend
           </Item>
           <Item
             value="privacy security devices"

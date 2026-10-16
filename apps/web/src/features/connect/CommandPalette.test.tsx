@@ -1,4 +1,6 @@
 import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { Route, Routes, useLocation } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/utils';
 import { CommandPalette } from './CommandPalette';
@@ -27,5 +29,27 @@ describe('command palette', () => {
       'Command menuCtrl/⌘ K',
     ]);
     items.forEach((i) => expect(i).toHaveAttribute('aria-disabled', 'true'));
+  });
+});
+
+describe('command palette: add a friend', () => {
+  function Probe() {
+    const location = useLocation();
+    return <p>{`${location.pathname} ${JSON.stringify(location.state)}`}</p>;
+  }
+
+  it('goes to Friends and asks for the username field to be focused', async () => {
+    const onOpenChange = vi.fn();
+    renderWithProviders(
+      <>
+        <CommandPalette open onOpenChange={onOpenChange} onNewChat={vi.fn()} />
+        <Routes>
+          <Route path="*" element={<Probe />} />
+        </Routes>
+      </>,
+    );
+    await userEvent.click(screen.getByRole('option', { name: 'Add a friend' }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(screen.getByText('/friends {"focusAddFriend":true}')).toBeInTheDocument();
   });
 });
