@@ -1,6 +1,9 @@
 import { friendlyError } from './errors';
 
-/** What the server did with a username-based friend request (mirrors `@vybora/api`). */
+/**
+ * What the server did with a username-based friend request. The single source
+ * of truth: `@vybora/api` re-exports this type.
+ */
 export type FriendRequestResult = 'sent' | 'accepted' | 'already_friends' | 'already_sent';
 
 /** What a person typed → the username the server matches (case-insensitive, `@` optional). */

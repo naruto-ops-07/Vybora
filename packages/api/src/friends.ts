@@ -1,7 +1,8 @@
+import type { FriendRequestResult } from '@vybora/core';
 import { unwrap, type VyboraClient } from './client';
 
-/** What the server did with a username-based request. */
-export type FriendRequestResult = 'sent' | 'accepted' | 'already_friends' | 'already_sent';
+/** What the server did with a username-based request (defined once, in core). */
+export type { FriendRequestResult };
 
 export interface Friend {
   userId: string;

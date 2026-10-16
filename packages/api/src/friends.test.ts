@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import type { FriendRequestResult as CoreFriendRequestResult } from '@vybora/core';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {
   cancelFriendRequest,
   fetchFriendRequests,
@@ -6,6 +7,7 @@ import {
   removeFriend,
   respondFriendRequest,
   sendFriendRequest,
+  type FriendRequestResult,
 } from './friends';
 import { qk } from './keys';
 import type { VyboraClient } from './client';
@@ -17,6 +19,11 @@ describe('friends API', () => {
     const rpc = vi.fn().mockResolvedValue({ data: 'accepted', error: null });
     expect(await sendFriendRequest(clientWith(rpc), '@Ada')).toBe('accepted');
     expect(rpc).toHaveBeenCalledWith('send_friend_request', { p_username: '@Ada' });
+  });
+
+  it('uses the request result type defined once in core', () => {
+    expectTypeOf<FriendRequestResult>().toEqualTypeOf<CoreFriendRequestResult>();
+    expectTypeOf(sendFriendRequest).returns.resolves.toEqualTypeOf<CoreFriendRequestResult>();
   });
 
   it('passes server errors through as thrown values', async () => {
