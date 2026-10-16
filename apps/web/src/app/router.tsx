@@ -17,6 +17,7 @@ const Workspace = lazy(() => import('@/features/connect/Workspace'));
 const MessagesWelcome = lazy(() =>
   import('@/features/connect/Workspace').then((m) => ({ default: m.MessagesWelcome })),
 );
+const FriendsWelcome = lazy(() => import('@/features/friends/FriendsWelcome'));
 const ChatPane = lazy(() => import('@/features/connect/ChatPane'));
 const SettingsIndex = lazy(() =>
   import('@/features/settings/SettingsNav').then((m) => ({ default: m.SettingsIndex })),
@@ -69,6 +70,7 @@ export const routes: RouteObject[] = [
               { path: 'messages/legacy', element: <LegacyInbox /> },
               { path: 'messages/legacy/:conversationId', element: <LegacyConversation /> },
               { path: 'messages/:conversationId', element: <ChatPane /> },
+              { path: 'friends', element: <FriendsWelcome /> },
               {
                 path: 'settings',
                 children: [

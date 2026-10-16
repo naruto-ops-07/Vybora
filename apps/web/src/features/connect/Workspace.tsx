@@ -5,6 +5,7 @@ import {
   KeyIcon,
   LockSimpleIcon,
   MonitorIcon,
+  UsersThreeIcon,
   WarningIcon,
 } from '@phosphor-icons/react';
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -14,6 +15,9 @@ import { Button } from '@/components/ui/Button';
 import { LogoMark } from '@/components/ui/Logo';
 import { Spinner } from '@/components/ui/Spinner';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { FriendRequestBadge } from '@/features/friends/FriendRequestBadge';
+import { FriendsPane } from '@/features/friends/FriendsPane';
+import { useFriendRequests } from '@/features/friends/hooks';
 import { ConversationList as LegacyList } from '@/features/messages/InboxPage';
 import { SettingsNav } from '@/features/settings/SettingsNav';
 import { cn } from '@/lib/cn';
@@ -160,7 +164,17 @@ function isTyping(el: EventTarget | null) {
   return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
 }
 
-function RailLink({ to, label, icon }: { to: string; label: string; icon: ReactNode }) {
+function RailLink({
+  to,
+  label,
+  icon,
+  badge,
+}: {
+  to: string;
+  label: string;
+  icon: ReactNode;
+  badge?: ReactNode;
+}) {
   return (
     <NavLink
       to={to}
@@ -178,6 +192,8 @@ function RailLink({ to, label, icon }: { to: string; label: string; icon: ReactN
           )}
           <span aria-hidden="true">{icon}</span>
           {label}
+          {/* After the label so screen readers hear "Friends, 2 friend requests". */}
+          {badge && <span className="absolute left-1/2 top-1 ml-1.5 flex">{badge}</span>}
         </>
       )}
     </NavLink>
@@ -193,6 +209,7 @@ export default function Workspace() {
   const location = useLocation();
   const chat = useMatch('/messages/:conversationId');
   const inSettings = location.pathname.startsWith('/settings');
+  const inFriends = location.pathname === '/friends' || location.pathname.startsWith('/friends/');
   const settingsSection = inSettings && location.pathname !== '/settings';
   const legacy = location.pathname.startsWith('/messages/legacy');
   const legacyChat = useMatch('/messages/legacy/:conversationId');
@@ -203,7 +220,11 @@ export default function Workspace() {
   const showingContent = !!activeId || settingsSection || !!legacyChat;
   // Profile/account settings and legacy chats must stay reachable even if the
   // encryption engine can't start (e.g. to sign out).
-  const needsEngine = !legacy && (!inSettings || location.pathname.startsWith('/settings/privacy'));
+  // Friends need no keys: adding and listing work even while the engine is locked.
+  const needsEngine =
+    !legacy && !inFriends && (!inSettings || location.pathname.startsWith('/settings/privacy'));
+  const incomingRequests = useFriendRequests().data?.incoming.length ?? 0;
+  const friendsBadge = <FriendRequestBadge count={incomingRequests} />;
   const content = (
     <Suspense
       fallback={
@@ -261,6 +282,12 @@ export default function Workspace() {
           <LogoMark size={30} />
           <div className="mt-6 flex w-full flex-1 flex-col">
             <RailLink to="/messages" label="Chats" icon={<ChatsCircleIcon size={22} />} />
+            <RailLink
+              to="/friends"
+              label="Friends"
+              icon={<UsersThreeIcon size={22} />}
+              badge={friendsBadge}
+            />
             <RailLink to="/settings" label="Settings" icon={<GearSixIcon size={22} />} />
           </div>
           {profile && (
@@ -276,12 +303,20 @@ export default function Workspace() {
             showingContent ? 'hidden md:flex' : 'flex',
           )}
           aria-label={
-            inSettings ? 'Settings sections' : legacy ? 'Legacy conversations' : 'Conversations'
+            inSettings
+              ? 'Settings sections'
+              : inFriends
+                ? 'Friends'
+                : legacy
+                  ? 'Legacy conversations'
+                  : 'Conversations'
           }
         >
           <div className="min-h-0 flex-1">
             {inSettings ? (
               <SettingsNav />
+            ) : inFriends ? (
+              <FriendsPane inputRef={searchRef} />
             ) : legacy ? (
               <LegacyList activeId={legacyChat?.params.conversationId} />
             ) : (
@@ -300,6 +335,12 @@ export default function Workspace() {
             className="pb-safe flex shrink-0 border-t border-line bg-surface md:hidden"
           >
             <RailLink to="/messages" label="Chats" icon={<ChatsCircleIcon size={22} />} />
+            <RailLink
+              to="/friends"
+              label="Friends"
+              icon={<UsersThreeIcon size={22} />}
+              badge={friendsBadge}
+            />
             <RailLink to="/settings" label="Settings" icon={<GearSixIcon size={22} />} />
           </nav>
         </aside>
@@ -315,7 +356,7 @@ export default function Workspace() {
         open={paletteOpen}
         onOpenChange={setPaletteOpen}
         onNewChat={() => {
-          if (inSettings || legacy) navigate('/messages');
+          if (inSettings || legacy || inFriends) navigate('/messages');
           setComposeSignal((n) => n + 1);
         }}
       />
