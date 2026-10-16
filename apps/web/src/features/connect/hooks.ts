@@ -1,5 +1,6 @@
 import {
   acknowledgeConversation,
+  fetchConnectPrivacy,
   fetchLastSeen,
   fetchNicknames,
   fetchSecureInbox,
@@ -7,6 +8,7 @@ import {
   peerOf,
   qk,
   subscribeToSecureConversation,
+  watchPresence,
   type SecureConversation,
 } from '@vybora/api';
 import type { LocalMessage } from '@vybora/e2ee';
@@ -30,6 +32,30 @@ export function useNicknames() {
     queryFn: () => fetchNicknames(supabase),
     staleTime: 60_000,
   });
+}
+
+/**
+ * Which of these people are online right now. Reciprocal: empty while my own
+ * "show when I'm online" is off. Re-subscribes only when the set of people
+ * changes, not on every list refetch.
+ */
+export function useOnlinePeers(peerIds: readonly string[]): Set<string> {
+  const { userId } = useMe();
+  const privacy = useQuery({
+    queryKey: qk.connect.privacy,
+    queryFn: () => fetchConnectPrivacy(supabase, userId),
+  });
+  const showOnline = !!privacy.data?.show_online;
+  const peersKey = [...new Set(peerIds)].filter(Boolean).join(',');
+  const [online, setOnline] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    if (!peersKey || !showOnline) {
+      setOnline(new Set());
+      return;
+    }
+    return watchPresence(supabase, peersKey.split(','), setOnline);
+  }, [peersKey, showOnline]);
+  return useMemo(() => (showOnline ? online : new Set<string>()), [showOnline, online]);
 }
 
 /** A peer's last seen (null when hidden). Disabled while my own online status is off. */

@@ -6,16 +6,14 @@ import {
   PushPinIcon,
 } from '@phosphor-icons/react';
 import {
-  fetchConnectPrivacy,
   isMuted,
   peerOf,
   qk,
   updateConversationPreferences,
-  watchPresence,
   type SecureConversation,
 } from '@vybora/api';
 import { chatRowPreview, formatRowTime, formatUnread, receiptOf } from '@vybora/core';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Avatar } from '@/components/ui/Avatar';
@@ -32,6 +30,7 @@ import {
   conversationTitle,
   useInboxTyping,
   useNicknames,
+  useOnlinePeers,
   usePreviews,
   useSecureInbox,
 } from './hooks';
@@ -79,7 +78,6 @@ export function InboxPane({
   const [filter, setFilter] = useState<Filter>('all');
   const [term, setTerm] = useState('');
   const [composing, setComposing] = useState(false);
-  const [online, setOnline] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!composeSignal) return;
@@ -104,30 +102,11 @@ export function InboxPane({
     const m = c.members.find((x) => x.id === uid);
     return nicknames.data?.[uid] ?? (m?.display_name || m?.username || 'Someone');
   };
-  const peersKey = useMemo(
-    () =>
-      [...new Set(convs.flatMap((c) => (c.kind === 'direct' ? [peerOf(c, userId)?.id ?? ''] : [])))]
-        .filter(Boolean)
-        .join(','),
+  const peerIds = useMemo(
+    () => convs.flatMap((c) => (c.kind === 'direct' ? [peerOf(c, userId)?.id ?? ''] : [])),
     [convs, userId],
   );
-  const privacy = useQuery({
-    queryKey: qk.connect.privacy,
-    queryFn: () => fetchConnectPrivacy(supabase, userId),
-  });
-  // Re-subscribe only when the set of people changes, not on every inbox refetch.
-  const showOnline = !!privacy.data?.show_online;
-  useEffect(() => {
-    if (!peersKey || !showOnline) {
-      setOnline(new Set());
-      return;
-    }
-    return watchPresence(supabase, peersKey.split(','), setOnline);
-  }, [peersKey, showOnline]);
-  const shownOnline = useMemo(
-    () => (showOnline ? online : new Set<string>()),
-    [showOnline, online],
-  );
+  const shownOnline = useOnlinePeers(peerIds);
 
   const visible = useMemo(() => {
     const t = term.trim().toLowerCase();
