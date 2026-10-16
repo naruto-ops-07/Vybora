@@ -1,10 +1,10 @@
 import { Icon } from '@/components/Icon';
-import { createSecureConversation, qk, searchProfiles } from '@vybora/api';
+import { createSecureConversation, fetchFriends, qk, searchProfiles } from '@vybora/api';
 import { friendlyError } from '@vybora/core';
 import type { UserSummary } from '@vybora/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, Stack } from 'expo-router';
-import { useDeferredValue, useState } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, View } from 'react-native';
 import { Text, TextInput } from '@/components/Text';
 import { radii } from '@/lib/theme';
@@ -24,6 +24,19 @@ export default function NewChat() {
     queryFn: () => searchProfiles(supabase, q),
     enabled: q.length > 0,
   });
+  // Friends first: a one-tap quick-pick while the search box is empty.
+  const friends = useQuery({ queryKey: qk.connect.friends, queryFn: () => fetchFriends(supabase) });
+  const friendOptions = useMemo<UserSummary[]>(
+    () =>
+      (friends.data ?? []).map((f) => ({
+        id: f.userId,
+        username: f.username,
+        display_name: f.displayName ?? '',
+        avatar_path: f.avatarPath,
+      })),
+    [friends.data],
+  );
+  const showFriends = !q && friendOptions.length > 0;
   const isGroup = picked.length > 1;
 
   const create = useMutation({
@@ -134,9 +147,25 @@ export default function NewChat() {
         </View>
       </View>
       <FlatList
-        data={results.data ?? []}
+        data={showFriends ? friendOptions : (results.data ?? [])}
         keyExtractor={(u) => u.id}
         keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={
+          showFriends ? (
+            <Text
+              accessibilityRole="header"
+              style={{
+                color: cc.textMuted,
+                fontSize: 13,
+                fontWeight: '600',
+                paddingHorizontal: 16,
+                paddingBottom: 4,
+              }}
+            >
+              Friends
+            </Text>
+          ) : null
+        }
         renderItem={({ item }) => {
           const on = picked.some((p) => p.id === item.id);
           return (
