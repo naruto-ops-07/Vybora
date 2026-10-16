@@ -45,16 +45,21 @@ alter table public.user_settings
 
 create or replace function public.are_friends(p_user uuid)
 returns boolean
-language sql
+language plpgsql
 stable
 security definer
 set search_path = ''
 as $$
-  select auth.uid() is not null and exists (
+begin
+  if auth.uid() is null then
+    raise exception 'not_authenticated' using errcode = '42501';
+  end if;
+  return exists (
     select 1 from public.friendships f
     where f.user_low = least(auth.uid(), p_user)
       and f.user_high = greatest(auth.uid(), p_user)
   );
+end;
 $$;
 
 -- Blocking someone ends any friendship and pending request between the pair.
@@ -79,8 +84,9 @@ create trigger blocks_clear_friends
   after insert on public.blocks
   for each row execute function private.blocks_clear_friends();
 
--- Same as 0009, plus: a recipient who only accepts chats from friends admits
--- their friends. 'everyone' and the legacy 'following' branch are unchanged.
+-- Same as 0009, plus a 'friends' value. The recipient's setting is read once
+-- and each value admits exactly one kind of sender: everyone -> anyone,
+-- following -> people the recipient follows (legacy), friends -> friends only.
 create or replace function private.can_message(p_user uuid)
 returns boolean
 language sql
@@ -96,19 +102,19 @@ as $$
          or (b.blocker_id = p_user and b.blocked_id = auth.uid())
     )
     and (
-      coalesce((select s.message_privacy from public.user_settings s where s.user_id = p_user), 'everyone') = 'everyone'
-      or exists (
-        select 1 from public.follows f
-        where f.follower_id = p_user and f.following_id = auth.uid() and f.status = 'accepted'
-      )
-      or (
-        coalesce((select s.message_privacy from public.user_settings s where s.user_id = p_user), 'everyone') = 'friends'
-        and exists (
+      case coalesce((select s.message_privacy from public.user_settings s where s.user_id = p_user), 'everyone')
+        when 'everyone' then true
+        when 'following' then exists (
+          select 1 from public.follows f
+          where f.follower_id = p_user and f.following_id = auth.uid() and f.status = 'accepted'
+        )
+        when 'friends' then exists (
           select 1 from public.friendships fr
           where fr.user_low = least(auth.uid(), p_user)
             and fr.user_high = greatest(auth.uid(), p_user)
         )
-      )
+        else false
+      end
     );
 $$;
 
@@ -213,9 +219,22 @@ begin
   end if;
 
   if coalesce(p_accept, false) then
+    -- A block (either way) means the request is stale and must look exactly
+    -- like a missing one. (Raising rolls the delete back; the blocks trigger
+    -- already clears requests, and the lists hide blocked pairs regardless.)
+    if exists (
+      select 1 from public.blocks b
+      where (b.blocker_id = v_me and b.blocked_id = p_requester)
+         or (b.blocker_id = p_requester and b.blocked_id = v_me)
+    ) then
+      raise exception 'request_not_found' using errcode = 'P0002';
+    end if;
     insert into public.friendships (user_low, user_high)
     values (least(v_me, p_requester), greatest(v_me, p_requester))
     on conflict do nothing;
+    -- Both of us asked at once: the reverse request is now moot.
+    delete from public.friend_requests r
+    where r.requester_id = v_me and r.addressee_id = p_requester;
   end if;
 end;
 $$;
@@ -280,6 +299,11 @@ begin
       on p.id = case when f.user_low = auth.uid() then f.user_high else f.user_low end
     where (f.user_low = auth.uid() or f.user_high = auth.uid())
       and p.status = 'active'
+      and not exists (
+        select 1 from public.blocks b
+        where (b.blocker_id = auth.uid() and b.blocked_id = p.id)
+           or (b.blocker_id = p.id and b.blocked_id = auth.uid())
+      )
     order by lower(coalesce(nullif(p.display_name, ''), p.username)), p.username;
 end;
 $$;
@@ -311,6 +335,11 @@ begin
       on p.id = case when r.addressee_id = auth.uid() then r.requester_id else r.addressee_id end
     where (r.requester_id = auth.uid() or r.addressee_id = auth.uid())
       and p.status = 'active'
+      and not exists (
+        select 1 from public.blocks b
+        where (b.blocker_id = auth.uid() and b.blocked_id = p.id)
+           or (b.blocker_id = p.id and b.blocked_id = auth.uid())
+      )
     order by r.created_at desc;
 end;
 $$;

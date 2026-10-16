@@ -112,6 +112,46 @@ describe('send_friend_request', () => {
 });
 
 describe('respond / cancel / remove', () => {
+  it('denies anon on every friend RPC', async () => {
+    const id = '00000000-0000-0000-0000-000000000001';
+    for (const call of [
+      `select public.respond_friend_request('${id}', true)`,
+      `select public.cancel_friend_request('${id}')`,
+      `select public.remove_friend('${id}')`,
+      `select public.are_friends('${id}')`,
+    ]) {
+      await expectDenied(db.as('anon', call), /permission denied/);
+    }
+  });
+
+  it('accepting also clears a reverse pending request', async () => {
+    const a = await db.createUser('fr_race_a');
+    const b = await db.createUser('fr_race_b');
+    await send(a, b.username);
+    // Simulate the race where both requests were inserted before either was seen.
+    await db.admin(`insert into friend_requests (requester_id, addressee_id) values ($1, $2)`, [
+      b.id,
+      a.id,
+    ]);
+    await respond(b, a, true);
+    expect(await friendshipCount(a, b)).toBe(1);
+    expect(await requestCount(a, b)).toBe(0);
+    expect(await requestCount(b, a)).toBe(0);
+  });
+
+  it('refuses to accept across a block, exactly like a missing request', async () => {
+    const a = await db.createUser('fr_bacc_a');
+    const b = await db.createUser('fr_bacc_b');
+    await block(b, a);
+    await db.admin(`insert into friend_requests (requester_id, addressee_id) values ($1, $2)`, [
+      a.id,
+      b.id,
+    ]);
+    await expectDenied(respond(b, a, true), /request_not_found/);
+    expect(await friendshipCount(a, b)).toBe(0);
+    await db.admin(`delete from blocks`);
+  });
+
   it('accepting creates one ordered friendship and clears the request', async () => {
     const a = await db.createUser('fr_acc_a');
     const b = await db.createUser('fr_acc_b');
@@ -203,6 +243,46 @@ describe('listing', () => {
   });
 });
 
+describe('listing and blocks', () => {
+  it('hides blocked pairs from both lists even if rows linger', async () => {
+    const me = await db.createUser('fr_lb_me');
+    const friend = await db.createUser('fr_lb_friend');
+    const asker = await db.createUser('fr_lb_asker');
+    const asked = await db.createUser('fr_lb_asked');
+    await befriend(me, friend);
+    await send(asker, me.username);
+    await send(me, asked.username);
+    await db.admin(`insert into blocks (blocker_id, blocked_id) values ($1, $2), ($3, $4)`, [
+      me.id,
+      friend.id,
+      asker.id,
+      me.id,
+    ]);
+    await db.admin(`insert into blocks (blocker_id, blocked_id) values ($1, $2)`, [
+      asked.id,
+      me.id,
+    ]);
+    // Re-create rows the cleanup trigger removed, as a racing write could.
+    await db.admin(
+      `insert into friendships (user_low, user_high) values (least($1::uuid, $2::uuid), greatest($1::uuid, $2::uuid))`,
+      [me.id, friend.id],
+    );
+    await db.admin(
+      `insert into friend_requests (requester_id, addressee_id) values ($1, $2), ($2, $3)`,
+      [asker.id, me.id, asked.id],
+    );
+    expect(await db.as(me, `select * from public.my_friends()`)).toEqual([]);
+    expect(await db.as(me, `select * from public.my_friend_requests()`)).toEqual([]);
+  });
+
+  it('raises not_authenticated from are_friends without a user', async () => {
+    await expectDenied(
+      db.as('service', `select public.are_friends(gen_random_uuid())`),
+      /not_authenticated/,
+    );
+  });
+});
+
 describe('table access', () => {
   it('has no direct client access to the friend tables', async () => {
     const a = await db.createUser('fr_tbl_a');
@@ -238,6 +318,10 @@ describe('blocking', () => {
     await block(a, b);
     await block(c, a);
     await block(a, d);
+    const e = await db.createUser('fr_blk_e');
+    await send(a, e.username);
+    await block(a, e);
+    expect(await requestCount(a, e)).toBe(0);
     expect(await friendshipCount(a, b)).toBe(0);
     expect(await requestCount(a, c)).toBe(0);
     expect(await requestCount(d, a)).toBe(0);
@@ -264,6 +348,19 @@ describe('friends-only message privacy', () => {
     await setPrivacy(owner, 'friends');
     await expectDenied(direct(stranger, owner), /cannot_message/);
     expect(await direct(friend, owner)).toHaveLength(1);
+  });
+
+  it('does not admit people the recipient follows under friends-only', async () => {
+    const owner = await db.createUser('fr_pv_fo_owner');
+    const followed = await db.createUser('fr_pv_fo_followed');
+    await db.admin(
+      `insert into follows (follower_id, following_id, status) values ($1, $2, 'accepted')`,
+      [owner.id, followed.id],
+    );
+    expect(await direct(followed, owner)).toHaveLength(1);
+    await db.admin(`delete from conversations`);
+    await setPrivacy(owner, 'friends');
+    await expectDenied(direct(followed, owner), /cannot_message/);
   });
 
   it('leaves everyone and following unchanged', async () => {

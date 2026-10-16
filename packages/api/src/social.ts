@@ -71,7 +71,7 @@ export async function fetchSettings(client: VyboraClient, userId: string) {
 export async function updateSettings(
   client: VyboraClient,
   userId: string,
-  patch: { message_privacy?: 'everyone' | 'following'; push_enabled?: boolean },
+  patch: { message_privacy?: 'everyone' | 'following' | 'friends'; push_enabled?: boolean },
 ) {
   unwrap(await client.from('user_settings').update(patch).eq('user_id', userId));
 }
