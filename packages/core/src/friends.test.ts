@@ -4,7 +4,7 @@ import {
   addFriendResultNotice,
   friendRequestsLabel,
   normalizeUsername,
-} from './copy';
+} from './friends';
 
 describe('normalizeUsername', () => {
   it('trims, drops one leading @ and lower-cases', () => {

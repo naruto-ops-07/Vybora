@@ -1,6 +1,5 @@
-import { formatUnread } from '@vybora/core';
+import { formatUnread, friendRequestsLabel } from '@vybora/core';
 import { cn } from '@/lib/cn';
-import { friendRequestsLabel } from './copy';
 
 /**
  * Incoming friend request count on the Friends nav entry. The digits are

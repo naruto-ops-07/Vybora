@@ -9,7 +9,13 @@ import {
 } from '@phosphor-icons/react';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import { qk, sendFriendRequest, type Friend, type FriendRequest } from '@vybora/api';
-import { formatRelativeTime } from '@vybora/core';
+import {
+  addFriendErrorNotice,
+  addFriendResultNotice,
+  formatRelativeTime,
+  normalizeUsername,
+  type AddFriendNotice,
+} from '@vybora/core';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLocation } from 'react-router';
@@ -21,12 +27,6 @@ import { useOnlinePeers } from '@/features/connect/hooks';
 import { Meta } from '@/features/connect/ui';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
-import {
-  addFriendErrorNotice,
-  addFriendResultNotice,
-  normalizeUsername,
-  type AddFriendNotice,
-} from './copy';
 import { nameOf, useFriendActions, useFriendRequests, useFriends, useMessageFriend } from './hooks';
 
 const NOTICE_ICON = {
