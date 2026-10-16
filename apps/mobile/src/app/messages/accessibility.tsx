@@ -1,64 +1,10 @@
 import type { ReduceMotionPref, TextSize } from '@vybora/core';
-import { Pressable, ScrollView, Switch, View } from 'react-native';
+import { ScrollView, Switch } from 'react-native';
 import { Text } from '@/components/Text';
 import { Row, SectionCard, useCc } from '@/features/connect/ui/primitives';
+import { Segmented } from '@/features/connect/ui/Segmented';
 import { useA11y } from '@/lib/a11y';
 import { radii } from '@/lib/theme';
-
-function Segmented<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: { value: T; label: string }[];
-  onChange: (v: T) => void;
-}) {
-  const cc = useCc();
-  return (
-    <View
-      accessibilityRole="radiogroup"
-      accessibilityLabel={label}
-      style={{
-        flexDirection: 'row',
-        borderWidth: 1,
-        borderColor: cc.lineStrong,
-        borderRadius: radii.md,
-        overflow: 'hidden',
-        marginHorizontal: 16,
-        marginVertical: 12,
-      }}
-    >
-      {options.map((o, i) => {
-        const on = o.value === value;
-        return (
-          <Pressable
-            key={o.value}
-            accessibilityRole="radio"
-            accessibilityLabel={o.label}
-            accessibilityState={{ checked: on }}
-            onPress={() => onChange(o.value)}
-            style={{
-              flex: 1,
-              minHeight: 44,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderLeftWidth: i ? 1 : 0,
-              borderLeftColor: cc.lineStrong,
-              backgroundColor: on ? cc.accent : 'transparent',
-            }}
-          >
-            <Text style={{ color: on ? cc.onAccent : cc.text, fontWeight: '500', fontSize: 14 }}>
-              {o.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
 
 export default function AccessibilityScreen() {
   const cc = useCc();

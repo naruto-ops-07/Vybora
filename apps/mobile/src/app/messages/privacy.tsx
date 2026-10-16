@@ -15,13 +15,22 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, ScrollView, Switch, View } from 'react-native';
+import { Icon } from '@/components/Icon';
+import { Button } from '@/components/ui';
 import { Text, TextInput } from '@/components/Text';
 import { useMe } from '@/features/auth/AuthProvider';
 import { useConnect } from '@/features/connect/ConnectProvider';
 import { ConnectGate } from '@/features/connect/ConnectGate';
 import { useCc, Pill, Row, SectionCard } from '@/features/connect/ui/primitives';
+import { Segmented } from '@/features/connect/ui/Segmented';
 import { appLockSupport, isAppLockEnabled, setAppLock } from '@/lib/connect/appLock';
 import { supabase } from '@/lib/supabase';
+
+type WhoCanMessage = 'everyone' | 'friends';
+const WHO_CAN_MESSAGE: { value: WhoCanMessage; label: string }[] = [
+  { value: 'everyone', label: 'Everyone' },
+  { value: 'friends', label: 'Friends only' },
+];
 
 function Privacy() {
   const cc = useCc();
@@ -47,11 +56,24 @@ function Privacy() {
   useEffect(() => void isAppLockEnabled().then(setLock), []);
   useEffect(() => setPhone(contact.data?.phone_e164 ?? ''), [contact.data?.phone_e164]);
 
-  const set = (patch: Partial<ConnectPrivacy>) =>
+  // Applied at once so switches and radios answer immediately; undone on failure.
+  const set = (patch: Partial<ConnectPrivacy>) => {
+    const before = qc.getQueryData<ConnectPrivacy>(qk.connect.privacy);
+    if (before) qc.setQueryData<ConnectPrivacy>(qk.connect.privacy, { ...before, ...patch });
     void updateConnectPrivacy(supabase, userId, patch).then(
       () => qc.invalidateQueries({ queryKey: qk.connect.privacy }),
-      (e) => Alert.alert('Not saved', friendlyError(e)),
+      (e) => {
+        const now = qc.getQueryData<ConnectPrivacy>(qk.connect.privacy);
+        if (before && now) {
+          const undo = Object.fromEntries(
+            Object.keys(patch).map((k) => [k, before[k as keyof ConnectPrivacy]]),
+          );
+          qc.setQueryData<ConnectPrivacy>(qk.connect.privacy, { ...now, ...undo });
+        }
+        Alert.alert('Not saved', friendlyError(e));
+      },
     );
+  };
   const p = privacy.data;
   const toggle = (
     key: keyof ConnectPrivacy,
@@ -166,15 +188,55 @@ function Privacy() {
           'Only people you share a chat with can see it. If you turn this off, you won’t see other people’s either.',
           'circle',
         )}
-        {/* Follow-based limits came from the old social features; only offer the way back. */}
-        {p?.message_privacy === 'following' && (
-          <Row
-            icon="users"
+        <View style={{ paddingTop: 12 }}>
+          <View
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16 }}
+          >
+            <Icon name="users" size={20} color={cc.textMuted} />
+            <Text style={{ color: cc.text, fontSize: 15, fontWeight: '500' }}>
+              Who can start chats with me
+            </Text>
+          </View>
+          <Segmented<WhoCanMessage>
             label="Who can start chats with me"
-            description="Limited to people you followed before VYBORA became messaging-only. Tap to allow everyone."
-            onPress={() => set({ message_privacy: 'everyone' })}
+            value={
+              p?.message_privacy === 'everyone' || p?.message_privacy === 'friends'
+                ? p.message_privacy
+                : undefined
+            }
+            options={WHO_CAN_MESSAGE}
+            onChange={(message_privacy) => set({ message_privacy })}
+            disabled={!p}
           />
-        )}
+          {/* Follow-based limits came from the old social features; only offer the way back. */}
+          {p?.message_privacy === 'following' ? (
+            <View style={{ paddingHorizontal: 16, paddingBottom: 14, gap: 10 }}>
+              <Text style={{ color: cc.textMuted, fontSize: 12, lineHeight: 17 }}>
+                Currently limited to people you followed before VYBORA became messaging-only.
+              </Text>
+              <Button
+                title="Allow everyone"
+                variant="outline"
+                compact
+                onPress={() => set({ message_privacy: 'everyone' })}
+                style={{ alignSelf: 'flex-start', minHeight: 44 }}
+              />
+            </View>
+          ) : (
+            <Text
+              style={{
+                color: cc.textMuted,
+                fontSize: 12,
+                lineHeight: 17,
+                paddingHorizontal: 16,
+                paddingBottom: 14,
+              }}
+            >
+              With Friends only, people who aren’t your friends can’t start a chat with you or add
+              you to a group. Chats you’re already in aren’t affected.
+            </Text>
+          )}
+        </View>
       </SectionCard>
 
       <SectionCard
