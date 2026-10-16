@@ -46,6 +46,8 @@ export const qk = {
     keys: (userId: string) => ['connect', 'keys', userId] as const,
     safety: (userId: string) => ['connect', 'safety', userId] as const,
     lastSeen: (userId: string) => ['connect', 'last-seen', userId] as const,
+    friends: ['connect', 'friends'] as const,
+    friendRequests: ['connect', 'friend-requests'] as const,
   },
   admin: {
     overview: ['admin', 'overview'] as const,

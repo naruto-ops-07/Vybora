@@ -11,4 +11,5 @@ export * from './admin';
 export * from './keys';
 export * from './cache';
 export * from './connect';
+export * from './friends';
 export * from './realtime';

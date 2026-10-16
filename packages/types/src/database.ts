@@ -489,6 +489,72 @@ export type Database = {
           },
         ];
       };
+      friend_requests: {
+        Row: {
+          requester_id: string;
+          addressee_id: string;
+          created_at: string;
+        };
+        Insert: {
+          requester_id: string;
+          addressee_id: string;
+          created_at?: string;
+        };
+        Update: {
+          requester_id?: string;
+          addressee_id?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'friend_requests_addressee_id_fkey';
+            columns: ['addressee_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'friend_requests_requester_id_fkey';
+            columns: ['requester_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      friendships: {
+        Row: {
+          user_low: string;
+          user_high: string;
+          created_at: string;
+        };
+        Insert: {
+          user_low: string;
+          user_high: string;
+          created_at?: string;
+        };
+        Update: {
+          user_low?: string;
+          user_high?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'friendships_user_high_fkey';
+            columns: ['user_high'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'friendships_user_low_fkey';
+            columns: ['user_low'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       hashtags: {
         Row: {
           id: string;
@@ -1444,6 +1510,12 @@ export type Database = {
         };
         Returns: undefined;
       };
+      are_friends: {
+        Args: {
+          p_user: string;
+        };
+        Returns: boolean;
+      };
       caller_blocked_with: {
         Args: {
           p_user: string;
@@ -1477,6 +1549,12 @@ export type Database = {
           p_story: string;
         };
         Returns: boolean;
+      };
+      cancel_friend_request: {
+        Args: {
+          p_addressee: string;
+        };
+        Returns: undefined;
       };
       claim_key_packages: {
         Args: {
@@ -1906,6 +1984,27 @@ export type Database = {
           revoked_at: string | null;
         }[];
       };
+      my_friend_requests: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          direction: string | null;
+          user_id: string | null;
+          username: string | null;
+          display_name: string | null;
+          avatar_path: string | null;
+          created_at: string | null;
+        }[];
+      };
+      my_friends: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          user_id: string | null;
+          username: string | null;
+          display_name: string | null;
+          avatar_path: string | null;
+          since: string | null;
+        }[];
+      };
       my_secure_conversations: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -1962,10 +2061,23 @@ export type Database = {
         };
         Returns: number;
       };
+      remove_friend: {
+        Args: {
+          p_friend: string;
+        };
+        Returns: undefined;
+      };
       remove_group_member: {
         Args: {
           p_conversation: string;
           p_user: string;
+        };
+        Returns: undefined;
+      };
+      respond_friend_request: {
+        Args: {
+          p_requester: string;
+          p_accept: boolean;
         };
         Returns: undefined;
       };
@@ -1993,6 +2105,12 @@ export type Database = {
           is_private: boolean | null;
           followers_count: number | null;
         }[];
+      };
+      send_friend_request: {
+        Args: {
+          p_username: string;
+        };
+        Returns: string;
       };
       set_conversation_theme: {
         Args: {

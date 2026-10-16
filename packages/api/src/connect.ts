@@ -604,7 +604,7 @@ export interface ConnectPrivacy {
   typing_indicators: boolean;
   show_online: boolean;
   message_previews: boolean;
-  message_privacy: 'everyone' | 'following';
+  message_privacy: 'everyone' | 'following' | 'friends';
 }
 
 export async function fetchConnectPrivacy(

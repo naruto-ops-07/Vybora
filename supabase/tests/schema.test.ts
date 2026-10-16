@@ -25,6 +25,8 @@ describe('schema', () => {
         'conversations',
         'device_tokens',
         'devices',
+        'friend_requests',
+        'friendships',
         'follows',
         'hashtags',
         'key_packages',
