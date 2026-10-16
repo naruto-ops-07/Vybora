@@ -1,9 +1,9 @@
 import { CheckIcon, LockSimpleIcon, MagnifyingGlassIcon, XIcon } from '@phosphor-icons/react';
-import { createSecureConversation, qk, searchProfiles } from '@vybora/api';
+import { createSecureConversation, fetchFriends, qk, searchProfiles } from '@vybora/api';
 import { friendlyError } from '@vybora/core';
 import type { UserSummary } from '@vybora/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useDeferredValue, useState } from 'react';
+import { useDeferredValue, useId, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -13,6 +13,45 @@ import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
+
+function PersonOption({
+  user,
+  checked,
+  onToggle,
+}: {
+  user: UserSummary;
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={checked}
+        onClick={onToggle}
+        className="flex w-full items-center gap-3 px-1 py-2.5 text-left hover:bg-surface-muted"
+      >
+        <Avatar path={user.avatar_path} name={user.username} size={36} />
+        <span className="min-w-0 flex-1 leading-tight">
+          <span className="block text-sm font-medium">{user.username}</span>
+          {user.display_name && (
+            <span className="block truncate text-[13px] text-muted">{user.display_name}</span>
+          )}
+        </span>
+        <span
+          className={cn(
+            'flex h-5 w-5 items-center justify-center rounded-sm border',
+            checked ? 'border-accent bg-accent text-on-accent' : 'border-line-strong',
+          )}
+          aria-hidden="true"
+        >
+          {checked && <CheckIcon size={12} weight="bold" />}
+        </span>
+      </button>
+    </li>
+  );
+}
 
 /** Start a direct chat (one person) or a group (two or more). */
 export function NewChatDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -28,6 +67,23 @@ export function NewChatDialog({ open, onClose }: { open: boolean; onClose: () =>
     queryFn: () => searchProfiles(supabase, q),
     enabled: open && q.length > 0,
   });
+  // Friends first: a one-tap quick-pick while the search box is empty.
+  const friends = useQuery({
+    queryKey: qk.connect.friends,
+    queryFn: () => fetchFriends(supabase),
+    enabled: open,
+  });
+  const friendOptions = useMemo<UserSummary[]>(
+    () =>
+      (friends.data ?? []).map((f) => ({
+        id: f.userId,
+        username: f.username,
+        display_name: f.displayName ?? '',
+        avatar_path: f.avatarPath,
+      })),
+    [friends.data],
+  );
+  const friendsHeadingId = useId();
   const isGroup = picked.length > 1;
 
   const close = () => {
@@ -123,38 +179,32 @@ export function NewChatDialog({ open, onClose }: { open: boolean; onClose: () =>
           onChange={(e) => setTerm(e.target.value)}
         />
       </div>
+      {!term.trim() && friendOptions.length > 0 && (
+        <>
+          <h3 id={friendsHeadingId} className="mt-4 px-1 text-[13px] font-semibold text-muted">
+            Friends
+          </h3>
+          <ul className="mt-1 divide-y divide-line" aria-labelledby={friendsHeadingId}>
+            {friendOptions.map((u) => (
+              <PersonOption
+                key={u.id}
+                user={u}
+                checked={picked.some((p) => p.id === u.id)}
+                onToggle={() => toggle(u)}
+              />
+            ))}
+          </ul>
+        </>
+      )}
       <ul className="mt-2 divide-y divide-line" aria-busy={results.isFetching}>
-        {results.data?.map((u) => {
-          const on = picked.some((p) => p.id === u.id);
-          return (
-            <li key={u.id}>
-              <button
-                type="button"
-                role="checkbox"
-                aria-checked={on}
-                onClick={() => toggle(u)}
-                className="flex w-full items-center gap-3 px-1 py-2.5 text-left hover:bg-surface-muted"
-              >
-                <Avatar path={u.avatar_path} name={u.username} size={36} />
-                <span className="min-w-0 flex-1 leading-tight">
-                  <span className="block text-sm font-medium">{u.username}</span>
-                  {u.display_name && (
-                    <span className="block truncate text-[13px] text-muted">{u.display_name}</span>
-                  )}
-                </span>
-                <span
-                  className={cn(
-                    'flex h-5 w-5 items-center justify-center rounded-sm border',
-                    on ? 'border-accent bg-accent text-on-accent' : 'border-line-strong',
-                  )}
-                  aria-hidden="true"
-                >
-                  {on && <CheckIcon size={12} weight="bold" />}
-                </span>
-              </button>
-            </li>
-          );
-        })}
+        {results.data?.map((u) => (
+          <PersonOption
+            key={u.id}
+            user={u}
+            checked={picked.some((p) => p.id === u.id)}
+            onToggle={() => toggle(u)}
+          />
+        ))}
       </ul>
       {results.isFetching && (
         <div className="flex justify-center py-4 text-accent">
