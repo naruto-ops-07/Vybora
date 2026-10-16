@@ -76,6 +76,7 @@ function Navigator({ fontsReady }: { fontsReady: boolean }) {
         <Stack.Screen name="messages/new" options={{ title: 'New chat', presentation: 'modal' }} />
         <Stack.Screen name="messages/details/[id]" options={{ title: 'Chat info' }} />
         <Stack.Screen name="messages/verify/[userId]" options={{ title: 'Safety number' }} />
+        <Stack.Screen name="messages/friends" options={{ title: 'Friends' }} />
         <Stack.Screen name="messages/privacy" options={{ title: 'Privacy & security' }} />
         <Stack.Screen name="messages/accessibility" options={{ title: 'Accessibility' }} />
         <Stack.Screen name="messages/legacy/[id]" options={{ title: '' }} />

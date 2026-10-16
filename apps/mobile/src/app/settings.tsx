@@ -8,7 +8,7 @@ import {
   updateSettings,
   uploadObject,
 } from '@vybora/api';
-import { friendlyError, storagePaths, uuid } from '@vybora/core';
+import { friendlyError, friendRequestsLabel, storagePaths, uuid } from '@vybora/core';
 import { profileUpdateSchema } from '@vybora/validation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
@@ -17,6 +17,7 @@ import { Alert, KeyboardAvoidingView, Platform, ScrollView, Switch, View } from 
 import { Avatar, Button, Loading, Text, TextField } from '@/components/ui';
 import { useMe } from '@/features/auth/AuthProvider';
 import { Row, SectionCard } from '@/features/connect/ui/primitives';
+import { useFriendRequests } from '@/features/friends/hooks';
 import { pickMedia } from '@/lib/media';
 import { supabase, supabaseConfig } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
@@ -29,6 +30,8 @@ export default function Settings() {
     queryKey: qk.settings(userId),
     queryFn: () => fetchSettings(supabase, userId),
   });
+  const requests = useFriendRequests();
+  const incoming = requests.data?.incoming.length ?? 0;
   const [form, setForm] = useState({ username: '', display_name: '', bio: '', website: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -194,6 +197,16 @@ export default function Settings() {
             />
             <Button title="Save profile" onPress={() => save.mutate()} loading={save.isPending} />
           </View>
+        </SectionCard>
+
+        <SectionCard title="Friends">
+          <Row
+            icon="users"
+            label="Friends"
+            description="Add people by username, answer requests, start a chat"
+            value={incoming > 0 ? friendRequestsLabel(incoming) : undefined}
+            onPress={() => router.push('/messages/friends')}
+          />
         </SectionCard>
 
         <SectionCard title="Privacy & security">

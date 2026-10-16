@@ -1,18 +1,16 @@
 import {
-  fetchConnectPrivacy,
   fetchConversations,
   isMuted,
   muteUntil,
   peerOf,
   qk,
   updateConversationPreferences,
-  watchPresence,
   type SecureConversation,
 } from '@vybora/api';
 import { chatRowPreview, formatRowTime, receiptOf } from '@vybora/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useIsFocused } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActionSheetIOS,
   Alert,
@@ -36,12 +34,15 @@ import {
   conversationTitle,
   useInboxTyping,
   useNicknames,
+  useOnlinePeers,
   usePreviews,
   useSecureInbox,
 } from '@/features/connect/hooks';
 import { ChatRow } from '@/features/connect/ui/ChatRowParts';
 import { ConnectEmpty, PrimaryButton, useCc } from '@/features/connect/ui/primitives';
 import { UndoBar } from '@/features/connect/ui/UndoBar';
+import { FriendsButton } from '@/features/friends/FriendsButton';
+import { useFriendRequests } from '@/features/friends/hooks';
 import { useHaptics } from '@/lib/haptics';
 import { radii } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
@@ -63,11 +64,11 @@ function Inbox() {
   });
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
-  const [online, setOnline] = useState<Set<string>>(new Set());
   const convs = useMemo(() => inbox.data ?? [], [inbox.data]);
   const previews = usePreviews(convs.map((c) => c.id));
   const focused = useIsFocused();
   const haptic = useHaptics();
+  const requests = useFriendRequests(focused);
   const [undo, setUndo] = useState<{ id: number; message: string; run: () => void } | null>(null);
   const recentIds = useMemo(
     () =>
@@ -86,25 +87,7 @@ function Inbox() {
     () => convs.map((c) => peerOf(c, userId)?.id).filter((x): x is string => !!x),
     [convs, userId],
   );
-  // Re-subscribe only when the set of people changes, not on every inbox refetch.
-  const peersKey = directPeers.join(',');
-  const privacy = useQuery({
-    queryKey: qk.connect.privacy,
-    queryFn: () => fetchConnectPrivacy(supabase, userId),
-  });
-  const showOnline = !!privacy.data?.show_online;
-  useEffect(() => {
-    if (!peersKey || !showOnline) {
-      setOnline(new Set());
-      return;
-    }
-    return watchPresence(supabase, peersKey.split(','), setOnline);
-  }, [peersKey, showOnline]);
-  // Derived so dots never outlive the toggle, even for one render.
-  const shownOnline = useMemo(
-    () => (showOnline ? online : new Set<string>()),
-    [showOnline, online],
-  );
+  const shownOnline = useOnlinePeers(directPeers);
 
   const shown = convs
     .filter((c) => {
@@ -193,6 +176,10 @@ function Inbox() {
         >
           Chats
         </Text>
+        <FriendsButton
+          count={requests.data?.incoming.length ?? 0}
+          onPress={() => router.push('/messages/friends')}
+        />
         <IconButton name="settings" label="Settings" onPress={() => router.push('/settings')} />
         <IconButton name="edit" label="New chat" onPress={() => router.push('/messages/new')} />
       </View>
