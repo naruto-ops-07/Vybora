@@ -8,6 +8,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react-native';
+import * as Haptics from 'expo-haptics';
 import { qk, type Friend, type FriendRequest, type SecureConversation } from '@vybora/api';
 import type { ReactNode } from 'react';
 import { Alert } from 'react-native';
@@ -252,6 +253,29 @@ describe('AddFriendForm', () => {
     await fireEvent.changeText(field(), 'maya');
     await fireEvent.press(send());
     await waitFor(() => expect(screen.getByText(text)).toBeTruthy());
+  });
+
+  it.each([
+    ['sent', 1],
+    ['accepted', 1],
+    ['already_friends', 0],
+    ['already_sent', 0],
+  ] as const)('gives a success haptic only for a real change (%s)', async (result, taps) => {
+    await render(<AddFriendForm onSubmit={jest.fn().mockResolvedValue(result)} />);
+    await fireEvent.changeText(field(), 'maya');
+    await fireEvent.press(send());
+    await waitFor(() => expect(field().props.value).toBe(''));
+    expect(Haptics.impactAsync).toHaveBeenCalledTimes(taps);
+  });
+
+  it('gives no haptic when the request fails', async () => {
+    await render(
+      <AddFriendForm onSubmit={jest.fn().mockRejectedValue({ message: 'user_not_found' })} />,
+    );
+    await fireEvent.changeText(field(), 'ghost');
+    await fireEvent.press(send());
+    await waitFor(() => expect(screen.getByText(/No one with that username/)).toBeTruthy());
+    expect(Haptics.impactAsync).not.toHaveBeenCalled();
   });
 
   it('shows one message for unknown, inactive and blocked usernames and keeps the text', async () => {

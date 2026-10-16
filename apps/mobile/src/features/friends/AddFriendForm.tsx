@@ -51,7 +51,8 @@ export function AddFriendForm({
       const result = await onSubmit(username);
       setNotice(addFriendResultNotice(result, username));
       setValue('');
-      haptic('light');
+      // Only a real change earns a tap; "already friends / already sent" is just info.
+      if (result === 'sent' || result === 'accepted') haptic('light');
     } catch (e) {
       setNotice(addFriendErrorNotice(e));
     } finally {

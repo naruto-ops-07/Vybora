@@ -11,7 +11,7 @@ import {
 import { friendlyError, friendRequestsLabel, storagePaths, uuid } from '@vybora/core';
 import { profileUpdateSchema } from '@vybora/validation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { router } from 'expo-router';
+import { router, useIsFocused } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, Switch, View } from 'react-native';
 import { Avatar, Button, Loading, Text, TextField } from '@/components/ui';
@@ -30,7 +30,8 @@ export default function Settings() {
     queryKey: qk.settings(userId),
     queryFn: () => fetchSettings(supabase, userId),
   });
-  const requests = useFriendRequests();
+  // Poll for the badge only while Settings is on screen.
+  const requests = useFriendRequests(useIsFocused());
   const incoming = requests.data?.incoming.length ?? 0;
   const [form, setForm] = useState({ username: '', display_name: '', bio: '', website: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
