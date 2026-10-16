@@ -22,6 +22,7 @@ const SettingsIndex = lazy(() =>
   import('@/features/settings/SettingsNav').then((m) => ({ default: m.SettingsIndex })),
 );
 const ProfileSettings = lazy(() => import('@/features/settings/EditProfilePage'));
+const AccessibilitySettings = lazy(() => import('@/features/a11y/AccessibilityPage'));
 const PrivacySettings = lazy(() => import('@/features/connect/PrivacyPage'));
 const AccountSettings = lazy(() => import('@/features/settings/AccountSettingsPage'));
 const LegacyInbox = lazy(() => import('@/features/messages/InboxPage'));
@@ -74,6 +75,7 @@ export const routes: RouteObject[] = [
                   { index: true, element: <SettingsIndex /> },
                   { path: 'profile', element: <ProfileSettings /> },
                   { path: 'privacy', element: <PrivacySettings /> },
+                  { path: 'accessibility', element: <AccessibilitySettings /> },
                   { path: 'account', element: <AccountSettings /> },
                 ],
               },

@@ -9,6 +9,7 @@ import {
 } from '@vybora/e2ee';
 import type { Json } from '@vybora/types';
 import { unwrap, type VyboraClient } from './client';
+import { acquireChannel, type ChannelSpec } from './realtime';
 
 // ---------------------------------------------------------------------
 // Transport: the engine's only path to the server (ciphertext + public keys)
@@ -629,6 +630,22 @@ export async function updateConnectPrivacy(
   unwrap(await client.from('user_settings').update(patch).eq('user_id', userId));
 }
 
+/** Record that I'm active (server time; throttled to once a minute server-side). */
+export async function touchActivity(client: VyboraClient): Promise<void> {
+  const { error } = await client.rpc('touch_activity');
+  if (error) throw error;
+}
+
+/** Last-seen times the server allows me to see (reciprocal, shared chats only). */
+export async function fetchLastSeen(
+  client: VyboraClient,
+  userIds: string[],
+): Promise<Record<string, string>> {
+  if (!userIds.length) return {};
+  const rows = unwrap(await client.rpc('last_seen', { p_user_ids: userIds.slice(0, 100) }));
+  return Object.fromEntries(rows.map((r) => [r.user_id!, r.last_active_at!]));
+}
+
 // ---------------------------------------------------------------------
 // Realtime: durable change signals + ephemeral typing/presence
 // ---------------------------------------------------------------------
@@ -690,10 +707,22 @@ export function subscribeToSecureInbox(client: VyboraClient, onChange: () => voi
   return () => void client.removeChannel(channel);
 }
 
+const typingSpec: ChannelSpec = {
+  config: { private: true, broadcast: { self: false } },
+  broadcast: ['typing'],
+};
+/** One spec per presence topic: the key is the topic's own user, so holders never disagree. */
+const presenceSpec = (userId: string): ChannelSpec => ({
+  config: { private: true, presence: { key: userId } },
+  presence: true,
+});
+const presenceTopic = (userId: string) => `connect:presence:${userId}`;
+
 /**
  * Ephemeral typing indicators on a private channel (Realtime Authorization
  * restricts it to members). Nothing is stored; sending is skipped entirely
- * when the user disabled typing indicators.
+ * when the user disabled typing indicators. The channel is shared (see
+ * realtime.ts), so the chat list and the open chat can both join a topic.
  */
 export function joinTypingChannel(
   client: VyboraClient,
@@ -701,18 +730,14 @@ export function joinTypingChannel(
   userId: string,
   onTyping: (userId: string, typing: boolean) => void,
 ) {
-  const channel = client.channel(`connect:conv:${conversationId}`, {
-    config: { private: true, broadcast: { self: false } },
-  });
-  channel.on('broadcast', { event: 'typing' }, (msg) => {
-    const p = msg.payload as { userId?: string; typing?: boolean };
+  const channel = acquireChannel(client, `connect:conv:${conversationId}`, typingSpec);
+  channel.onBroadcast('typing', (payload) => {
+    const p = (payload ?? {}) as { userId?: string; typing?: boolean };
     if (p.userId && p.userId !== userId) onTyping(p.userId, !!p.typing);
   });
-  channel.subscribe();
   return {
-    send: (typing: boolean) =>
-      void channel.send({ type: 'broadcast', event: 'typing', payload: { userId, typing } }),
-    leave: () => void client.removeChannel(channel),
+    send: (typing: boolean) => channel.send('typing', { userId, typing }),
+    leave: () => channel.release(),
   };
 }
 
@@ -721,13 +746,15 @@ export function joinTypingChannel(
  * (only if "show online" is on); people who share a chat may subscribe.
  */
 export function announcePresence(client: VyboraClient, userId: string) {
-  const channel = client.channel(`connect:presence:${userId}`, {
-    config: { private: true, presence: { key: userId } },
+  const channel = acquireChannel(client, presenceTopic(userId), presenceSpec(userId));
+  const off = channel.onStatus((status) => {
+    if (status === 'SUBSCRIBED') channel.track({ online_at: new Date().toISOString() });
   });
-  channel.subscribe((status) => {
-    if (status === 'SUBSCRIBED') void channel.track({ online_at: new Date().toISOString() });
-  });
-  return () => void client.removeChannel(channel);
+  return () => {
+    off();
+    channel.untrack();
+    channel.release();
+  };
 }
 
 export function watchPresence(
@@ -736,16 +763,14 @@ export function watchPresence(
   onChange: (online: Set<string>) => void,
 ) {
   const online = new Set<string>();
-  const channels = userIds.slice(0, 30).map((id) => {
-    const ch = client.channel(`connect:presence:${id}`, { config: { private: true } });
-    ch.on('presence', { event: 'sync' }, () => {
-      const present = Object.keys(ch.presenceState()).length > 0;
-      if (present) online.add(id);
+  const channels = [...new Set(userIds.slice(0, 30))].map((id) => {
+    const channel = acquireChannel(client, presenceTopic(id), presenceSpec(id));
+    channel.onPresenceSync((state) => {
+      if (Object.keys(state).length > 0) online.add(id);
       else online.delete(id);
       onChange(new Set(online));
     });
-    ch.subscribe();
-    return ch;
+    return channel;
   });
-  return () => channels.forEach((c) => void client.removeChannel(c));
+  return () => channels.forEach((c) => c.release());
 }

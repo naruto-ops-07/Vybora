@@ -1,24 +1,46 @@
 import { Icon } from '@/components/Icon';
-import { fetchConnectPrivacy, peerOf, qk, watchPresence } from '@vybora/api';
-import { friendlyError } from '@vybora/core';
+import {
+  fetchConnectPrivacy,
+  isMuted,
+  peerOf,
+  qk,
+  touchActivity,
+  watchPresence,
+} from '@vybora/api';
+import {
+  dayLabel,
+  friendlyError,
+  headerStatus,
+  layoutThread,
+  messageActions,
+  messageSummary,
+  nextAnnouncement,
+  receiptOf,
+  selectionToText,
+  type AnnounceMark,
+  type MessageAction,
+} from '@vybora/core';
 import { MAX_ATTACHMENT_BYTES, type LocalMessage } from '@vybora/e2ee';
 import { useQuery } from '@tanstack/react-query';
-import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, Stack, useIsFocused, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionSheetIOS,
+  AccessibilityInfo,
   ActivityIndicator,
   Alert,
+  Animated,
+  BackHandler,
   FlatList,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
   View,
+  type ViewToken,
 } from 'react-native';
 import { Text } from '@/components/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,11 +51,14 @@ import { ConnectGate } from '@/features/connect/ConnectGate';
 import {
   conversationTitle,
   useConversation,
+  useLastSeen,
   useNicknames,
   useSecureMessages,
   useTyping,
 } from '@/features/connect/hooks';
-import { Bubble, type Receipt } from '@/features/connect/ui/Bubble';
+import { copyText } from '@/features/connect/copy';
+import { useToday } from '@/features/connect/useToday';
+import { Bubble } from '@/features/connect/ui/Bubble';
 import { Composer } from '@/features/connect/ui/Composer';
 import { MessageActions } from '@/features/connect/ui/MessageActions';
 import {
@@ -44,6 +69,10 @@ import {
   useCc,
   useThemeDef,
 } from '@/features/connect/ui/primitives';
+import { SwipeToReply } from '@/features/connect/ui/SwipeToReply';
+import { DateChip, JumpToLatest, UnreadDivider } from '@/features/connect/ui/ThreadParts';
+import { useA11y } from '@/lib/a11y';
+import { useHaptics } from '@/lib/haptics';
 import { radii } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
 
@@ -85,6 +114,17 @@ function Chat() {
   const [selected, setSelected] = useState<LocalMessage | null>(null);
   const [viewer, setViewer] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const haptic = useHaptics();
+  const { prefs: a11y } = useA11y();
+  const [selection, setSelection] = useState<Set<string> | null>(null);
+  useEffect(() => setSelection(null), [id]);
+  const toggle = (mid: string) =>
+    setSelection((s) => {
+      const next = new Set(s ?? []);
+      if (next.has(mid)) next.delete(mid);
+      else next.add(mid);
+      return next;
+    });
   const [online, setOnline] = useState(false);
 
   const theme = effectiveTheme(
@@ -105,10 +145,17 @@ function Chat() {
   );
 
   const peerId = peer?.id;
+  const showOnline = !!privacy.data?.show_online;
   useEffect(
-    () => (peerId ? watchPresence(supabase, [peerId], (s) => setOnline(s.has(peerId))) : undefined),
-    [peerId],
+    () =>
+      peerId && showOnline
+        ? watchPresence(supabase, [peerId], (s) => setOnline(s.has(peerId)))
+        : undefined,
+    [peerId, showOnline],
   );
+  // Derived so the "online" state never outlives the toggle, even for one render.
+  const shownOnline = showOnline && online;
+  const lastSeen = useLastSeen(peerId, showOnline && conv?.kind === 'direct' && !shownOnline);
 
   // Safety-number change warning (direct chats).
   const keys = useQuery({
@@ -127,16 +174,159 @@ function Chat() {
     [messages.data],
   );
 
-  const receiptFor = (m: LocalMessage): Receipt | undefined => {
-    if (m.senderId !== userId) return undefined;
-    if (m.status === 'sending') return 'sending';
-    if (m.status === 'failed') return 'failed';
-    const others = conv?.members.filter((x) => x.id !== userId) ?? [];
-    if (!m.seq || !others.length) return 'sent';
-    if (others.every((o) => o.read_seq >= m.seq!)) return 'read';
-    if (others.every((o) => o.delivered_seq >= m.seq!)) return 'delivered';
-    return 'sent';
-  };
+  const selectedMessages = [...ordered].reverse().filter((m) => selection?.has(m.id));
+  const canBulkDelete =
+    selectedMessages.length > 0 &&
+    selectedMessages.every((m) => messageActions(m, m.senderId === userId).includes('delete'));
+  const startReply = (m: LocalMessage) => setReplyTo(m);
+
+  // Drop ids that left the thread (deleted, expired); keep the same Set when nothing changed.
+  useEffect(() => {
+    setSelection((s) => {
+      if (!s) return s;
+      const live = new Set(ordered.map((m) => m.id));
+      const kept = [...s].filter((x) => live.has(x));
+      return kept.length === s.size ? s : new Set(kept);
+    });
+  }, [ordered]);
+
+  // Android back leaves select mode first.
+  useEffect(() => {
+    if (!selection) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setSelection(null);
+      return true;
+    });
+    return () => sub.remove();
+  }, [selection]);
+
+  // The unread divider uses the read position from when the chat was opened,
+  // so it neither vanishes when the messages are acknowledged nor grows when
+  // new ones arrive live.
+  const [readMark, setReadMark] = useState<{ id: string; seq: number; until: number } | null>(null);
+  useEffect(() => {
+    if (conv && readMark?.id !== id)
+      setReadMark({ id, seq: conv.lastReadSeq, until: conv.lastSeq });
+  }, [conv, id, readMark?.id]);
+  const today = useToday();
+  const rows = useMemo(
+    () =>
+      layoutThread([...ordered].reverse(), {
+        myUserId: userId,
+        lastReadSeq: readMark?.id === id ? readMark.seq : Number.MAX_SAFE_INTEGER,
+        unreadUntilSeq: readMark?.id === id ? readMark.until : undefined,
+        now: today,
+      }).reverse(),
+    [ordered, userId, readMark, id, today],
+  );
+
+  const { reduceMotion } = useA11y();
+  const list = useRef<FlatList<(typeof rows)[number]>>(null);
+  const [floatingDay, setFloatingDay] = useState<string | null>(null);
+  const fade = useRef(new Animated.Value(0)).current;
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The floating chip only follows the finger: viewability also fires on first
+  // layout, after programmatic scrolls and when live messages arrive.
+  const scrolling = useRef(false);
+  const reduceRef = useRef(reduceMotion);
+  useEffect(() => {
+    reduceRef.current = reduceMotion;
+  }, [reduceMotion]);
+  const [away, setAway] = useState(false);
+  const [newCount, setNewCount] = useState(0);
+  const lastSeenSeq = useRef(0);
+  const onViewable = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    // Inverted list: the highest index on screen is the oldest (top) row.
+    const top = viewableItems.reduce<ViewToken | null>(
+      (a, b) => ((b.index ?? 0) > (a?.index ?? -1) ? b : a),
+      null,
+    );
+    const item = top?.item as (typeof rows)[number] | undefined;
+    if (!item || !scrolling.current) return;
+    const label =
+      item.type === 'message'
+        ? dayLabel(item.message.createdAt, new Date())
+        : item.type === 'date'
+          ? item.label
+          : null;
+    if (!label) return;
+    setFloatingDay(label);
+    fade.stopAnimation();
+    if (reduceRef.current) fade.setValue(1);
+    else Animated.timing(fade, { toValue: 1, duration: 120, useNativeDriver: true }).start();
+  }).current;
+  const beginScroll = useRef(() => {
+    scrolling.current = true;
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = null;
+  }).current;
+  const endScroll = useRef(() => {
+    scrolling.current = false;
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => {
+      hideTimer.current = null;
+      fade.stopAnimation();
+      if (reduceRef.current) {
+        fade.setValue(0);
+        setFloatingDay(null);
+      } else
+        Animated.timing(fade, { toValue: 0, duration: 250, useNativeDriver: true }).start(
+          ({ finished }) => finished && setFloatingDay(null),
+        );
+    }, 1500);
+  }).current;
+  useEffect(
+    () => () => {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    lastSeenSeq.current = 0;
+    setNewCount(0);
+    scrolling.current = false;
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    fade.setValue(0);
+    setFloatingDay(null);
+  }, [id, fade]);
+  useEffect(() => {
+    const newest = ordered[0]?.seq ?? 0;
+    if (!away || !lastSeenSeq.current) {
+      lastSeenSeq.current = Math.max(lastSeenSeq.current, newest);
+      setNewCount(0);
+      return;
+    }
+    // Only newer messages from others count; older pages (lower seq) and my own never do.
+    const fresh = ordered.filter(
+      (m) => (m.seq ?? 0) > lastSeenSeq.current && m.senderId !== userId,
+    ).length;
+    if (fresh) setNewCount((c) => c + fresh);
+    lastSeenSeq.current = Math.max(lastSeenSeq.current, newest);
+  }, [ordered, userId, away]);
+
+  // Tracks the highest announced seq, so an expiring newest message never re-announces older ones.
+  const announced = useRef<AnnounceMark | null>(null);
+  useEffect(() => {
+    if (!messages.isSuccess) return;
+    const { mark, announce } = nextAnnouncement(announced.current, ordered, id, userId);
+    announced.current = mark;
+    if (!announce) return;
+    const muted = conv ? isMuted(conv) || !conv.notificationsEnabled : true;
+    if (!muted)
+      AccessibilityInfo.announceForAccessibility(
+        `${nameOf(announce.senderId)}: ${messageSummary(announce)}`,
+      );
+  }, [ordered, messages.isSuccess, userId, id, conv, nameOf]);
+
+  // Open at the unread divider once per chat.
+  const positioned = useRef<string | null>(null);
+  useEffect(() => {
+    if (positioned.current === id || readMark?.id !== id || !rows.length) return;
+    positioned.current = id;
+    const index = rows.findIndex((r) => r.type === 'unread');
+    if (index > 0) list.current?.scrollToIndex({ index, viewPosition: 1, animated: false });
+  }, [rows, id, readMark]);
 
   const run = async (fn: () => Promise<unknown>) => {
     try {
@@ -172,6 +362,7 @@ function Chat() {
       : undefined;
     setReplyTo(null);
     void run(() => engine!.send(id, { t: 'text', body, replyTo: r }));
+    if (showOnline) void touchActivity(supabase).catch(() => undefined);
   };
 
   const sendFile = async (
@@ -246,13 +437,14 @@ function Chat() {
   };
 
   const typingNames = typingUsers.map(nameOf);
-  const subtitle = typingNames.length
-    ? `${typingNames.join(', ')} typing…`
-    : conv?.kind === 'group'
-      ? `${conv.members.length} members`
-      : online
-        ? 'Online'
-        : 'End-to-end encrypted';
+  const subtitle = headerStatus({
+    isGroup: conv?.kind === 'group',
+    memberCount: conv?.members.length ?? 0,
+    typingNames,
+    online: shownOnline,
+    lastSeenAt: lastSeen.data ?? null,
+    now: new Date(),
+  });
   const composerDisabled = syncState === 'waiting_for_access' || syncState === 'broken';
 
   return (
@@ -265,65 +457,162 @@ function Chat() {
         options={{
           headerStyle: { backgroundColor: cc.panel },
           headerTintColor: cc.text,
-          headerTitle: () => (
-            <Pressable
-              onPress={() => router.push({ pathname: '/messages/details/[id]', params: { id } })}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}
-              accessibilityRole="button"
-              accessibilityLabel={`${title}, chat details`}
-            >
-              {conv?.kind === 'group' ? (
-                <View
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 17,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: cc.strong,
-                  }}
-                >
-                  <Icon name="users" size={16} color={cc.accent} />
-                </View>
-              ) : (
-                <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={34} />
-              )}
-              <View>
-                <Text style={{ color: cc.text, fontWeight: '600', fontSize: 16 }} numberOfLines={1}>
-                  {title}
-                </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                  {typingNames.length ? (
-                    <TypingDots color={def.accent} />
-                  ) : (
-                    <Icon
-                      name={online ? 'circle' : 'lock'}
-                      size={9}
-                      color={online ? cc.success : cc.textSubtle}
-                    />
-                  )}
+          ...(selection
+            ? {
+                headerTitle: () => (
                   <Text
-                    mono
-                    style={{ color: typingNames.length ? def.accent : cc.textSubtle, fontSize: 11 }}
+                    style={{ color: cc.text, fontWeight: '600', fontSize: 17 }}
+                    accessibilityLiveRegion="polite"
                   >
-                    {subtitle}
+                    {selectedMessages.length} selected
                   </Text>
-                </View>
-              </View>
-            </Pressable>
-          ),
-          headerRight: () =>
-            conv?.disappearingSeconds ? (
-              <View
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                accessibilityLabel="Disappearing messages on"
-              >
-                <Icon name="timer" size={15} color={cc.textMuted} />
-                <Text mono style={{ color: cc.textMuted, fontSize: 12 }}>
-                  {TTL_LABEL(conv.disappearingSeconds)}
-                </Text>
-              </View>
-            ) : null,
+                ),
+                headerLeft: () => (
+                  <Pressable
+                    onPress={() => setSelection(null)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel selection"
+                    style={{
+                      width: 44,
+                      height: 44,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Icon name="x" size={22} color={cc.text} />
+                  </Pressable>
+                ),
+                headerRight: () => (
+                  <View style={{ flexDirection: 'row' }}>
+                    <Pressable
+                      disabled={selectedMessages.length === 0}
+                      onPress={() => {
+                        void copyText(selectionToText(selectedMessages, { nameOf }));
+                        setSelection(null);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Copy selected"
+                      accessibilityState={{ disabled: selectedMessages.length === 0 }}
+                      style={{
+                        width: 44,
+                        height: 44,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: selectedMessages.length ? 1 : 0.4,
+                      }}
+                    >
+                      <Icon name="copy" size={20} color={cc.text} />
+                    </Pressable>
+                    <Pressable
+                      disabled={!canBulkDelete}
+                      onPress={() =>
+                        Alert.alert(
+                          selectedMessages.length === 1
+                            ? 'Delete 1 message for everyone?'
+                            : `Delete ${selectedMessages.length} messages for everyone?`,
+                          'They are removed on every device in this chat.',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Delete',
+                              style: 'destructive',
+                              onPress: () => {
+                                const targets = selectedMessages.map((m) => m.id);
+                                setSelection(null);
+                                void run(async () => {
+                                  for (const target of targets)
+                                    await engine!.send(id, { t: 'delete', target });
+                                });
+                              },
+                            },
+                          ],
+                        )
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel="Delete selected for everyone"
+                      accessibilityState={{ disabled: !canBulkDelete }}
+                      style={{
+                        width: 44,
+                        height: 44,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: canBulkDelete ? 1 : 0.4,
+                      }}
+                    >
+                      <Icon name="trash" size={20} color={cc.danger} />
+                    </Pressable>
+                  </View>
+                ),
+              }
+            : {
+                headerTitle: () => (
+                  <Pressable
+                    onPress={() =>
+                      router.push({ pathname: '/messages/details/[id]', params: { id } })
+                    }
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${title}, chat details`}
+                  >
+                    {conv?.kind === 'group' ? (
+                      <View
+                        style={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: 17,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: cc.strong,
+                        }}
+                      >
+                        <Icon name="users" size={16} color={cc.accent} />
+                      </View>
+                    ) : (
+                      <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={34} />
+                    )}
+                    <View>
+                      <Text
+                        style={{ color: cc.text, fontWeight: '600', fontSize: 16 }}
+                        numberOfLines={1}
+                      >
+                        {title}
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        {typingNames.length ? (
+                          <TypingDots color={def.accent} />
+                        ) : (
+                          <Icon
+                            name={shownOnline ? 'circle' : 'lock'}
+                            size={9}
+                            color={shownOnline ? cc.success : cc.textSubtle}
+                          />
+                        )}
+                        <Text
+                          mono
+                          style={{
+                            color: typingNames.length ? def.accent : cc.textSubtle,
+                            fontSize: 11,
+                          }}
+                        >
+                          {subtitle}
+                        </Text>
+                      </View>
+                    </View>
+                  </Pressable>
+                ),
+                headerRight: () =>
+                  conv?.disappearingSeconds ? (
+                    <View
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                      accessibilityLabel="Disappearing messages on"
+                    >
+                      <Icon name="timer" size={15} color={cc.textMuted} />
+                      <Text mono style={{ color: cc.textMuted, fontSize: 12 }}>
+                        {TTL_LABEL(conv.disappearingSeconds)}
+                      </Text>
+                    </View>
+                  ) : null,
+              }),
         }}
       />
       <ChatBackground theme={theme}>
@@ -371,52 +660,117 @@ function Chat() {
             </Text>
           </Pressable>
         )}
-        <FlatList
-          inverted
-          data={ordered}
-          keyExtractor={(m) => m.id}
-          contentContainerStyle={{ paddingVertical: 12 }}
-          renderItem={({ item, index }) => {
-            const older = ordered[index + 1];
-            return (
-              <Bubble
-                message={item}
-                mine={item.senderId === userId}
-                theme={def}
-                senderName={conv?.kind === 'group' ? nameOf(item.senderId) : undefined}
-                showSender={conv?.kind === 'group' && older?.senderId !== item.senderId}
-                receipt={receiptFor(item)}
-                onLongPress={setSelected}
-                onRetry={(m) => void run(() => engine!.retry(id, m.id))}
-                onOpenImage={setViewer}
-                nameOf={nameOf}
-              />
-            );
-          }}
-          ListFooterComponent={
-            <View style={{ paddingVertical: 18, gap: 8, alignItems: 'center' }}>
-              <EncryptionBadge />
-              <Text
-                style={{
-                  color: cc.textSubtle,
-                  fontSize: 12,
-                  textAlign: 'center',
-                  paddingHorizontal: 40,
-                }}
-              >
-                Messages and attachments are secured with end-to-end encryption (MLS). Not even
-                VYBORA can read them.
-              </Text>
-            </View>
-          }
-          ListEmptyComponent={
-            messages.isPending || syncState === 'syncing' ? (
-              <View style={{ padding: 30, transform: [{ scaleY: -1 }] }}>
-                <ActivityIndicator color={def.accent} />
+        <View style={{ flex: 1 }}>
+          <FlatList
+            ref={list}
+            inverted
+            data={rows}
+            keyExtractor={(r) => r.key}
+            contentContainerStyle={{ paddingVertical: 12 }}
+            onViewableItemsChanged={onViewable}
+            viewabilityConfig={{ itemVisiblePercentThreshold: 10 }}
+            onScroll={(e) => {
+              const { contentOffset, layoutMeasurement } = e.nativeEvent;
+              setAway(contentOffset.y > layoutMeasurement.height);
+            }}
+            scrollEventThrottle={100}
+            onScrollBeginDrag={beginScroll}
+            onMomentumScrollBegin={beginScroll}
+            onScrollEndDrag={endScroll}
+            onMomentumScrollEnd={endScroll}
+            onScrollToIndexFailed={(info) =>
+              list.current?.scrollToOffset({
+                offset: info.averageItemLength * info.index,
+                animated: false,
+              })
+            }
+            renderItem={({ item }) => {
+              if (item.type === 'date') return <DateChip label={item.label} />;
+              if (item.type === 'unread') return <UnreadDivider count={item.count} />;
+              const m = item.message;
+              const group = conv?.kind === 'group';
+              const sender = conv?.members.find((x) => x.id === m.senderId);
+              const canReply = messageActions(m, item.mine).includes('reply');
+              return (
+                <SwipeToReply
+                  enabled={!selection && canReply}
+                  onReply={() => startReply(m)}
+                  color={def.accent}
+                >
+                  <Bubble
+                    message={m}
+                    mine={item.mine}
+                    theme={def}
+                    senderName={group ? nameOf(m.senderId) : undefined}
+                    showSender={!!group && item.runStart}
+                    runStart={item.runStart}
+                    runEnd={item.runEnd}
+                    avatar={
+                      group && !item.mine
+                        ? { path: sender?.avatar_path ?? null, name: sender?.username ?? '?' }
+                        : undefined
+                    }
+                    receipt={receiptOf(m, userId, conv?.members ?? [])}
+                    onLongPress={(x) => {
+                      haptic('medium');
+                      setSelected(x);
+                    }}
+                    onRetry={(x) => void run(() => engine!.retry(id, x.id))}
+                    onOpenImage={setViewer}
+                    nameOf={nameOf}
+                    selecting={!!selection}
+                    selected={!!selection?.has(m.id)}
+                    onToggleSelect={(x) => toggle(x.id)}
+                    showReplyButton={a11y.alwaysShowActions && canReply}
+                    onReply={startReply}
+                  />
+                </SwipeToReply>
+              );
+            }}
+            ListFooterComponent={
+              <View style={{ paddingVertical: 18, gap: 8, alignItems: 'center' }}>
+                <EncryptionBadge />
+                <Text
+                  style={{
+                    color: cc.textSubtle,
+                    fontSize: 12,
+                    textAlign: 'center',
+                    paddingHorizontal: 40,
+                  }}
+                >
+                  Messages and attachments are secured with end-to-end encryption (MLS). Not even
+                  VYBORA can read them.
+                </Text>
               </View>
-            ) : null
-          }
-        />
+            }
+            ListEmptyComponent={
+              messages.isPending || syncState === 'syncing' ? (
+                <View style={{ padding: 30, transform: [{ scaleY: -1 }] }}>
+                  <ActivityIndicator color={def.accent} />
+                </View>
+              ) : null
+            }
+          />
+          {floatingDay && (
+            <Animated.View
+              style={{ position: 'absolute', top: 8, left: 0, right: 0, opacity: fade }}
+              pointerEvents="none"
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            >
+              <DateChip label={floatingDay} floating />
+            </Animated.View>
+          )}
+          {away && (
+            <JumpToLatest
+              count={newCount}
+              onPress={() => {
+                setNewCount(0);
+                list.current?.scrollToOffset({ offset: 0, animated: !reduceMotion });
+              }}
+            />
+          )}
+        </View>
         {busy && (
           <View
             style={{
@@ -452,7 +806,7 @@ function Chat() {
 
       <MessageActions
         message={selected}
-        mine={selected?.senderId === userId}
+        actions={selected ? messageActions(selected, selected.senderId === userId) : []}
         myReaction={
           selected
             ? (Object.entries(selected.reactions).find(([, u]) => u.includes(userId))?.[0] ?? null)
@@ -462,32 +816,29 @@ function Chat() {
         onReact={(emoji) => {
           const m = selected!;
           const mine = m.reactions[emoji]?.includes(userId);
+          haptic('selection');
           setSelected(null);
           void run(() => engine!.send(id, { t: 'reaction', target: m.id, emoji, remove: mine }));
         }}
-        onReply={() => {
-          setReplyTo(selected);
-          setSelected(null);
-        }}
-        onCopy={() => {
-          void Clipboard.setStringAsync(selected?.body ?? '');
-          setSelected(null);
-        }}
-        onDelete={() => {
+        onAction={(a: MessageAction) => {
           const m = selected!;
           setSelected(null);
-          Alert.alert(
-            'Delete for everyone?',
-            'This removes the message on every device in this chat.',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Delete',
-                style: 'destructive',
-                onPress: () => void run(() => engine!.send(id, { t: 'delete', target: m.id })),
-              },
-            ],
-          );
+          if (a === 'reply') startReply(m);
+          else if (a === 'copy') void copyText(m.body ?? '');
+          else if (a === 'select') setSelection(new Set([m.id]));
+          else if (a === 'delete')
+            Alert.alert(
+              'Delete for everyone?',
+              'This removes the message on every device in this chat.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: () => void run(() => engine!.send(id, { t: 'delete', target: m.id })),
+                },
+              ],
+            );
         }}
       />
 

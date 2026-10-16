@@ -43,6 +43,18 @@ New conversations are end-to-end encrypted with MLS (RFC 9420); the server store
 - Push payloads contain no message content; the server applies mute/notification settings via a service-role-only function.
 - Encrypted attachments live in the private `connect` bucket (`application/octet-stream`, 26 MB), readable only by conversation members.
 
+## Last seen and presence
+
+Added by migration `20261015000012_last_seen.sql` (not yet pushed to the hosted project).
+
+- **`user_activity`** holds one `last_active_at` per user. RLS is on and **all client grants are revoked**; only the functions below touch it, so activity never leaks through profiles or devices.
+- **`touch_activity()`** is `security definer`, uses server time (`now()`, never a client timestamp) and writes at most once per 60 s per user. Clients call it only while the user's own "show when I'm online" setting is on.
+- **`last_seen(uuid[])`** returns rows only when the caller shares a chat with the target, both sides have `show_online` on, and neither has blocked the other. Values are truncated to the minute. It rejects more than 100 ids (counted with `cardinality()`, so nested arrays cannot slip past) and multi-dimensional arrays. Helpers `caller_shows_online()` and `caller_blocked_with(uuid)` are `security definer` because RLS hides the other party's rows from the caller.
+- **Presence is reciprocal.** The `connect: presence read` policy on `realtime.messages` now lets you read someone else's presence only while your own `show_online` is on and no block exists either way. Your own presence topic stays readable.
+- **Presence changes apply on the next join, not instantly.** Supabase Realtime evaluates private-channel policies when a client joins a channel (and again when its access token is refreshed). A client that already joined someone's presence channel keeps receiving their presence after a block or a `show_online` change until it rejoins or its token refreshes. `last_seen()` is checked on every call, so last seen stops immediately.
+- **Clients** hide last seen, including cached values, whenever the user's own setting is off.
+- **Accessibility preferences** (text size, high contrast, reduce motion, haptics, swipe to reply, always-visible actions) are stored on the device only and are never sent to the server.
+
 ## Storage
 
 - `avatars` (public by design), `media` (private), `dm` (private, legacy DMs), `connect` (private, encrypted attachments only). Size and MIME allow-lists are set on the buckets.

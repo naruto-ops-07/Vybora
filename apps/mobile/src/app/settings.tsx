@@ -205,6 +205,15 @@ export default function Settings() {
           />
         </SectionCard>
 
+        <SectionCard title="Accessibility">
+          <Row
+            icon="eye"
+            label="Accessibility"
+            description="Motion, text size, contrast, gestures"
+            onPress={() => router.push('/messages/accessibility')}
+          />
+        </SectionCard>
+
         <SectionCard
           title="Notifications"
           footer="Controls push delivery to your phones. Notifications never include message content. Per-chat options are in each chat’s info."

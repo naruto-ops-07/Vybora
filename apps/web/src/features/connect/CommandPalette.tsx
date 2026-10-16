@@ -1,7 +1,9 @@
 import {
   ChatCircleIcon,
   DesktopIcon,
+  EyeIcon,
   GearSixIcon,
+  KeyboardIcon,
   MoonIcon,
   NotePencilIcon,
   ShieldCheckIcon,
@@ -43,6 +45,22 @@ function Item({
   );
 }
 
+/** Listed for discoverability only: shown as disabled items, so they can't be "run". */
+const SHORTCUTS: [keys: string, label: string][] = [
+  ['↑ ↓', 'Move between messages'],
+  ['Enter', 'Open the message menu (also Shift F10)'],
+  ['R', 'Reply to the focused message'],
+  ['Space', 'Select or deselect a message in select mode'],
+  ['Esc', 'Close or go back'],
+  ['Alt N', 'New message'],
+  ['Alt I', 'Chat details'],
+  ['Alt ↑ ↓', 'Previous or next chat'],
+  ['Ctrl/⌘ K', 'Command menu'],
+];
+
+const GROUP =
+  '[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-muted';
+
 /** Ctrl/⌘ K: jump to a chat or run an action from anywhere in the workspace. */
 export function CommandPalette({
   open,
@@ -82,10 +100,7 @@ export function CommandPalette({
         </Command.Empty>
 
         {!!inbox.data?.length && (
-          <Command.Group
-            heading="Chats"
-            className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-muted"
-          >
+          <Command.Group heading="Chats" className={GROUP}>
             {inbox.data.map((c) => {
               const title = conversationTitle(c, userId, nicknames.data);
               return (
@@ -104,10 +119,7 @@ export function CommandPalette({
           </Command.Group>
         )}
 
-        <Command.Group
-          heading="Actions"
-          className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-muted"
-        >
+        <Command.Group heading="Actions" className={GROUP}>
           <Item
             value="new message chat"
             icon={<NotePencilIcon size={18} />}
@@ -131,6 +143,13 @@ export function CommandPalette({
             Settings
           </Item>
           <Item
+            value="accessibility text size contrast motion"
+            icon={<EyeIcon size={18} />}
+            onSelect={() => run(() => navigate('/settings/accessibility'))}
+          >
+            Accessibility
+          </Item>
+          <Item
             value="theme dark"
             icon={<MoonIcon size={18} />}
             onSelect={() => run(() => setTheme('dark'))}
@@ -151,6 +170,23 @@ export function CommandPalette({
           >
             Match system theme
           </Item>
+        </Command.Group>
+
+        <Command.Group heading="Keyboard shortcuts" className={GROUP}>
+          {SHORTCUTS.map(([keys, label]) => (
+            <Command.Item
+              key={keys}
+              value={`shortcut keyboard ${label} ${keys}`}
+              disabled
+              className="flex h-9 items-center gap-3 rounded-md px-3 text-sm text-muted"
+            >
+              <span className="text-subtle" aria-hidden="true">
+                <KeyboardIcon size={18} />
+              </span>
+              <span className="min-w-0 flex-1 truncate">{label}</span>
+              <kbd className="font-mono text-[11px] text-subtle">{keys}</kbd>
+            </Command.Item>
+          ))}
         </Command.Group>
       </Command.List>
     </Command.Dialog>

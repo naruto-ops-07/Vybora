@@ -20,6 +20,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
 import { ConnectProvider } from '@/features/connect/ConnectProvider';
+import { A11yProvider } from '@/lib/a11y';
 import { envOk, envProblems } from '@/lib/env';
 import { registerForPush } from '@/lib/push';
 import { font, useTheme } from '@/lib/theme';
@@ -76,6 +77,7 @@ function Navigator({ fontsReady }: { fontsReady: boolean }) {
         <Stack.Screen name="messages/details/[id]" options={{ title: 'Chat info' }} />
         <Stack.Screen name="messages/verify/[userId]" options={{ title: 'Safety number' }} />
         <Stack.Screen name="messages/privacy" options={{ title: 'Privacy & security' }} />
+        <Stack.Screen name="messages/accessibility" options={{ title: 'Accessibility' }} />
         <Stack.Screen name="messages/legacy/[id]" options={{ title: '' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings' }} />
         <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
@@ -134,19 +136,21 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        {envOk ? (
-          <QueryClientProvider client={queryClient}>
-            <AuthProvider>
-              <ConnectProvider>
-                <Navigator fontsReady={fontsReady} />
-              </ConnectProvider>
-            </AuthProvider>
-          </QueryClientProvider>
-        ) : (
-          <SetupRequired />
-        )}
-      </SafeAreaProvider>
+      <A11yProvider>
+        <SafeAreaProvider>
+          {envOk ? (
+            <QueryClientProvider client={queryClient}>
+              <AuthProvider>
+                <ConnectProvider>
+                  <Navigator fontsReady={fontsReady} />
+                </ConnectProvider>
+              </AuthProvider>
+            </QueryClientProvider>
+          ) : (
+            <SetupRequired />
+          )}
+        </SafeAreaProvider>
+      </A11yProvider>
     </GestureHandlerRootView>
   );
 }

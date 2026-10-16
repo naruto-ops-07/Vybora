@@ -9,8 +9,22 @@ import {
   WifiSlashIcon,
   XIcon,
 } from '@phosphor-icons/react';
-import { fetchConnectPrivacy, peerOf, qk, watchPresence } from '@vybora/api';
-import { friendlyError } from '@vybora/core';
+import {
+  fetchConnectPrivacy,
+  isMuted,
+  peerOf,
+  qk,
+  touchActivity,
+  watchPresence,
+} from '@vybora/api';
+import {
+  friendlyError,
+  headerStatus,
+  layoutThread,
+  messageActions,
+  receiptOf,
+  selectionToText,
+} from '@vybora/core';
 import { MAX_ATTACHMENT_BYTES, type AttachmentRef, type LocalMessage } from '@vybora/e2ee';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -20,10 +34,12 @@ import { Button } from '@/components/ui/Button';
 import { Tip } from '@/components/ui/Tooltip';
 import { ConfirmDialog } from '@/components/ui/Dialog';
 import { useToast } from '@/components/ui/Toast';
+import { useA11y } from '@/features/a11y/A11yProvider';
 import { useMe } from '@/features/auth/AuthProvider';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
-import { Bubble, type Receipt } from './Bubble';
+import { useIncomingAnnouncement } from './announce';
+import { Bubble } from './Bubble';
 import { Composer, type ComposerHandle, type ReplyDraft } from './Composer';
 import { useConnect } from './ConnectProvider';
 import { DetailsPanel } from './DetailsPanel';
@@ -32,11 +48,17 @@ import {
   MESSAGE_PAGE,
   messagePreview,
   useConversation,
+  useLastSeen,
   useNicknames,
   useSecureMessages,
   useTyping,
 } from './hooks';
-import { chatBackground, effectiveTheme, GroupAvatar, Meta, TypingDots, useChatTheme } from './ui';
+import { DateChip, groupByDay, JumpToLatest, ThreadDay, UnreadDivider } from './ThreadParts';
+import { useCopyText } from './copy';
+import { useToday } from './useToday';
+import { BulkDeleteDialog, SelectBar } from './SelectBar';
+import { threadKeyDown } from './threadKeys';
+import { chatBackground, effectiveTheme, GroupAvatar, TypingDots, useChatTheme } from './ui';
 import { VerifyDialog } from './VerifyDialog';
 
 export const ttlLabel = (s: number) =>
@@ -47,20 +69,6 @@ export const ttlLabel = (s: number) =>
       : s >= 3600
         ? `${Math.round(s / 3600)}h`
         : `${Math.round(s / 60)}m`;
-
-const dayLabel = (iso: string) => {
-  const d = new Date(iso);
-  const today = new Date();
-  const yesterday = new Date(Date.now() - 86_400_000);
-  if (d.toDateString() === today.toDateString()) return 'Today';
-  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return d.toLocaleDateString([], {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric',
-  });
-};
 
 type AttachmentMeta = Omit<AttachmentRef, 'path' | 'key' | 'nonce' | 'sha256' | 'size'>;
 
@@ -126,6 +134,11 @@ export default function ChatPane() {
   const [details, setDetails] = useState(false);
   const [verifying, setVerifying] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [selection, setSelection] = useState<Set<string> | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  // Captured when the dialog opens: the selection is cleared on confirm, while it closes.
+  const [bulkCount, setBulkCount] = useState(0);
+  useEffect(() => setSelection(null), [id]);
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const restoreFrom = useRef<number | null>(null);
@@ -153,10 +166,17 @@ export default function ChatPane() {
   }, [id]);
 
   const peerId = peer?.id;
+  const showOnline = !!privacy.data?.show_online;
   useEffect(
-    () => (peerId ? watchPresence(supabase, [peerId], (s) => setOnline(s.has(peerId))) : undefined),
-    [peerId],
+    () =>
+      peerId && showOnline
+        ? watchPresence(supabase, [peerId], (s) => setOnline(s.has(peerId)))
+        : undefined,
+    [peerId, showOnline],
   );
+  // Derived so the "online" state never outlives the toggle, even for one render.
+  const shownOnline = showOnline && online;
+  const lastSeen = useLastSeen(peerId, showOnline && conv?.kind === 'direct' && !shownOnline);
 
   const keys = useQuery({
     queryKey: qk.connect.keys(peerId ?? ''),
@@ -174,6 +194,107 @@ export default function ChatPane() {
     [messages.data],
   );
 
+  // The unread divider uses the read position from when the chat was opened,
+  // so it doesn't vanish the moment this tab acknowledges the messages.
+  const [readMark, setReadMark] = useState<{ id: string; seq: number; until: number } | null>(null);
+  useEffect(() => {
+    if (conv && readMark?.id !== id)
+      setReadMark({ id, seq: conv.lastReadSeq, until: conv.lastSeq });
+  }, [conv, id, readMark?.id]);
+
+  const today = useToday();
+  const items = useMemo(
+    () =>
+      layoutThread(ordered, {
+        myUserId: userId,
+        lastReadSeq: readMark?.id === id ? readMark.seq : Number.MAX_SAFE_INTEGER,
+        unreadUntilSeq: readMark?.id === id ? readMark.until : undefined,
+        now: today,
+      }),
+    [ordered, userId, readMark, id, today],
+  );
+  const days = useMemo(() => groupByDay(items), [items]);
+  const newestId = ordered.at(-1)?.id;
+  const toggle = (mid: string) =>
+    setSelection((s) => {
+      const next = new Set(s ?? []);
+      if (next.has(mid)) next.delete(mid);
+      else next.add(mid);
+      return next;
+    });
+  const selectedMessages = ordered.filter((m) => selection?.has(m.id));
+  const canBulkDelete =
+    selectedMessages.length > 0 &&
+    selectedMessages.every((m) => messageActions(m, m.senderId === userId).includes('delete'));
+  // Drop ids of messages that expired or were deleted remotely; stay in select mode.
+  useEffect(() => {
+    setSelection((s) => {
+      if (!s) return s;
+      const live = new Set(ordered.map((m) => m.id));
+      const kept = [...s].filter((x) => live.has(x));
+      return kept.length === s.size ? s : new Set(kept);
+    });
+  }, [ordered]);
+  const copyText = useCopyText();
+  const copySelection = async () => {
+    if (!selectedMessages.length) return;
+    const copied = await copyText(
+      selectionToText(selectedMessages, { nameOf }),
+      selectedMessages.length === 1
+        ? 'Message copied'
+        : `${selectedMessages.length} messages copied`,
+    );
+    if (!copied) return;
+    setSelection(null);
+  };
+
+  const { reduceMotion } = useA11y();
+  const [away, setAway] = useState(false);
+  const [newCount, setNewCount] = useState(0);
+  const lastSeenSeq = useRef(0);
+  useEffect(() => {
+    lastSeenSeq.current = 0;
+    setNewCount(0);
+    setAway(false);
+  }, [id]);
+  useEffect(() => {
+    const newest = ordered.at(-1)?.seq ?? 0;
+    if (stick.current || !lastSeenSeq.current) {
+      setNewCount(0);
+      lastSeenSeq.current = Math.max(lastSeenSeq.current, newest);
+      return;
+    }
+    const fresh = ordered.filter(
+      (m) => (m.seq ?? 0) > lastSeenSeq.current && m.senderId !== userId,
+    ).length;
+    if (fresh) setNewCount((c) => c + fresh);
+    lastSeenSeq.current = Math.max(lastSeenSeq.current, newest);
+  }, [ordered, userId]);
+
+  const jumpToLatest = () => {
+    const el = scroller.current;
+    if (!el) return;
+    stick.current = true;
+    setNewCount(0);
+    el.scrollTo({ top: el.scrollHeight, behavior: reduceMotion ? 'auto' : 'smooth' });
+  };
+
+  const announcement = useIncomingAnnouncement(ordered, {
+    ready: messages.isSuccess,
+    userId,
+    muted: conv ? isMuted(conv) || !conv.notificationsEnabled : true,
+    conversationId: id,
+    nameOf,
+  });
+
+  const replyById = (mid: string) => {
+    const m = ordered.find((x) => x.id === mid);
+    if (m && messageActions(m, m.senderId === userId).includes('reply')) {
+      setReplyTo(m);
+      composer.current?.focus();
+    }
+  };
+
   // Stay pinned to the newest message unless the reader scrolled up; keep the
   // reading position when older messages are prepended.
   useLayoutEffect(() => {
@@ -187,22 +308,22 @@ export default function ChatPane() {
     } else if (stick.current) el.scrollTop = el.scrollHeight;
   }, [ordered.length, typingUsers.length, id, messages.isFetching]);
 
+  const positioned = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    if (positioned.current === id || readMark?.id !== id || !ordered.length) return;
+    positioned.current = id;
+    const divider = scroller.current?.querySelector<HTMLElement>('[data-unread-divider]');
+    if (divider) {
+      divider.scrollIntoView({ block: 'start' });
+      stick.current = false;
+    }
+  }, [id, readMark, ordered.length]);
+
   const loadEarlier = () => {
     const el = scroller.current;
     if (el) restoreFrom.current = el.scrollHeight - el.scrollTop;
     stick.current = false;
     setLimit((l) => l + MESSAGE_PAGE);
-  };
-
-  const receiptFor = (m: LocalMessage): Receipt | undefined => {
-    if (m.senderId !== userId) return undefined;
-    if (m.status === 'sending') return 'sending';
-    if (m.status === 'failed') return 'failed';
-    const others = conv?.members.filter((x) => x.id !== userId) ?? [];
-    if (!m.seq || !others.length) return 'sent';
-    if (others.every((o) => o.read_seq >= m.seq!)) return 'read';
-    if (others.every((o) => o.delivered_seq >= m.seq!)) return 'delivered';
-    return 'sent';
   };
 
   const run = async (fn: () => Promise<unknown>) => {
@@ -237,6 +358,7 @@ export default function ChatPane() {
     setReplyTo(null);
     stick.current = true;
     void run(() => engine!.send(id, { t: 'text', body, replyTo: r }));
+    if (showOnline) void touchActivity(supabase).catch(() => undefined);
   };
 
   const sendFiles = async (files: File[]) => {
@@ -279,32 +401,39 @@ export default function ChatPane() {
       if (e.altKey && (e.key === 'i' || e.key === 'I')) {
         e.preventDefault();
         setDetails((d) => !d);
+      } else if (
+        e.key === 'Escape' &&
+        selection &&
+        !document.querySelector('[role="dialog"],[role="menu"]')
+      ) {
+        setSelection(null);
       } else if (e.key === 'Escape' && details && !document.querySelector('[role="dialog"]'))
         setDetails(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [details]);
+  }, [details, selection]);
 
   // Only once the inbox is settled: a just-created chat may not be in the cached list yet.
   if (conversation.isSuccess && !conversation.isFetching && !conv)
     return <Navigate to={`/messages/legacy/${id}`} replace />;
 
   const typingNames = typingUsers.map(nameOf);
-  const subtitle = typingNames.length
-    ? `${typingNames.join(', ')} ${typingNames.length > 1 ? 'are' : 'is'} typing`
-    : conv?.kind === 'group'
-      ? `${conv.members.length} members, encrypted`
-      : online
-        ? 'online'
-        : 'end-to-end encrypted';
+  const subtitle = headerStatus({
+    isGroup: conv?.kind === 'group',
+    memberCount: conv?.members.length ?? 0,
+    typingNames,
+    online: shownOnline,
+    lastSeenAt: lastSeen.data ?? null,
+    now: new Date(),
+  });
   const composerDisabled = syncState === 'waiting_for_access' || syncState === 'broken';
 
   return (
     <div className="flex h-full min-w-0 flex-1">
       <div
         className="relative flex h-full min-w-0 flex-1 flex-col bg-bg"
-        style={chatBackground(theme, def.accent)}
+        style={chatBackground(theme, def)}
         onDragOver={(e) => {
           if (composerDisabled || !e.dataTransfer.types.includes('Files')) return;
           e.preventDefault();
@@ -317,69 +446,82 @@ export default function ChatPane() {
           if (!composerDisabled) void sendFiles([...e.dataTransfer.files]);
         }}
       >
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-surface px-2 md:px-4">
-          <Link
-            to="/messages"
-            className="flex h-10 w-10 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-ink md:hidden"
-            aria-label="Back to chats"
-          >
-            <ArrowLeftIcon size={20} />
-          </Link>
-          <button
-            type="button"
-            onClick={() => setDetails((d) => !d)}
-            className="flex min-w-0 flex-1 items-center gap-3 rounded-md py-1 text-left"
-            aria-label={`${title}, chat details`}
-          >
-            {conv?.kind === 'group' ? (
-              <GroupAvatar size={34} />
-            ) : (
-              <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={34} />
-            )}
-            <span className="min-w-0">
-              <span className="block truncate text-[15px] font-semibold">{title || ' '}</span>
-              <span
-                className="flex items-center gap-1.5 font-mono text-[11px] leading-4"
-                aria-live="polite"
-              >
-                {typingNames.length ? (
-                  <TypingDots color={def.accent} />
-                ) : online ? (
-                  <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
-                ) : (
-                  <LockSimpleIcon size={10} className="text-subtle" aria-hidden="true" />
-                )}
+        {selection ? (
+          <SelectBar
+            count={selectedMessages.length}
+            canDelete={canBulkDelete}
+            onCopy={() => void copySelection()}
+            onDelete={() => {
+              setBulkCount(selectedMessages.length);
+              setBulkDeleting(true);
+            }}
+            onCancel={() => setSelection(null)}
+          />
+        ) : (
+          <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-surface px-2 md:px-4">
+            <Link
+              to="/messages"
+              className="flex h-10 w-10 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-ink md:hidden"
+              aria-label="Back to chats"
+            >
+              <ArrowLeftIcon size={20} />
+            </Link>
+            <button
+              type="button"
+              onClick={() => setDetails((d) => !d)}
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-md py-1 text-left"
+              aria-label={`${title}, chat details`}
+            >
+              {conv?.kind === 'group' ? (
+                <GroupAvatar size={34} />
+              ) : (
+                <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={34} />
+              )}
+              <span className="min-w-0">
+                <span className="block truncate text-[15px] font-semibold">{title || ' '}</span>
                 <span
-                  className={online && !typingNames.length ? 'text-success' : 'text-subtle'}
-                  style={typingNames.length ? { color: def.accent } : undefined}
+                  className="flex items-center gap-1.5 font-mono text-[11px] leading-4"
+                  aria-live="polite"
                 >
-                  {subtitle}
+                  {typingNames.length ? (
+                    <TypingDots color={def.accent} />
+                  ) : shownOnline ? (
+                    <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
+                  ) : (
+                    <LockSimpleIcon size={10} className="text-subtle" aria-hidden="true" />
+                  )}
+                  <span
+                    className={shownOnline && !typingNames.length ? 'text-success' : 'text-subtle'}
+                    style={typingNames.length ? { color: def.accent } : undefined}
+                  >
+                    {subtitle}
+                  </span>
                 </span>
               </span>
-            </span>
-          </button>
-          {conv?.disappearingSeconds ? (
-            <span
-              className="flex items-center gap-1 rounded-sm border border-line px-1.5 py-0.5 font-mono text-[11px] text-muted"
-              title="Disappearing messages are on"
-            >
-              <TimerIcon size={12} aria-hidden="true" /> {ttlLabel(conv.disappearingSeconds)}
-              <span className="sr-only">disappearing messages</span>
-            </span>
-          ) : null}
-          <Tip label="Details" shortcut="Alt I">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setDetails((d) => !d)}
-              aria-label="Chat details"
-              aria-pressed={details}
-              className={cn('text-muted', details && 'bg-surface-strong text-ink')}
-            >
-              <InfoIcon size={20} />
-            </Button>
-          </Tip>
-        </header>
+            </button>
+            {conv?.disappearingSeconds ? (
+              <span
+                className="flex items-center gap-1 rounded-sm border border-line px-1.5 py-0.5 font-mono text-[11px] text-muted"
+                title="Disappearing messages are on"
+              >
+                <TimerIcon size={12} aria-hidden="true" /> {ttlLabel(conv.disappearingSeconds)}
+                <span className="sr-only">disappearing messages</span>
+              </span>
+            ) : null}
+            <Tip label="Details" shortcut="Alt I">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setDetails((d) => !d)}
+                aria-label="Chat details"
+                aria-pressed={details}
+                className={cn('text-muted', details && 'bg-surface-strong text-ink')}
+              >
+                <InfoIcon size={20} />
+              </Button>
+            </Tip>
+          </header>
+        )}
 
         {!live && (
           <div
@@ -404,99 +546,121 @@ export default function ChatPane() {
           </button>
         )}
 
-        <div
-          ref={scroller}
-          className="scroll-thin min-h-0 flex-1 overflow-y-auto py-4"
-          onScroll={(e) => {
-            const el = e.currentTarget;
-            stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-          }}
-          role="log"
-          aria-label={`Messages with ${title}`}
-        >
-          {hasMore ? (
-            <div className="mb-4 flex justify-center">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={loadEarlier}
-                loading={messages.isFetching}
-              >
-                Load earlier messages
-              </Button>
-            </div>
-          ) : (
-            <p className="mx-auto mb-6 mt-2 flex max-w-sm items-start justify-center gap-2 px-6 text-center text-xs leading-relaxed text-muted">
-              <LockSimpleIcon
-                size={13}
-                className="mt-0.5 shrink-0 text-accent"
-                aria-hidden="true"
-              />
-              Messages and attachments in this chat are end-to-end encrypted. Only its members’
-              devices can read them.
-            </p>
-          )}
-          {(messages.isPending || (syncState === 'syncing' && !ordered.length)) && (
-            <div className="flex justify-center py-8" style={{ color: def.accent }}>
-              <CircleNotchIcon className="animate-spin" size={22} aria-label="Loading messages" />
-            </div>
-          )}
-          {!messages.isPending && syncState !== 'syncing' && ordered.length === 0 && (
-            <p className="py-10 text-center text-sm text-muted">
-              No messages yet. Say hello — it’s encrypted.
-            </p>
-          )}
-          {ordered.map((m, i) => {
-            const prev = ordered[i - 1];
-            const newDay =
-              !prev ||
-              new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString();
-            return (
-              <div key={m.id}>
-                {newDay && (
-                  <div className="my-4 flex items-center gap-3 px-6" role="separator">
-                    <span className="h-px flex-1 bg-line" />
-                    <Meta>{dayLabel(m.createdAt)}</Meta>
-                    <span className="h-px flex-1 bg-line" />
-                  </div>
-                )}
-                <Bubble
-                  message={m}
-                  mine={m.senderId === userId}
-                  theme={def}
-                  senderName={conv?.kind === 'group' ? nameOf(m.senderId) : undefined}
-                  showSender={conv?.kind === 'group' && (newDay || prev?.senderId !== m.senderId)}
-                  receipt={receiptFor(m)}
-                  myUserId={userId}
-                  nameOf={nameOf}
-                  onReact={(msg, emoji) =>
-                    void run(() =>
-                      engine!.send(id, {
-                        t: 'reaction',
-                        target: msg.id,
-                        emoji,
-                        remove: !!msg.reactions[emoji]?.includes(userId),
-                      }),
-                    )
-                  }
-                  onReply={(msg) => {
-                    setReplyTo(msg);
-                    composer.current?.focus();
-                  }}
-                  onDelete={setDeleting}
-                  onRetry={(msg) => void run(() => engine!.retry(id, msg.id))}
-                  onOpenImage={setViewer}
-                  onJumpTo={jumpTo}
-                />
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <div
+            ref={scroller}
+            className="scroll-thin min-h-0 flex-1 overflow-y-auto py-4"
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+              stick.current = distance < 80;
+              setAway(distance > el.clientHeight);
+              if (stick.current) setNewCount(0);
+            }}
+            onKeyDown={(e) =>
+              threadKeyDown(e, { onReply: replyById, onToggle: selection ? toggle : undefined })
+            }
+            role="log"
+            aria-label={`Messages with ${title}`}
+          >
+            {hasMore ? (
+              <div className="mb-4 flex justify-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={loadEarlier}
+                  loading={messages.isFetching}
+                >
+                  Load earlier messages
+                </Button>
               </div>
-            );
-          })}
-          {uploads > 0 && (
-            <div className="flex items-center justify-end gap-2 px-6 py-2 font-mono text-[11px] text-muted">
-              <CircleNotchIcon className="animate-spin" size={13} aria-hidden="true" />
-              Encrypting and uploading{uploads > 1 ? ` ${uploads} files` : ''}…
-            </div>
-          )}
+            ) : (
+              <p className="mx-auto mb-6 mt-2 flex max-w-sm items-start justify-center gap-2 px-6 text-center text-xs leading-relaxed text-muted">
+                <LockSimpleIcon
+                  size={13}
+                  className="mt-0.5 shrink-0 text-accent"
+                  aria-hidden="true"
+                />
+                Messages and attachments in this chat are end-to-end encrypted. Only its members’
+                devices can read them.
+              </p>
+            )}
+            {(messages.isPending || (syncState === 'syncing' && !ordered.length)) && (
+              <div className="flex justify-center py-8" style={{ color: def.accent }}>
+                <CircleNotchIcon className="animate-spin" size={22} aria-label="Loading messages" />
+              </div>
+            )}
+            {!messages.isPending && syncState !== 'syncing' && ordered.length === 0 && (
+              <p className="py-10 text-center text-sm text-muted">
+                No messages yet. Say hello — it’s encrypted.
+              </p>
+            )}
+            {days.map((day) => (
+              <ThreadDay key={day.key}>
+                {day.items.map((it) => {
+                  if (it.type === 'date') return <DateChip key={it.key} label={it.label} />;
+                  if (it.type === 'unread') return <UnreadDivider key={it.key} count={it.count} />;
+                  const m = it.message;
+                  const group = conv?.kind === 'group';
+                  const sender = conv?.members.find((x) => x.id === m.senderId);
+                  return (
+                    <Bubble
+                      key={it.key}
+                      message={m}
+                      mine={it.mine}
+                      theme={def}
+                      senderName={group ? nameOf(m.senderId) : undefined}
+                      showSender={!!group && it.runStart}
+                      runStart={it.runStart}
+                      runEnd={it.runEnd}
+                      avatar={
+                        group && !it.mine
+                          ? { path: sender?.avatar_path ?? null, name: sender?.username ?? '?' }
+                          : undefined
+                      }
+                      tabbable={m.id === newestId}
+                      receipt={receiptOf(m, userId, conv?.members ?? [])}
+                      myUserId={userId}
+                      nameOf={nameOf}
+                      onCopy={(msg) => void copyText(msg.body ?? '')}
+                      onReact={(msg, emoji) =>
+                        void run(() =>
+                          engine!.send(id, {
+                            t: 'reaction',
+                            target: msg.id,
+                            emoji,
+                            remove: !!msg.reactions[emoji]?.includes(userId),
+                          }),
+                        )
+                      }
+                      onReply={(msg) => {
+                        setReplyTo(msg);
+                        composer.current?.focus();
+                      }}
+                      onDelete={setDeleting}
+                      onRetry={(msg) => void run(() => engine!.retry(id, msg.id))}
+                      onOpenImage={setViewer}
+                      onJumpTo={jumpTo}
+                      onSelect={(msg) => setSelection(new Set([msg.id]))}
+                      selecting={!!selection}
+                      selected={!!selection?.has(m.id)}
+                      onToggleSelect={(msg) => toggle(msg.id)}
+                    />
+                  );
+                })}
+              </ThreadDay>
+            ))}
+            {uploads > 0 && (
+              <div className="flex items-center justify-end gap-2 px-6 py-2 font-mono text-[11px] text-muted">
+                <CircleNotchIcon className="animate-spin" size={13} aria-hidden="true" />
+                Encrypting and uploading{uploads > 1 ? ` ${uploads} files` : ''}…
+              </div>
+            )}
+          </div>
+          {away && <JumpToLatest count={newCount} onClick={jumpToLatest} />}
+          <p className="sr-only" role="status" aria-live="polite">
+            {announcement}
+          </p>
         </div>
 
         <Composer
@@ -559,6 +723,20 @@ export default function ChatPane() {
         description="This removes the message on every device in this chat."
         confirmLabel="Delete"
         danger
+      />
+
+      <BulkDeleteDialog
+        open={bulkDeleting}
+        count={bulkCount}
+        onClose={() => setBulkDeleting(false)}
+        onConfirm={() => {
+          const targets = selectedMessages.map((m) => m.id);
+          setBulkDeleting(false);
+          setSelection(null);
+          void run(async () => {
+            for (const target of targets) await engine!.send(id, { t: 'delete', target });
+          });
+        }}
       />
 
       {verifying && conv && (

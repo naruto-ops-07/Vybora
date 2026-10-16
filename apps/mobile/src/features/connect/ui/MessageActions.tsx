@@ -1,3 +1,4 @@
+import type { MessageAction } from '@vybora/core';
 import type { LocalMessage } from '@vybora/e2ee';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { Icon, type IconName } from '@/components/Icon';
@@ -8,35 +9,29 @@ import { useCc } from './primitives';
 /** Reactions are message content (emoji), not interface icons. */
 export const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '🙏', '👍', '🔥'];
 
+const ACTION: Record<MessageAction, { icon: IconName; label: string; danger?: boolean }> = {
+  reply: { icon: 'corner-up-left', label: 'Reply' },
+  copy: { icon: 'copy', label: 'Copy text' },
+  select: { icon: 'check-circle', label: 'Select' },
+  delete: { icon: 'trash', label: 'Delete for everyone', danger: true },
+};
+
 export function MessageActions({
   message,
-  mine,
   myReaction,
+  actions,
   onClose,
   onReact,
-  onReply,
-  onCopy,
-  onDelete,
+  onAction,
 }: {
   message: LocalMessage | null;
-  mine: boolean;
   myReaction: string | null;
+  actions: MessageAction[];
   onClose: () => void;
   onReact: (emoji: string) => void;
-  onReply: () => void;
-  onCopy: () => void;
-  onDelete: () => void;
+  onAction: (a: MessageAction) => void;
 }) {
   const cc = useCc();
-  const actions: { icon: IconName; label: string; onPress: () => void; danger?: boolean }[] = [
-    { icon: 'corner-up-left', label: 'Reply', onPress: onReply },
-    ...(message?.kind === 'text'
-      ? [{ icon: 'copy' as const, label: 'Copy text', onPress: onCopy }]
-      : []),
-    ...(mine
-      ? [{ icon: 'trash' as const, label: 'Delete for everyone', onPress: onDelete, danger: true }]
-      : []),
-  ];
   return (
     <Modal visible={!!message} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable
@@ -89,24 +84,29 @@ export function MessageActions({
               </Pressable>
             ))}
           </View>
-          {actions.map((a) => (
-            <Pressable
-              key={a.label}
-              onPress={a.onPress}
-              accessibilityRole="menuitem"
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 14,
-                paddingHorizontal: 20,
-                minHeight: 52,
-                backgroundColor: pressed ? cc.raised : 'transparent',
-              })}
-            >
-              <Icon name={a.icon} size={20} color={a.danger ? cc.danger : cc.textMuted} />
-              <Text style={{ color: a.danger ? cc.danger : cc.text, fontSize: 16 }}>{a.label}</Text>
-            </Pressable>
-          ))}
+          {actions.map((a) => {
+            const def = ACTION[a];
+            return (
+              <Pressable
+                key={a}
+                onPress={() => onAction(a)}
+                accessibilityRole="menuitem"
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 14,
+                  paddingHorizontal: 20,
+                  minHeight: 52,
+                  backgroundColor: pressed ? cc.raised : 'transparent',
+                })}
+              >
+                <Icon name={def.icon} size={20} color={def.danger ? cc.danger : cc.textMuted} />
+                <Text style={{ color: def.danger ? cc.danger : cc.text, fontSize: 16 }}>
+                  {def.label}
+                </Text>
+              </Pressable>
+            );
+          })}
         </Pressable>
       </Pressable>
     </Modal>

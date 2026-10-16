@@ -1,0 +1,133 @@
+import { formatClock, formatLastSeen, type TimeOpts } from './time';
+
+export type Receipt = 'sending' | 'failed' | 'sent' | 'delivered' | 'read';
+
+/** Ticks for my message, from every other member's delivered/read position. */
+export function receiptOf(
+  m: { senderId: string; status: string; seq: number | null },
+  myUserId: string,
+  members: readonly { id: string; read_seq: number; delivered_seq: number }[],
+): Receipt | undefined {
+  if (m.senderId !== myUserId) return undefined;
+  if (m.status === 'sending') return 'sending';
+  if (m.status === 'failed') return 'failed';
+  const others = members.filter((x) => x.id !== myUserId);
+  if (!m.seq || !others.length) return 'sent';
+  if (others.every((o) => o.read_seq >= m.seq!)) return 'read';
+  if (others.every((o) => o.delivered_seq >= m.seq!)) return 'delivered';
+  return 'sent';
+}
+
+export interface PreviewMessageLike {
+  senderId: string;
+  kind: 'text' | 'attachment' | 'undecryptable';
+  body?: string;
+  caption?: string;
+  attachment?: { kind: string; name?: string };
+  deleted?: boolean;
+}
+
+const ATTACHMENT_LABEL: Record<string, string> = {
+  image: 'Photo',
+  video: 'Video',
+  voice: 'Voice message',
+};
+
+/** One-line description of a decrypted message (never more than the device already shows). */
+export function messageSummary(m: PreviewMessageLike): string {
+  if (m.deleted) return 'This message was deleted';
+  if (m.kind === 'undecryptable') return 'Message couldn’t be decrypted';
+  if (m.kind === 'attachment') {
+    const caption = m.caption?.trim();
+    if (caption) return caption;
+    const k = m.attachment?.kind ?? 'file';
+    return ATTACHMENT_LABEL[k] ?? `File: ${m.attachment?.name ?? 'attachment'}`;
+  }
+  return m.body ?? '';
+}
+
+export interface RowPreview {
+  prefix: string | null;
+  text: string;
+  receipt: Receipt | null;
+  typing: boolean;
+}
+
+export function chatRowPreview(
+  last: PreviewMessageLike | undefined,
+  opts: {
+    myUserId: string;
+    isGroup: boolean;
+    typingUserIds: readonly string[];
+    nameOf: (userId: string) => string;
+    receipt?: Receipt;
+  },
+): RowPreview {
+  const typers = opts.typingUserIds.filter((id) => id !== opts.myUserId);
+  if (typers.length) {
+    const text = !opts.isGroup
+      ? 'typing…'
+      : typers.length === 1
+        ? `${opts.nameOf(typers[0]!)} is typing…`
+        : `${typers.length} people are typing…`;
+    return { prefix: null, text, receipt: null, typing: true };
+  }
+  if (!last) return { prefix: null, text: 'No messages yet', receipt: null, typing: false };
+  const mine = last.senderId === opts.myUserId;
+  return {
+    prefix: mine ? 'You' : opts.isGroup ? opts.nameOf(last.senderId) : null,
+    text: messageSummary(last),
+    receipt: mine && !last.deleted ? (opts.receipt ?? null) : null,
+    typing: false,
+  };
+}
+
+/** Plain-text copy of selected messages: "[18:01] Maya: Dinner?" per line. */
+export function selectionToText(
+  messages: readonly (PreviewMessageLike & { createdAt: string })[],
+  opts: TimeOpts & { nameOf: (userId: string) => string },
+): string {
+  return messages
+    .map(
+      (m) => `[${formatClock(m.createdAt, opts)}] ${opts.nameOf(m.senderId)}: ${messageSummary(m)}`,
+    )
+    .join('\n');
+}
+
+/** The line under a chat's name: typing → online → last seen → fallback. */
+export function headerStatus(
+  o: TimeOpts & {
+    isGroup: boolean;
+    memberCount: number;
+    typingNames: readonly string[];
+    online: boolean;
+    lastSeenAt: string | null;
+    now: Date;
+  },
+): string {
+  if (o.typingNames.length) {
+    if (!o.isGroup) return 'typing…';
+    return `${o.typingNames.join(', ')} ${o.typingNames.length > 1 ? 'are' : 'is'} typing…`;
+  }
+  if (o.isGroup) return `${o.memberCount} members`;
+  if (o.online) return 'online';
+  if (o.lastSeenAt) return formatLastSeen(o.lastSeenAt, o.now, o);
+  return 'end-to-end encrypted';
+}
+
+export type MessageAction = 'reply' | 'copy' | 'select' | 'delete';
+
+/** What the message menu offers. Project 2 adds forward/edit/star here. */
+export function messageActions(
+  m: { kind: string; deleted?: boolean; status: string },
+  mine: boolean,
+): MessageAction[] {
+  if (m.deleted || m.kind === 'undecryptable' || m.status === 'sending' || m.status === 'failed')
+    return [];
+  return [
+    'reply',
+    ...(m.kind === 'text' ? (['copy'] as const) : []),
+    'select',
+    ...(mine ? (['delete'] as const) : []),
+  ];
+}

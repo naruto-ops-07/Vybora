@@ -41,14 +41,14 @@
 
 **Shared (`packages/core/src/chat/`)**
 
-| File | Responsibility |
-| --- | --- |
-| `time.ts` | `dayKey`, `dayLabel`, `formatClock`, `formatLastSeen`, `formatRowTime`, `formatUnread` |
-| `layout.ts` | `layoutThread` → date / unread / message items with run flags |
+| File         | Responsibility                                                                                                  |
+| ------------ | --------------------------------------------------------------------------------------------------------------- |
+| `time.ts`    | `dayKey`, `dayLabel`, `formatClock`, `formatLastSeen`, `formatRowTime`, `formatUnread`                          |
+| `layout.ts`  | `layoutThread` → date / unread / message items with run flags                                                   |
 | `preview.ts` | `Receipt`, `receiptOf`, `messageSummary`, `chatRowPreview`, `selectionToText`, `headerStatus`, `messageActions` |
-| `swipe.ts` | `SWIPE_REPLY_THRESHOLD`, `swipeReplyDecision` |
-| `a11y.ts` | `A11yPrefs`, defaults, `parseA11yPrefs`, `resolveReduceMotion`, `TEXT_SIZE_PX`, `A11Y_STORAGE_KEY` |
-| `index.ts` | re-exports |
+| `swipe.ts`   | `SWIPE_REPLY_THRESHOLD`, `swipeReplyDecision`                                                                   |
+| `a11y.ts`    | `A11yPrefs`, defaults, `parseA11yPrefs`, `resolveReduceMotion`, `TEXT_SIZE_PX`, `A11Y_STORAGE_KEY`              |
+| `index.ts`   | re-exports                                                                                                      |
 
 `packages/config/src/index.ts` gains `highContrastThemes`.
 
@@ -75,12 +75,14 @@
 ### Task 1: Shared time wording (`packages/core/src/chat/time.ts`)
 
 **Files:**
+
 - Create: `packages/core/src/chat/time.ts`
 - Create: `packages/core/src/chat/index.ts`
 - Modify: `packages/core/src/index.ts` (add `export * from './chat';`)
 - Test: `packages/core/src/chat/time.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces:
   - `interface TimeOpts { timeZone?: string; locale?: string }`
@@ -115,7 +117,9 @@ describe('dayLabel', () => {
   it('uses the reader’s time zone for the day boundary', () => {
     const noon = new Date('2026-10-15T12:00:00Z');
     expect(dayLabel('2026-10-14T23:30:00Z', noon, { ...utc, timeZone: 'UTC' })).toBe('Yesterday');
-    expect(dayLabel('2026-10-14T23:30:00Z', noon, { ...utc, timeZone: 'Asia/Kolkata' })).toBe('Today');
+    expect(dayLabel('2026-10-14T23:30:00Z', noon, { ...utc, timeZone: 'Asia/Kolkata' })).toBe(
+      'Today',
+    );
   });
 
   it('keeps one calendar day across the US daylight-saving change', () => {
@@ -123,7 +127,9 @@ describe('dayLabel', () => {
     // 2026-11-01 01:30 EDT and 01:30 EST are both on 1 November.
     expect(dayKey('2026-11-01T05:30:00Z', ny)).toBe('2026-11-01');
     expect(dayKey('2026-11-01T06:30:00Z', ny)).toBe('2026-11-01');
-    expect(dayLabel('2026-11-01T06:30:00Z', new Date('2026-11-02T15:00:00Z'), ny)).toBe('Yesterday');
+    expect(dayLabel('2026-11-01T06:30:00Z', new Date('2026-11-02T15:00:00Z'), ny)).toBe(
+      'Yesterday',
+    );
   });
 });
 
@@ -218,7 +224,12 @@ function weekday(date: Date, opts: TimeOpts, style: 'long' | 'short') {
 
 /** "Mon 12 Oct" (or "12 Oct"), with the year only when it isn't the current one. */
 function shortDate(date: Date, now: Date, opts: TimeOpts, withWeekday: boolean) {
-  const ps = parts(date, opts, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  const ps = parts(date, opts, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
   const sameYear = part(ps, 'year') === part(parts(now, opts, { year: 'numeric' }), 'year');
   return [
     withWeekday ? part(ps, 'weekday') : '',
@@ -294,11 +305,13 @@ git commit -m "feat(core): messenger time wording (day labels, last seen, row ti
 ### Task 2: Thread layout (`layoutThread`)
 
 **Files:**
+
 - Create: `packages/core/src/chat/layout.ts`
 - Modify: `packages/core/src/chat/index.ts`
 - Test: `packages/core/src/chat/layout.test.ts`
 
 **Interfaces:**
+
 - Consumes: `dayKey`, `dayLabel`, `TimeOpts` (Task 1).
 - Produces:
   - `interface ThreadMessageLike { id: string; senderId: string; createdAt: string; seq: number | null }`
@@ -466,7 +479,12 @@ export function layoutThread<M extends ThreadMessageLike>(
     let breakRun = false;
     const day = dayKey(m.createdAt, opts);
     if (day !== prevDay) {
-      items.push({ type: 'date', key: `date-${day}`, label: dayLabel(m.createdAt, opts.now, opts), day });
+      items.push({
+        type: 'date',
+        key: `date-${day}`,
+        label: dayLabel(m.createdAt, opts.now, opts),
+        day,
+      });
       prevDay = day;
       breakRun = true;
     }
@@ -521,11 +539,13 @@ git commit -m "feat(core): layoutThread for runs, date chips and unread divider"
 ### Task 3: Previews, receipts, header status, actions, swipe (`preview.ts`, `swipe.ts`)
 
 **Files:**
+
 - Create: `packages/core/src/chat/preview.ts`, `packages/core/src/chat/swipe.ts`
 - Modify: `packages/core/src/chat/index.ts`
 - Test: `packages/core/src/chat/preview.test.ts`
 
 **Interfaces:**
+
 - Consumes: `formatClock`, `formatLastSeen`, `TimeOpts` (Task 1).
 - Produces:
   - `type Receipt = 'sending' | 'failed' | 'sent' | 'delivered' | 'read'`
@@ -566,9 +586,15 @@ describe('receiptOf', () => {
     { id: 'maya', read_seq: 5, delivered_seq: 8 },
   ];
   it('derives ticks from the other members’ positions', () => {
-    expect(receiptOf({ senderId: 'maya', status: 'received', seq: 3 }, 'me', members)).toBeUndefined();
-    expect(receiptOf({ senderId: 'me', status: 'sending', seq: null }, 'me', members)).toBe('sending');
-    expect(receiptOf({ senderId: 'me', status: 'failed', seq: null }, 'me', members)).toBe('failed');
+    expect(
+      receiptOf({ senderId: 'maya', status: 'received', seq: 3 }, 'me', members),
+    ).toBeUndefined();
+    expect(receiptOf({ senderId: 'me', status: 'sending', seq: null }, 'me', members)).toBe(
+      'sending',
+    );
+    expect(receiptOf({ senderId: 'me', status: 'failed', seq: null }, 'me', members)).toBe(
+      'failed',
+    );
     expect(receiptOf({ senderId: 'me', status: 'sent', seq: 5 }, 'me', members)).toBe('read');
     expect(receiptOf({ senderId: 'me', status: 'sent', seq: 7 }, 'me', members)).toBe('delivered');
     expect(receiptOf({ senderId: 'me', status: 'sent', seq: 9 }, 'me', members)).toBe('sent');
@@ -578,23 +604,42 @@ describe('receiptOf', () => {
 describe('messageSummary', () => {
   it('describes every kind without leaking more than the local preview', () => {
     expect(messageSummary(text('maya', 'Hi'))).toBe('Hi');
-    expect(messageSummary({ senderId: 'maya', kind: 'attachment', attachment: { kind: 'image' } })).toBe('Photo');
     expect(
-      messageSummary({ senderId: 'maya', kind: 'attachment', attachment: { kind: 'image' }, caption: 'Beach' }),
+      messageSummary({ senderId: 'maya', kind: 'attachment', attachment: { kind: 'image' } }),
+    ).toBe('Photo');
+    expect(
+      messageSummary({
+        senderId: 'maya',
+        kind: 'attachment',
+        attachment: { kind: 'image' },
+        caption: 'Beach',
+      }),
     ).toBe('Beach');
-    expect(messageSummary({ senderId: 'maya', kind: 'attachment', attachment: { kind: 'voice' } })).toBe('Voice message');
     expect(
-      messageSummary({ senderId: 'maya', kind: 'attachment', attachment: { kind: 'file', name: 'a.pdf' } }),
+      messageSummary({ senderId: 'maya', kind: 'attachment', attachment: { kind: 'voice' } }),
+    ).toBe('Voice message');
+    expect(
+      messageSummary({
+        senderId: 'maya',
+        kind: 'attachment',
+        attachment: { kind: 'file', name: 'a.pdf' },
+      }),
     ).toBe('File: a.pdf');
-    expect(messageSummary({ senderId: 'maya', kind: 'undecryptable' })).toBe('Message couldn’t be decrypted');
-    expect(messageSummary({ ...text('maya', 'secret'), deleted: true })).toBe('This message was deleted');
+    expect(messageSummary({ senderId: 'maya', kind: 'undecryptable' })).toBe(
+      'Message couldn’t be decrypted',
+    );
+    expect(messageSummary({ ...text('maya', 'secret'), deleted: true })).toBe(
+      'This message was deleted',
+    );
   });
 });
 
 describe('chatRowPreview', () => {
   const base = { myUserId: 'me', typingUserIds: [], nameOf };
   it('prefixes my messages with You and keeps the receipt', () => {
-    expect(chatRowPreview(text('me', 'See you'), { ...base, isGroup: false, receipt: 'read' })).toEqual({
+    expect(
+      chatRowPreview(text('me', 'See you'), { ...base, isGroup: false, receipt: 'read' }),
+    ).toEqual({
       prefix: 'You',
       text: 'See you',
       receipt: 'read',
@@ -606,16 +651,20 @@ describe('chatRowPreview', () => {
     expect(chatRowPreview(text('maya', 'Hi'), { ...base, isGroup: false }).prefix).toBeNull();
   });
   it('lets typing win over the last message', () => {
-    expect(chatRowPreview(text('maya', 'Hi'), { ...base, isGroup: false, typingUserIds: ['maya'] })).toEqual({
+    expect(
+      chatRowPreview(text('maya', 'Hi'), { ...base, isGroup: false, typingUserIds: ['maya'] }),
+    ).toEqual({
       prefix: null,
       text: 'typing…',
       receipt: null,
       typing: true,
     });
-    expect(chatRowPreview(undefined, { ...base, isGroup: true, typingUserIds: ['maya'] }).text).toBe('Maya is typing…');
-    expect(chatRowPreview(undefined, { ...base, isGroup: true, typingUserIds: ['maya', 'leo'] }).text).toBe(
-      '2 people are typing…',
-    );
+    expect(
+      chatRowPreview(undefined, { ...base, isGroup: true, typingUserIds: ['maya'] }).text,
+    ).toBe('Maya is typing…');
+    expect(
+      chatRowPreview(undefined, { ...base, isGroup: true, typingUserIds: ['maya', 'leo'] }).text,
+    ).toBe('2 people are typing…');
   });
   it('ignores my own typing and handles empty chats', () => {
     expect(chatRowPreview(undefined, { ...base, isGroup: false, typingUserIds: ['me'] })).toEqual({
@@ -654,23 +703,37 @@ describe('headerStatus', () => {
   };
   it('prefers typing, then online, then last seen, then the fallback', () => {
     expect(headerStatus({ ...base, typingNames: ['Maya'], online: true })).toBe('typing…');
-    expect(headerStatus({ ...base, online: true, lastSeenAt: '2026-10-15T09:00:00Z' })).toBe('online');
-    expect(headerStatus({ ...base, lastSeenAt: '2026-10-15T09:12:00Z' })).toBe('last seen today at 09:12');
+    expect(headerStatus({ ...base, online: true, lastSeenAt: '2026-10-15T09:00:00Z' })).toBe(
+      'online',
+    );
+    expect(headerStatus({ ...base, lastSeenAt: '2026-10-15T09:12:00Z' })).toBe(
+      'last seen today at 09:12',
+    );
     expect(headerStatus(base)).toBe('end-to-end encrypted');
   });
   it('shows group typing names and member counts', () => {
-    expect(headerStatus({ ...base, isGroup: true, memberCount: 5, typingNames: ['Maya', 'Leo'] })).toBe(
-      'Maya, Leo are typing…',
+    expect(
+      headerStatus({ ...base, isGroup: true, memberCount: 5, typingNames: ['Maya', 'Leo'] }),
+    ).toBe('Maya, Leo are typing…');
+    expect(headerStatus({ ...base, isGroup: true, memberCount: 5, typingNames: ['Maya'] })).toBe(
+      'Maya is typing…',
     );
-    expect(headerStatus({ ...base, isGroup: true, memberCount: 5, typingNames: ['Maya'] })).toBe('Maya is typing…');
     expect(headerStatus({ ...base, isGroup: true, memberCount: 5 })).toBe('5 members');
   });
 });
 
 describe('messageActions', () => {
   it('offers actions only for settled, readable messages', () => {
-    expect(messageActions({ kind: 'text', status: 'sent' }, true)).toEqual(['reply', 'copy', 'select', 'delete']);
-    expect(messageActions({ kind: 'attachment', status: 'received' }, false)).toEqual(['reply', 'select']);
+    expect(messageActions({ kind: 'text', status: 'sent' }, true)).toEqual([
+      'reply',
+      'copy',
+      'select',
+      'delete',
+    ]);
+    expect(messageActions({ kind: 'attachment', status: 'received' }, false)).toEqual([
+      'reply',
+      'select',
+    ]);
     expect(messageActions({ kind: 'text', status: 'sending' }, true)).toEqual([]);
     expect(messageActions({ kind: 'text', status: 'failed' }, true)).toEqual([]);
     expect(messageActions({ kind: 'undecryptable', status: 'received' }, false)).toEqual([]);
@@ -791,7 +854,9 @@ export function selectionToText(
   opts: TimeOpts & { nameOf: (userId: string) => string },
 ): string {
   return messages
-    .map((m) => `[${formatClock(m.createdAt, opts)}] ${opts.nameOf(m.senderId)}: ${messageSummary(m)}`)
+    .map(
+      (m) => `[${formatClock(m.createdAt, opts)}] ${opts.nameOf(m.senderId)}: ${messageSummary(m)}`,
+    )
     .join('\n');
 }
 
@@ -825,7 +890,12 @@ export function messageActions(
 ): MessageAction[] {
   if (m.deleted || m.kind === 'undecryptable' || m.status === 'sending' || m.status === 'failed')
     return [];
-  return ['reply', ...(m.kind === 'text' ? (['copy'] as const) : []), 'select', ...(mine ? (['delete'] as const) : [])];
+  return [
+    'reply',
+    ...(m.kind === 'text' ? (['copy'] as const) : []),
+    'select',
+    ...(mine ? (['delete'] as const) : []),
+  ];
 }
 ```
 
@@ -878,11 +948,13 @@ git commit -m "feat(core): row previews, receipts, header status, message action
 ### Task 4: Accessibility prefs model + high-contrast tokens
 
 **Files:**
+
 - Create: `packages/core/src/chat/a11y.ts`
 - Modify: `packages/core/src/chat/index.ts`, `packages/config/src/index.ts`
 - Test: `packages/core/src/chat/a11y.test.ts`
 
 **Interfaces:**
+
 - Consumes: `themes`, `ThemeTokens`, `palette` from `@vybora/config`.
 - Produces:
   - `type ReduceMotionPref = 'system' | 'on' | 'off'`, `type TextSize = 'sm' | 'md' | 'lg' | 'xl'`
@@ -911,7 +983,13 @@ describe('parseA11yPrefs', () => {
   it('keeps valid fields and replaces invalid ones one by one', () => {
     expect(
       parseA11yPrefs(
-        JSON.stringify({ textSize: 'xl', highContrast: true, reduceMotion: 'sometimes', haptics: 'yes', extra: 1 }),
+        JSON.stringify({
+          textSize: 'xl',
+          highContrast: true,
+          reduceMotion: 'sometimes',
+          haptics: 'yes',
+          extra: 1,
+        }),
       ),
     ).toEqual({ ...DEFAULT_A11Y_PREFS, textSize: 'xl', highContrast: true });
   });
@@ -1098,12 +1176,14 @@ git commit -m "feat(core,config): accessibility prefs model and high-contrast to
 ### Task 5: Last-seen migration, DB tests, types and API
 
 **Files:**
+
 - Create: `supabase/migrations/20261015000012_last_seen.sql`
 - Test: `supabase/tests/last-seen.test.ts`
 - Modify: `packages/types/src/database.ts` (regenerated), `packages/api/src/connect.ts`, `packages/api/src/keys.ts`
 - Test: `packages/api/src/lastSeen.test.ts`
 
 **Interfaces:**
+
 - Consumes: `public.shares_conversation_with(uuid)`, `public.user_settings.show_online`, `public.blocks`, `public.try_uuid`, `realtime.topic()` (existing).
 - Produces:
   - SQL: `public.touch_activity() returns void`, `public.last_seen(p_user_ids uuid[]) returns table (user_id uuid, last_active_at timestamptz)`, `public.caller_shows_online() returns boolean`
@@ -1125,10 +1205,16 @@ beforeAll(async () => {
 afterAll(async () => db.close());
 
 async function chat(owner: User, other: User) {
-  await db.as(owner, `select public.create_secure_conversation('direct', $1::uuid[], null)`, [[other.id]]);
+  await db.as(owner, `select public.create_secure_conversation('direct', $1::uuid[], null)`, [
+    [other.id],
+  ]);
 }
 const lastSeen = (viewer: User, ids: string[]) =>
-  db.as<{ user_id: string; last_active_at: Date }>(viewer, `select * from public.last_seen($1::uuid[])`, [ids]);
+  db.as<{ user_id: string; last_active_at: Date }>(
+    viewer,
+    `select * from public.last_seen($1::uuid[])`,
+    [ids],
+  );
 const setActive = (u: User, iso: string) =>
   db.admin(
     `insert into user_activity (user_id, last_active_at) values ($1, $2)
@@ -1209,15 +1295,30 @@ describe('touch_activity', () => {
     );
     expect(first).toBeDefined();
 
-    await db.admin(`update user_activity set last_active_at = now() - interval '30 seconds' where user_id = $1`, [a.id]);
-    const [before] = await db.admin<{ last_active_at: Date }>(`select last_active_at from user_activity where user_id = $1`, [a.id]);
+    await db.admin(
+      `update user_activity set last_active_at = now() - interval '30 seconds' where user_id = $1`,
+      [a.id],
+    );
+    const [before] = await db.admin<{ last_active_at: Date }>(
+      `select last_active_at from user_activity where user_id = $1`,
+      [a.id],
+    );
     await db.as(a, `select public.touch_activity()`);
-    const [throttled] = await db.admin<{ last_active_at: Date }>(`select last_active_at from user_activity where user_id = $1`, [a.id]);
+    const [throttled] = await db.admin<{ last_active_at: Date }>(
+      `select last_active_at from user_activity where user_id = $1`,
+      [a.id],
+    );
     expect(throttled!.last_active_at.getTime()).toBe(before!.last_active_at.getTime());
 
-    await db.admin(`update user_activity set last_active_at = now() - interval '2 minutes' where user_id = $1`, [a.id]);
+    await db.admin(
+      `update user_activity set last_active_at = now() - interval '2 minutes' where user_id = $1`,
+      [a.id],
+    );
     await db.as(a, `select public.touch_activity()`);
-    const [fresh] = await db.admin<{ last_active_at: Date }>(`select last_active_at from user_activity where user_id = $1`, [a.id]);
+    const [fresh] = await db.admin<{ last_active_at: Date }>(
+      `select last_active_at from user_activity where user_id = $1`,
+      [a.id],
+    );
     expect(Date.now() - fresh!.last_active_at.getTime()).toBeLessThan(10_000);
 
     await expectDenied(db.as('anon', `select public.touch_activity()`));
@@ -1232,14 +1333,18 @@ describe('presence channel reciprocity', () => {
     const topic = `connect:presence:${a.id}`;
     await db.admin(`insert into realtime.messages (topic, payload) values ($1, '{}')`, [topic]);
     const canRead = async () =>
-      (await db.asOnTopic(b, topic, `select id from realtime.messages where topic = $1`, [topic])).length > 0;
+      (await db.asOnTopic(b, topic, `select id from realtime.messages where topic = $1`, [topic]))
+        .length > 0;
     expect(await canRead()).toBe(true);
     await showOnline(b, false);
     expect(await canRead()).toBe(false);
     // Your own topic stays readable.
     const own = `connect:presence:${b.id}`;
     await db.admin(`insert into realtime.messages (topic, payload) values ($1, '{}')`, [own]);
-    expect((await db.asOnTopic(b, own, `select id from realtime.messages where topic = $1`, [own])).length).toBeGreaterThan(0);
+    expect(
+      (await db.asOnTopic(b, own, `select id from realtime.messages where topic = $1`, [own]))
+        .length,
+    ).toBeGreaterThan(0);
   });
 });
 ```
@@ -1464,11 +1569,13 @@ git commit -m "feat(db,api): reciprocal last seen with server-side privacy rules
 ### Task 6: Web accessibility provider, page, styles and route
 
 **Files:**
+
 - Create: `apps/web/src/features/a11y/A11yProvider.tsx`, `apps/web/src/features/a11y/AccessibilityPage.tsx`
 - Test: `apps/web/src/features/a11y/a11y.test.tsx`
 - Modify: `apps/web/src/app/App.tsx`, `apps/web/src/app/router.tsx`, `apps/web/src/features/settings/SettingsNav.tsx`, `apps/web/src/features/connect/CommandPalette.tsx`, `apps/web/src/styles/index.css`, `apps/web/src/routes/Landing.tsx`, `apps/web/src/routes/landing/motion.ts`, `apps/web/src/test/utils.tsx`
 
 **Interfaces:**
+
 - Consumes: `A11yPrefs`, `DEFAULT_A11Y_PREFS`, `parseA11yPrefs`, `resolveReduceMotion`, `A11Y_STORAGE_KEY`, `highContrastThemes` (Task 4).
 - Produces:
   - `A11yProvider({ children })`, `useA11y(): { prefs: A11yPrefs; setPrefs(patch: Partial<A11yPrefs>): void; reduceMotion: boolean }` (falls back to defaults outside the provider)
@@ -1513,10 +1620,16 @@ describe('Accessibility settings', () => {
   });
 
   it('restores saved settings on the next visit', () => {
-    localStorage.setItem(A11Y_STORAGE_KEY, JSON.stringify({ textSize: 'xl', alwaysShowActions: true }));
+    localStorage.setItem(
+      A11Y_STORAGE_KEY,
+      JSON.stringify({ textSize: 'xl', alwaysShowActions: true }),
+    );
     renderWithProviders(<AccessibilityPage />);
     expect(document.documentElement.dataset.textSize).toBe('xl');
-    expect(screen.getByRole('radio', { name: 'Extra large' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'Extra large' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
     expect(screen.getByRole('switch', { name: 'Always show message actions' })).toHaveAttribute(
       'aria-checked',
       'true',
@@ -1766,15 +1879,15 @@ export default function AccessibilityPage() {
 ```tsx
 import { A11yProvider } from '@/features/a11y/A11yProvider';
 // …
-      <ToastProvider>
-        <A11yProvider>
-          <TooltipProvider>
-            <AuthProvider>
-              <RouterProvider router={router} />
-            </AuthProvider>
-          </TooltipProvider>
-        </A11yProvider>
-      </ToastProvider>
+<ToastProvider>
+  <A11yProvider>
+    <TooltipProvider>
+      <AuthProvider>
+        <RouterProvider router={router} />
+      </AuthProvider>
+    </TooltipProvider>
+  </A11yProvider>
+</ToastProvider>;
 ```
 
 `apps/web/src/app/router.tsx` — add the lazy import and route:
@@ -1799,13 +1912,13 @@ const AccessibilitySettings = lazy(() => import('@/features/a11y/AccessibilityPa
 `apps/web/src/features/connect/CommandPalette.tsx` — import `EyeIcon`; add after the Settings item:
 
 ```tsx
-          <Item
-            value="accessibility text size contrast motion"
-            icon={<EyeIcon size={18} />}
-            onSelect={() => run(() => navigate('/settings/accessibility'))}
-          >
-            Accessibility
-          </Item>
+<Item
+  value="accessibility text size contrast motion"
+  icon={<EyeIcon size={18} />}
+  onSelect={() => run(() => navigate('/settings/accessibility'))}
+>
+  Accessibility
+</Item>
 ```
 
 `apps/web/src/test/utils.tsx` — wrap with the provider:
@@ -1813,13 +1926,13 @@ const AccessibilitySettings = lazy(() => import('@/features/a11y/AccessibilityPa
 ```tsx
 import { A11yProvider } from '@/features/a11y/A11yProvider';
 // …
-        <ToastProvider>
-          <A11yProvider>
-            <TooltipProvider>
-              <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
-            </TooltipProvider>
-          </A11yProvider>
-        </ToastProvider>
+<ToastProvider>
+  <A11yProvider>
+    <TooltipProvider>
+      <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+    </TooltipProvider>
+  </A11yProvider>
+</ToastProvider>;
 ```
 
 - [ ] **Step 6: Styles — high contrast, text size, reduce motion, utilities**
@@ -1889,20 +2002,20 @@ In `apps/web/src/styles/index.css`, after the `[data-theme='dark'] { … }` bloc
 In `@layer utilities { … }` add:
 
 ```css
-  .text-msg {
-    font-size: var(--vy-msg-size);
-    line-height: 1.45;
+.text-msg {
+  font-size: var(--vy-msg-size);
+  line-height: 1.45;
+}
+.text-msg-sm {
+  font-size: calc(var(--vy-msg-size) - 2px);
+  line-height: 1.4;
+}
+@media (pointer: coarse) {
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
   }
-  .text-msg-sm {
-    font-size: calc(var(--vy-msg-size) - 2px);
-    line-height: 1.4;
-  }
-  @media (pointer: coarse) {
-    .touch-target {
-      min-width: 44px;
-      min-height: 44px;
-    }
-  }
+}
 ```
 
 After the tooltip keyframes add:
@@ -1943,9 +2056,12 @@ Replace the final `@media (prefers-reduced-motion: reduce) { … }` block with:
 
 ```ts
 const prefersReducedMotion = () => {
-  const attr = typeof document !== 'undefined' ? document.documentElement.dataset.reduceMotion : undefined;
+  const attr =
+    typeof document !== 'undefined' ? document.documentElement.dataset.reduceMotion : undefined;
   if (attr) return attr === 'true';
-  return typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  return (
+    typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
 };
 
 /** Smooth scrolling for the marketing page only; off with reduced motion. */
@@ -1997,11 +2113,13 @@ git commit -m "feat(web): Settings → Accessibility (motion, text size, contras
 ### Task 7: Web conversation layout (runs, tails, date chips, unread divider)
 
 **Files:**
+
 - Create: `apps/web/src/features/connect/ThreadParts.tsx`
 - Modify: `apps/web/src/features/connect/Bubble.tsx`, `apps/web/src/features/connect/ChatPane.tsx`
 - Test: `apps/web/src/features/connect/thread.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `layoutThread`, `ThreadItem`, `receiptOf`, `messageSummary`, `formatClock`, `formatUnread`, `Receipt` (Tasks 1–3); `useA11y` (Task 6).
 - Produces:
   - `DateChip({ label }: { label: string })`, `UnreadDivider({ count }: { count: number })`, `JumpToLatest({ count, onClick }: { count: number; onClick: () => void })` (used in Task 8)
@@ -2091,7 +2209,9 @@ describe('conversation layout', () => {
     );
     expect(screen.getByRole('heading', { name: 'Today' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '3 unread messages' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Jump to latest message, 3 new' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Jump to latest message, 3 new' }),
+    ).toBeInTheDocument();
   });
 });
 ```
@@ -2205,56 +2325,70 @@ function Tail({ mine, fill }: { mine: boolean; fill?: string }) {
 4. In the component, destructure the new props and compute the label:
 
 ```tsx
-  const senderLabel = mine ? 'You' : nameOf(m.senderId);
-  const label = [senderLabel, formatClock(m.createdAt), messageSummary(m), receipt ? RECEIPT_LABEL[receipt] : null]
-    .filter(Boolean)
-    .join(', ');
+const senderLabel = mine ? 'You' : nameOf(m.senderId);
+const label = [
+  senderLabel,
+  formatClock(m.createdAt),
+  messageSummary(m),
+  receipt ? RECEIPT_LABEL[receipt] : null,
+]
+  .filter(Boolean)
+  .join(', ');
 ```
 
 5. Replace the outer wrapper and bubble classes:
 
 ```tsx
+<div
+  className={cn(
+    'group flex flex-col px-3 md:px-6',
+    runStart ? 'pt-2' : 'pt-0.5',
+    mine ? 'items-end' : 'items-start',
+  )}
+  data-message-id={m.id}
+  tabIndex={tabbable ? 0 : -1}
+  role="article"
+  aria-label={label}
+>
+  {showSender && !mine && senderName && (
+    <span
+      className={cn('mb-0.5 text-xs font-semibold', avatar ? 'ml-10' : 'ml-1')}
+      style={{ color: theme.accent }}
+    >
+      {senderName}
+    </span>
+  )}
+  <div className={cn('flex max-w-full items-end gap-2', mine && 'flex-row-reverse')}>
+    {avatar &&
+      !mine &&
+      (runEnd ? (
+        <Avatar path={avatar.path} name={avatar.name} size={28} />
+      ) : (
+        <span className="w-7 shrink-0" aria-hidden="true" />
+      ))}
     <div
       className={cn(
-        'group flex flex-col px-3 md:px-6',
-        runStart ? 'pt-2' : 'pt-0.5',
-        mine ? 'items-end' : 'items-start',
+        'relative flex max-w-[min(80%,600px)] items-center gap-1',
+        mine && 'flex-row-reverse',
       )}
-      data-message-id={m.id}
-      tabIndex={tabbable ? 0 : -1}
-      role="article"
-      aria-label={label}
     >
-      {showSender && !mine && senderName && (
-        <span className={cn('mb-0.5 text-xs font-semibold', avatar ? 'ml-10' : 'ml-1')} style={{ color: theme.accent }}>
-          {senderName}
-        </span>
-      )}
-      <div className={cn('flex max-w-full items-end gap-2', mine && 'flex-row-reverse')}>
-        {avatar && !mine &&
-          (runEnd ? (
-            <Avatar path={avatar.path} name={avatar.name} size={28} />
-          ) : (
-            <span className="w-7 shrink-0" aria-hidden="true" />
-          ))}
-        <div className={cn('relative flex max-w-[min(80%,600px)] items-center gap-1', mine && 'flex-row-reverse')}>
-          <div
-            className={cn(
-              'relative min-w-0 rounded-lg',
-              media ? 'p-1' : 'px-3 py-2',
-              runEnd && (mine ? 'rounded-br-sm' : 'rounded-bl-sm'),
-              !filled && 'border border-line bg-bubble-in text-ink',
-            )}
-            style={filled ? { background: theme.bubble, color: theme.bubbleText } : undefined}
-          >
-            {/* …existing reply quote, content and meta row unchanged… */}
-            {runEnd && <Tail mine={mine} fill={filled ? theme.bubble : undefined} />}
-          </div>
-          {/* …existing actions bar and reaction picker unchanged… */}
-        </div>
+      <div
+        className={cn(
+          'relative min-w-0 rounded-lg',
+          media ? 'p-1' : 'px-3 py-2',
+          runEnd && (mine ? 'rounded-br-sm' : 'rounded-bl-sm'),
+          !filled && 'border border-line bg-bubble-in text-ink',
+        )}
+        style={filled ? { background: theme.bubble, color: theme.bubbleText } : undefined}
+      >
+        {/* …existing reply quote, content and meta row unchanged… */}
+        {runEnd && <Tail mine={mine} fill={filled ? theme.bubble : undefined} />}
       </div>
-      {/* …existing reactions row and retry button unchanged… */}
+      {/* …existing actions bar and reaction picker unchanged… */}
     </div>
+  </div>
+  {/* …existing reactions row and retry button unchanged… */}
+</div>
 ```
 
 6. In the text content and caption `<p>`s, replace `text-[15px] leading-[1.45]` with `text-msg`.
@@ -2265,90 +2399,92 @@ function Tail({ mine, fill }: { mine: boolean; fill?: string }) {
 2. Freeze the read position when a chat opens (after the `ordered` memo):
 
 ```tsx
-  // The unread divider uses the read position from when the chat was opened,
-  // so it doesn't vanish the moment this tab acknowledges the messages.
-  const [readMark, setReadMark] = useState<{ id: string; seq: number } | null>(null);
-  useEffect(() => {
-    if (conv && readMark?.id !== id) setReadMark({ id, seq: conv.lastReadSeq });
-  }, [conv, id, readMark?.id]);
+// The unread divider uses the read position from when the chat was opened,
+// so it doesn't vanish the moment this tab acknowledges the messages.
+const [readMark, setReadMark] = useState<{ id: string; seq: number } | null>(null);
+useEffect(() => {
+  if (conv && readMark?.id !== id) setReadMark({ id, seq: conv.lastReadSeq });
+}, [conv, id, readMark?.id]);
 
-  const items = useMemo(
-    () =>
-      layoutThread(ordered, {
-        myUserId: userId,
-        lastReadSeq: readMark?.id === id ? readMark.seq : Number.MAX_SAFE_INTEGER,
-        now: new Date(),
-      }),
-    [ordered, userId, readMark, id],
-  );
-  const newestId = ordered.at(-1)?.id;
+const items = useMemo(
+  () =>
+    layoutThread(ordered, {
+      myUserId: userId,
+      lastReadSeq: readMark?.id === id ? readMark.seq : Number.MAX_SAFE_INTEGER,
+      now: new Date(),
+    }),
+  [ordered, userId, readMark, id],
+);
+const newestId = ordered.at(-1)?.id;
 ```
 
 3. Replace the `{ordered.map((m, i) => { … })}` block with:
 
 ```tsx
-          {items.map((it) => {
-            if (it.type === 'date') return <DateChip key={it.key} label={it.label} />;
-            if (it.type === 'unread') return <UnreadDivider key={it.key} count={it.count} />;
-            const m = it.message;
-            const group = conv?.kind === 'group';
-            const sender = conv?.members.find((x) => x.id === m.senderId);
-            return (
-              <Bubble
-                key={it.key}
-                message={m}
-                mine={it.mine}
-                theme={def}
-                senderName={group ? nameOf(m.senderId) : undefined}
-                showSender={!!group && it.runStart}
-                runStart={it.runStart}
-                runEnd={it.runEnd}
-                avatar={
-                  group && !it.mine
-                    ? { path: sender?.avatar_path ?? null, name: sender?.username ?? '?' }
-                    : undefined
-                }
-                tabbable={m.id === newestId}
-                receipt={receiptOf(m, userId, conv?.members ?? [])}
-                myUserId={userId}
-                nameOf={nameOf}
-                onReact={(msg, emoji) =>
-                  void run(() =>
-                    engine!.send(id, {
-                      t: 'reaction',
-                      target: msg.id,
-                      emoji,
-                      remove: !!msg.reactions[emoji]?.includes(userId),
-                    }),
-                  )
-                }
-                onReply={(msg) => {
-                  setReplyTo(msg);
-                  composer.current?.focus();
-                }}
-                onDelete={setDeleting}
-                onRetry={(msg) => void run(() => engine!.retry(id, msg.id))}
-                onOpenImage={setViewer}
-                onJumpTo={jumpTo}
-                onSelect={() => undefined}
-              />
-            );
-          })}
+{
+  items.map((it) => {
+    if (it.type === 'date') return <DateChip key={it.key} label={it.label} />;
+    if (it.type === 'unread') return <UnreadDivider key={it.key} count={it.count} />;
+    const m = it.message;
+    const group = conv?.kind === 'group';
+    const sender = conv?.members.find((x) => x.id === m.senderId);
+    return (
+      <Bubble
+        key={it.key}
+        message={m}
+        mine={it.mine}
+        theme={def}
+        senderName={group ? nameOf(m.senderId) : undefined}
+        showSender={!!group && it.runStart}
+        runStart={it.runStart}
+        runEnd={it.runEnd}
+        avatar={
+          group && !it.mine
+            ? { path: sender?.avatar_path ?? null, name: sender?.username ?? '?' }
+            : undefined
+        }
+        tabbable={m.id === newestId}
+        receipt={receiptOf(m, userId, conv?.members ?? [])}
+        myUserId={userId}
+        nameOf={nameOf}
+        onReact={(msg, emoji) =>
+          void run(() =>
+            engine!.send(id, {
+              t: 'reaction',
+              target: msg.id,
+              emoji,
+              remove: !!msg.reactions[emoji]?.includes(userId),
+            }),
+          )
+        }
+        onReply={(msg) => {
+          setReplyTo(msg);
+          composer.current?.focus();
+        }}
+        onDelete={setDeleting}
+        onRetry={(msg) => void run(() => engine!.retry(id, msg.id))}
+        onOpenImage={setViewer}
+        onJumpTo={jumpTo}
+        onSelect={() => undefined}
+      />
+    );
+  });
+}
 ```
 
 4. Scroll to the unread divider once per chat (place after the existing pin-to-bottom `useLayoutEffect`):
 
 ```tsx
-  const positioned = useRef<string | null>(null);
-  useLayoutEffect(() => {
-    if (positioned.current === id || readMark?.id !== id || !ordered.length) return;
-    positioned.current = id;
-    const divider = scroller.current?.querySelector<HTMLElement>('[data-unread-divider]');
-    if (divider) {
-      divider.scrollIntoView({ block: 'start' });
-      stick.current = false;
-    }
-  }, [id, readMark, ordered.length]);
+const positioned = useRef<string | null>(null);
+useLayoutEffect(() => {
+  if (positioned.current === id || readMark?.id !== id || !ordered.length) return;
+  positioned.current = id;
+  const divider = scroller.current?.querySelector<HTMLElement>('[data-unread-divider]');
+  if (divider) {
+    divider.scrollIntoView({ block: 'start' });
+    stick.current = false;
+  }
+}, [id, readMark, ordered.length]);
 ```
 
 5. Update the existing Bubble tests in `connect.test.tsx`: add `runStart`, `runEnd` and `onSelect={vi.fn()}` to its `renderBubble` props.
@@ -2370,11 +2506,13 @@ git commit -m "feat(web): message runs with tails, sticky date chips and unread 
 ### Task 8: Web jump-to-latest, new-message announcements, keyboard navigation
 
 **Files:**
+
 - Create: `apps/web/src/features/connect/announce.ts`, `apps/web/src/features/connect/threadKeys.ts`
 - Modify: `apps/web/src/features/connect/ChatPane.tsx`
 - Test: `apps/web/src/features/connect/thread.test.tsx` (extend)
 
 **Interfaces:**
+
 - Consumes: `JumpToLatest` (Task 7), `messageSummary`, `messageActions` (Task 3), `useA11y` (Task 6).
 - Produces:
   - `useIncomingAnnouncement(messages: readonly LocalMessage[], opts: { ready: boolean; userId: string; muted: boolean; conversationId: string; nameOf: (id: string) => string }): string`
@@ -2393,9 +2531,12 @@ describe('new-message announcements', () => {
 
   it('announces only messages that arrive after the chat loaded', () => {
     const first = { ...msg, id: 'a' };
-    const { result, rerender } = renderHook((p: { list: LocalMessage[] }) => useIncomingAnnouncement(p.list, base), {
-      initialProps: { list: [first] },
-    });
+    const { result, rerender } = renderHook(
+      (p: { list: LocalMessage[] }) => useIncomingAnnouncement(p.list, base),
+      {
+        initialProps: { list: [first] },
+      },
+    );
     expect(result.current).toBe('');
     rerender({ list: [first, { ...msg, id: 'b', body: 'hello' }] });
     expect(result.current).toBe('Maya: hello');
@@ -2403,12 +2544,26 @@ describe('new-message announcements', () => {
 
   it('stays quiet in muted chats and for my own messages', () => {
     const { result, rerender } = renderHook(
-      (p: { list: LocalMessage[]; muted: boolean }) => useIncomingAnnouncement(p.list, { ...base, muted: p.muted }),
+      (p: { list: LocalMessage[]; muted: boolean }) =>
+        useIncomingAnnouncement(p.list, { ...base, muted: p.muted }),
       { initialProps: { list: [{ ...msg, id: 'a' }], muted: true } },
     );
-    rerender({ list: [{ ...msg, id: 'a' }, { ...msg, id: 'b' }], muted: true });
+    rerender({
+      list: [
+        { ...msg, id: 'a' },
+        { ...msg, id: 'b' },
+      ],
+      muted: true,
+    });
     expect(result.current).toBe('');
-    rerender({ list: [{ ...msg, id: 'a' }, { ...msg, id: 'b' }, { ...msg, id: 'c', senderId: 'me' }], muted: false });
+    rerender({
+      list: [
+        { ...msg, id: 'a' },
+        { ...msg, id: 'b' },
+        { ...msg, id: 'c', senderId: 'me' },
+      ],
+      muted: false,
+    });
     expect(result.current).toBe('');
   });
 });
@@ -2536,7 +2691,12 @@ export function threadKeyDown(
     e.preventDefault();
     const r = current.getBoundingClientRect();
     current.dispatchEvent(
-      new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 24, clientY: r.top + 12 }),
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: r.left + 24,
+        clientY: r.top + 12,
+      }),
     );
   } else if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey) {
     e.preventDefault();
@@ -2554,77 +2714,79 @@ export function threadKeyDown(
 2. State and effects (after the `items` memo):
 
 ```tsx
-  const { reduceMotion } = useA11y();
-  const [away, setAway] = useState(false);
-  const [newCount, setNewCount] = useState(0);
-  const lastSeenSeq = useRef(0);
-  useEffect(() => {
-    lastSeenSeq.current = 0;
+const { reduceMotion } = useA11y();
+const [away, setAway] = useState(false);
+const [newCount, setNewCount] = useState(0);
+const lastSeenSeq = useRef(0);
+useEffect(() => {
+  lastSeenSeq.current = 0;
+  setNewCount(0);
+  setAway(false);
+}, [id]);
+useEffect(() => {
+  const newest = ordered.at(-1)?.seq ?? 0;
+  if (stick.current || !lastSeenSeq.current) {
     setNewCount(0);
-    setAway(false);
-  }, [id]);
-  useEffect(() => {
-    const newest = ordered.at(-1)?.seq ?? 0;
-    if (stick.current || !lastSeenSeq.current) {
-      setNewCount(0);
-      lastSeenSeq.current = Math.max(lastSeenSeq.current, newest);
-      return;
-    }
-    const fresh = ordered.filter((m) => (m.seq ?? 0) > lastSeenSeq.current && m.senderId !== userId).length;
-    if (fresh) setNewCount((c) => c + fresh);
     lastSeenSeq.current = Math.max(lastSeenSeq.current, newest);
-  }, [ordered, userId]);
+    return;
+  }
+  const fresh = ordered.filter(
+    (m) => (m.seq ?? 0) > lastSeenSeq.current && m.senderId !== userId,
+  ).length;
+  if (fresh) setNewCount((c) => c + fresh);
+  lastSeenSeq.current = Math.max(lastSeenSeq.current, newest);
+}, [ordered, userId]);
 
-  const jumpToLatest = () => {
-    const el = scroller.current;
-    if (!el) return;
-    stick.current = true;
-    setNewCount(0);
-    el.scrollTo({ top: el.scrollHeight, behavior: reduceMotion ? 'auto' : 'smooth' });
-  };
+const jumpToLatest = () => {
+  const el = scroller.current;
+  if (!el) return;
+  stick.current = true;
+  setNewCount(0);
+  el.scrollTo({ top: el.scrollHeight, behavior: reduceMotion ? 'auto' : 'smooth' });
+};
 
-  const announcement = useIncomingAnnouncement(ordered, {
-    ready: !!messages.isSuccess,
-    userId,
-    muted: conv ? isMuted(conv) || !conv.notificationsEnabled : true,
-    conversationId: id,
-    nameOf,
-  });
+const announcement = useIncomingAnnouncement(ordered, {
+  ready: !!messages.isSuccess,
+  userId,
+  muted: conv ? isMuted(conv) || !conv.notificationsEnabled : true,
+  conversationId: id,
+  nameOf,
+});
 
-  const replyById = (mid: string) => {
-    const m = ordered.find((x) => x.id === mid);
-    if (m && messageActions(m, m.senderId === userId).includes('reply')) {
-      setReplyTo(m);
-      composer.current?.focus();
-    }
-  };
+const replyById = (mid: string) => {
+  const m = ordered.find((x) => x.id === mid);
+  if (m && messageActions(m, m.senderId === userId).includes('reply')) {
+    setReplyTo(m);
+    composer.current?.focus();
+  }
+};
 ```
 
 3. Wrap the scroller in a positioned container, extend `onScroll`, add `onKeyDown`, the live region and the button:
 
 ```tsx
-        <div className="relative flex min-h-0 flex-1 flex-col">
-          <div
-            ref={scroller}
-            className="scroll-thin min-h-0 flex-1 overflow-y-auto py-4"
-            onScroll={(e) => {
-              const el = e.currentTarget;
-              const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-              stick.current = distance < 80;
-              setAway(distance > el.clientHeight);
-              if (stick.current) setNewCount(0);
-            }}
-            onKeyDown={(e) => threadKeyDown(e, { onReply: replyById })}
-            role="log"
-            aria-label={`Messages with ${title}`}
-          >
-            {/* …existing content… */}
-          </div>
-          {away && <JumpToLatest count={newCount} onClick={jumpToLatest} />}
-          <p className="sr-only" role="status" aria-live="polite">
-            {announcement}
-          </p>
-        </div>
+<div className="relative flex min-h-0 flex-1 flex-col">
+  <div
+    ref={scroller}
+    className="scroll-thin min-h-0 flex-1 overflow-y-auto py-4"
+    onScroll={(e) => {
+      const el = e.currentTarget;
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+      stick.current = distance < 80;
+      setAway(distance > el.clientHeight);
+      if (stick.current) setNewCount(0);
+    }}
+    onKeyDown={(e) => threadKeyDown(e, { onReply: replyById })}
+    role="log"
+    aria-label={`Messages with ${title}`}
+  >
+    {/* …existing content… */}
+  </div>
+  {away && <JumpToLatest count={newCount} onClick={jumpToLatest} />}
+  <p className="sr-only" role="status" aria-live="polite">
+    {announcement}
+  </p>
+</div>
 ```
 
 (The scroller keeps `role="log"`; the live region is separate so history loads are not read aloud.)
@@ -2646,11 +2808,13 @@ git commit -m "feat(web): jump to latest, new-message announcements, keyboard na
 ### Task 9: Web message menu, swipe-to-reply, always-visible actions
 
 **Files:**
+
 - Create: `apps/web/src/features/connect/MessageMenu.tsx`, `apps/web/src/features/connect/useSwipeReply.ts`
 - Modify: `apps/web/src/features/connect/Bubble.tsx`, `apps/web/src/features/connect/ChatPane.tsx`, `apps/web/src/test/setup.ts`, `apps/web/package.json`
 - Test: `apps/web/src/features/connect/menu.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `messageActions`, `MessageAction`, `swipeReplyDecision`, `SWIPE_REPLY_THRESHOLD` (Task 3); `useA11y` (Task 6); `QUICK_REACTIONS` (existing in `Bubble.tsx`).
 - Produces:
   - `MessageMenu({ children, actions, myReactions, onReact, onAction }: { children: ReactElement; actions: MessageAction[]; myReactions: string[]; onReact: (emoji: string) => void; onAction: (a: MessageAction) => void })`
@@ -2697,7 +2861,12 @@ describe('message menu', () => {
     const onAction = vi.fn();
     const onReact = vi.fn();
     render(
-      <MessageMenu actions={['reply', 'copy', 'select', 'delete']} myReactions={['👍']} onReact={onReact} onAction={onAction}>
+      <MessageMenu
+        actions={['reply', 'copy', 'select', 'delete']}
+        myReactions={['👍']}
+        onReact={onReact}
+        onAction={onAction}
+      >
         <div>Bubble</div>
       </MessageMenu>,
     );
@@ -2737,9 +2906,12 @@ describe('swipe to reply (touch)', () => {
 
   it('ignores mouse input, vertical drags and the disabled setting', () => {
     const onTrigger = vi.fn();
-    const { result, rerender } = renderHook((p: { on: boolean }) => useSwipeReply(onTrigger, p.on), {
-      initialProps: { on: true },
-    });
+    const { result, rerender } = renderHook(
+      (p: { on: boolean }) => useSwipeReply(onTrigger, p.on),
+      {
+        initialProps: { on: true },
+      },
+    );
     act(() => result.current.handlers.onPointerDown!(ev(0, 0, 0, 'mouse')));
     act(() => result.current.handlers.onPointerUp!(ev(90, 0, 100, 'mouse')));
     act(() => result.current.handlers.onPointerDown!(ev(0, 0, 0)));
@@ -2803,7 +2975,10 @@ export function MessageMenu({
           collisionPadding={8}
           className="menu z-50 min-w-52 rounded-md border border-line-strong bg-surface p-1"
         >
-          <ContextMenu.Group aria-label="Reactions" className="flex gap-0.5 border-b border-line p-1">
+          <ContextMenu.Group
+            aria-label="Reactions"
+            className="flex gap-0.5 border-b border-line p-1"
+          >
             {QUICK_REACTIONS.map((emoji) => {
               const on = myReactions.includes(emoji);
               return (
@@ -2901,25 +3076,32 @@ export function useSwipeReply(onTrigger: () => void, enabled: boolean) {
 2. Inside the component:
 
 ```tsx
-  const { prefs, reduceMotion } = useA11y();
-  const root = useRef<HTMLDivElement>(null);
-  const actions = messageActions(m, mine);
-  const swipe = useSwipeReply(() => onReply(m), prefs.swipeToReply && actions.includes('reply'));
-  const myReactions = Object.entries(m.reactions)
-    .filter(([, users]) => users.includes(myUserId))
-    .map(([e]) => e);
-  const openMenu = () => {
-    const el = root.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 24, clientY: r.top + 12 }));
-  };
-  const onAction = (a: MessageAction) => {
-    if (a === 'reply') onReply(m);
-    else if (a === 'copy') void navigator.clipboard?.writeText(m.body ?? '');
-    else if (a === 'select') onSelect(m);
-    else if (a === 'delete') onDelete(m);
-  };
+const { prefs, reduceMotion } = useA11y();
+const root = useRef<HTMLDivElement>(null);
+const actions = messageActions(m, mine);
+const swipe = useSwipeReply(() => onReply(m), prefs.swipeToReply && actions.includes('reply'));
+const myReactions = Object.entries(m.reactions)
+  .filter(([, users]) => users.includes(myUserId))
+  .map(([e]) => e);
+const openMenu = () => {
+  const el = root.current;
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  el.dispatchEvent(
+    new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: r.left + 24,
+      clientY: r.top + 12,
+    }),
+  );
+};
+const onAction = (a: MessageAction) => {
+  if (a === 'reply') onReply(m);
+  else if (a === 'copy') void navigator.clipboard?.writeText(m.body ?? '');
+  else if (a === 'select') onSelect(m);
+  else if (a === 'delete') onDelete(m);
+};
 ```
 
 (import `type MessageAction` from `@vybora/core`.)
@@ -2949,19 +3131,21 @@ export function useSwipeReply(onTrigger: () => void, enabled: boolean) {
 5. Hover actions bar: make it visible when the setting is on, add **More**, and give buttons the touch target class:
 
 ```tsx
-        {actions.length > 0 && (
-          <div
-            className={cn(
-              'flex shrink-0 items-center transition-opacity duration-150 focus-within:opacity-100 group-hover:opacity-100',
-              prefs.alwaysShowActions || picker ? 'opacity-100' : 'opacity-0',
-            )}
-          >
-            {/* existing React / Reply / Copy / Delete ActionButtons unchanged */}
-            <ActionButton label="More actions" onClick={openMenu}>
-              <DotsThreeIcon size={16} />
-            </ActionButton>
-          </div>
-        )}
+{
+  actions.length > 0 && (
+    <div
+      className={cn(
+        'flex shrink-0 items-center transition-opacity duration-150 focus-within:opacity-100 group-hover:opacity-100',
+        prefs.alwaysShowActions || picker ? 'opacity-100' : 'opacity-0',
+      )}
+    >
+      {/* existing React / Reply / Copy / Delete ActionButtons unchanged */}
+      <ActionButton label="More actions" onClick={openMenu}>
+        <DotsThreeIcon size={16} />
+      </ActionButton>
+    </div>
+  );
+}
 ```
 
 Replace the old `actionable` condition with `actions.length > 0`, and add `touch-target` to `ActionButton`'s class list.
@@ -2985,11 +3169,13 @@ git commit -m "feat(web): message menu with reaction bar, touch swipe-to-reply, 
 ### Task 10: Web select mode
 
 **Files:**
+
 - Create: `apps/web/src/features/connect/SelectBar.tsx`
 - Modify: `apps/web/src/features/connect/Bubble.tsx`, `apps/web/src/features/connect/ChatPane.tsx`
 - Test: `apps/web/src/features/connect/menu.test.tsx` (extend)
 
 **Interfaces:**
+
 - Consumes: `selectionToText`, `messageActions` (Task 3); `threadKeyDown` `onToggle` (Task 8).
 - Produces:
   - `SelectBar({ count, canDelete, onCopy, onDelete, onCancel }: { count: number; canDelete: boolean; onCopy: () => void; onDelete: () => void; onCancel: () => void })`
@@ -3004,7 +3190,15 @@ describe('select bar', () => {
   it('shows the count and only enables delete when allowed', async () => {
     const onCopy = vi.fn();
     const onCancel = vi.fn();
-    render(<SelectBar count={2} canDelete={false} onCopy={onCopy} onDelete={vi.fn()} onCancel={onCancel} />);
+    render(
+      <SelectBar
+        count={2}
+        canDelete={false}
+        onCopy={onCopy}
+        onDelete={vi.fn()}
+        onCancel={onCancel}
+      />,
+    );
     expect(screen.getByText('2 selected')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Delete selected for everyone' })).toBeDisabled();
     await userEvent.click(screen.getByRole('button', { name: 'Copy selected' }));
@@ -3018,12 +3212,12 @@ describe('select bar', () => {
 And in `thread.test.tsx` add:
 
 ```tsx
-  it('shows a checkbox in select mode and toggles on click', async () => {
-    const onToggleSelect = vi.fn();
-    render(<Harness selecting selected={false} onToggleSelect={onToggleSelect} />);
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Select message from Maya' }));
-    expect(onToggleSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }));
-  });
+it('shows a checkbox in select mode and toggles on click', async () => {
+  const onToggleSelect = vi.fn();
+  render(<Harness selecting selected={false} onToggleSelect={onToggleSelect} />);
+  await userEvent.click(screen.getByRole('checkbox', { name: 'Select message from Maya' }));
+  expect(onToggleSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }));
+});
 ```
 
 (add `import userEvent from '@testing-library/user-event';` to `thread.test.tsx`.)
@@ -3065,7 +3259,13 @@ export function SelectBar({
       <span className="flex-1 text-[15px] font-semibold" aria-live="polite">
         {count} selected
       </span>
-      <Button variant="ghost" size="icon" onClick={onCopy} disabled={!count} aria-label="Copy selected">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onCopy}
+        disabled={!count}
+        aria-label="Copy selected"
+      >
         <CopyIcon size={20} />
       </Button>
       <Button
@@ -3092,24 +3292,26 @@ In `Bubble.tsx` add props `selecting?: boolean; selected?: boolean; onToggleSele
 - Inside the bubble row, before the avatar slot:
 
 ```tsx
-        {selecting && (
-          <button
-            type="button"
-            role="checkbox"
-            aria-checked={!!selected}
-            aria-label={`Select message from ${senderLabel}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleSelect?.(m);
-            }}
-            className={cn(
-              'touch-target flex h-6 w-6 shrink-0 items-center justify-center self-center rounded-sm border',
-              selected ? 'border-accent bg-accent text-on-accent' : 'border-line-strong bg-surface',
-            )}
-          >
-            {selected && <CheckIcon size={14} aria-hidden="true" />}
-          </button>
-        )}
+{
+  selecting && (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={!!selected}
+      aria-label={`Select message from ${senderLabel}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggleSelect?.(m);
+      }}
+      className={cn(
+        'touch-target flex h-6 w-6 shrink-0 items-center justify-center self-center rounded-sm border',
+        selected ? 'border-accent bg-accent text-on-accent' : 'border-line-strong bg-surface',
+      )}
+    >
+      {selected && <CheckIcon size={14} aria-hidden="true" />}
+    </button>
+  );
+}
 ```
 
 - Hide the hover actions bar while `selecting`.
@@ -3120,25 +3322,28 @@ In `Bubble.tsx` add props `selecting?: boolean; selected?: boolean; onToggleSele
 2. State and helpers:
 
 ```tsx
-  const [selection, setSelection] = useState<Set<string> | null>(null);
-  const [bulkDeleting, setBulkDeleting] = useState(false);
-  useEffect(() => setSelection(null), [id]);
-  const toggle = (mid: string) =>
-    setSelection((s) => {
-      const next = new Set(s ?? []);
-      if (next.has(mid)) next.delete(mid);
-      else next.add(mid);
-      return next;
-    });
-  const selectedMessages = ordered.filter((m) => selection?.has(m.id));
-  const canBulkDelete =
-    selectedMessages.length > 0 &&
-    selectedMessages.every((m) => messageActions(m, m.senderId === userId).includes('delete'));
-  const copySelection = () => {
-    void navigator.clipboard?.writeText(selectionToText(selectedMessages, { nameOf }));
-    toast.show(selectedMessages.length === 1 ? 'Message copied' : `${selectedMessages.length} messages copied`, 'success');
-    setSelection(null);
-  };
+const [selection, setSelection] = useState<Set<string> | null>(null);
+const [bulkDeleting, setBulkDeleting] = useState(false);
+useEffect(() => setSelection(null), [id]);
+const toggle = (mid: string) =>
+  setSelection((s) => {
+    const next = new Set(s ?? []);
+    if (next.has(mid)) next.delete(mid);
+    else next.add(mid);
+    return next;
+  });
+const selectedMessages = ordered.filter((m) => selection?.has(m.id));
+const canBulkDelete =
+  selectedMessages.length > 0 &&
+  selectedMessages.every((m) => messageActions(m, m.senderId === userId).includes('delete'));
+const copySelection = () => {
+  void navigator.clipboard?.writeText(selectionToText(selectedMessages, { nameOf }));
+  toast.show(
+    selectedMessages.length === 1 ? 'Message copied' : `${selectedMessages.length} messages copied`,
+    'success',
+  );
+  setSelection(null);
+};
 ```
 
 3. In the keydown effect, close select mode first:
@@ -3157,22 +3362,22 @@ In `Bubble.tsx` add props `selecting?: boolean; selected?: boolean; onToggleSele
 7. Bulk delete confirm, next to the existing `ConfirmDialog`:
 
 ```tsx
-      <ConfirmDialog
-        open={bulkDeleting}
-        onClose={() => setBulkDeleting(false)}
-        onConfirm={() => {
-          const targets = selectedMessages.map((m) => m.id);
-          setBulkDeleting(false);
-          setSelection(null);
-          void run(async () => {
-            for (const target of targets) await engine!.send(id, { t: 'delete', target });
-          });
-        }}
-        title={`Delete ${selectedMessages.length} messages for everyone?`}
-        description="They are removed on every device in this chat."
-        confirmLabel="Delete"
-        danger
-      />
+<ConfirmDialog
+  open={bulkDeleting}
+  onClose={() => setBulkDeleting(false)}
+  onConfirm={() => {
+    const targets = selectedMessages.map((m) => m.id);
+    setBulkDeleting(false);
+    setSelection(null);
+    void run(async () => {
+      for (const target of targets) await engine!.send(id, { t: 'delete', target });
+    });
+  }}
+  title={`Delete ${selectedMessages.length} messages for everyone?`}
+  description="They are removed on every device in this chat."
+  confirmLabel="Delete"
+  danger
+/>
 ```
 
 (Match the existing `ConfirmDialog` prop names used for single delete in this file — copy them exactly.)
@@ -3194,11 +3399,13 @@ git commit -m "feat(web): select messages to copy or delete together"
 ### Task 11: Web chat-list rows
 
 **Files:**
+
 - Create: `apps/web/src/features/connect/ChatRowParts.tsx`
 - Modify: `apps/web/src/features/connect/InboxPane.tsx`, `apps/web/src/features/connect/hooks.ts`
 - Test: `apps/web/src/features/connect/rows.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `chatRowPreview`, `RowPreview`, `receiptOf`, `formatRowTime`, `formatUnread` (Tasks 1, 3); `Ticks` (Task 7); `useA11y` (Task 6); `joinTypingChannel`, `isMuted`, `muteUntil`, `PreferencePatch`, `SecureConversation` (`@vybora/api`).
 - Produces:
   - `RowPreviewText({ preview, unread }: { preview: RowPreview; unread: boolean })`
@@ -3220,7 +3427,12 @@ import { useInboxTyping } from './hooks';
 const listeners = new Map<string, (who: string, typing: boolean) => void>();
 vi.mock('@vybora/api', async (orig) => ({
   ...(await orig<typeof import('@vybora/api')>()),
-  joinTypingChannel: (_c: unknown, conv: string, _u: string, cb: (who: string, t: boolean) => void) => {
+  joinTypingChannel: (
+    _c: unknown,
+    conv: string,
+    _u: string,
+    cb: (who: string, t: boolean) => void,
+  ) => {
     listeners.set(conv, cb);
     return { send: vi.fn(), leave: vi.fn() };
   },
@@ -3236,19 +3448,34 @@ afterEach(() => {
 
 describe('chat row preview', () => {
   it('shows You: with ticks for my last message', () => {
-    render(<RowPreviewText unread={false} preview={{ prefix: 'You', text: 'See you', receipt: 'read', typing: false }} />);
+    render(
+      <RowPreviewText
+        unread={false}
+        preview={{ prefix: 'You', text: 'See you', receipt: 'read', typing: false }}
+      />,
+    );
     expect(screen.getByText('You:')).toBeInTheDocument();
     expect(screen.getByLabelText('Read')).toBeInTheDocument();
   });
 
   it('shows typing in place of the preview', () => {
-    render(<RowPreviewText unread={false} preview={{ prefix: null, text: 'typing…', receipt: null, typing: true }} />);
+    render(
+      <RowPreviewText
+        unread={false}
+        preview={{ prefix: null, text: 'typing…', receipt: null, typing: true }}
+      />,
+    );
     expect(screen.getByText('typing…')).toHaveClass('text-accent');
   });
 });
 
 describe('chat row menu', () => {
-  const conv = { id: 'c1', pinned: false, archived: false, mutedUntil: null } as unknown as SecureConversation;
+  const conv = {
+    id: 'c1',
+    pinned: false,
+    archived: false,
+    mutedUntil: null,
+  } as unknown as SecureConversation;
   it('offers pin, mute and archive', async () => {
     const onPrefs = vi.fn();
     const onArchive = vi.fn();
@@ -3313,7 +3540,11 @@ export function useInboxTyping(conversationIds: readonly string[], enabled: bool
         const old = timers.get(t);
         if (old) clearTimeout(old);
         update(conv, who, on);
-        if (on) timers.set(t, setTimeout(() => update(conv, who, false), 5000));
+        if (on)
+          timers.set(
+            t,
+            setTimeout(() => update(conv, who, false), 5000),
+          );
       }),
     );
     return () => {
@@ -3329,7 +3560,13 @@ export function useInboxTyping(conversationIds: readonly string[], enabled: bool
 - [ ] **Step 4: Implement `ChatRowParts.tsx`**
 
 ```tsx
-import { ArchiveIcon, BellIcon, BellSlashIcon, PushPinIcon, PushPinSlashIcon } from '@phosphor-icons/react';
+import {
+  ArchiveIcon,
+  BellIcon,
+  BellSlashIcon,
+  PushPinIcon,
+  PushPinSlashIcon,
+} from '@phosphor-icons/react';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import { isMuted, muteUntil, type PreferencePatch, type SecureConversation } from '@vybora/api';
 import type { RowPreview } from '@vybora/core';
@@ -3338,9 +3575,15 @@ import { cn } from '@/lib/cn';
 import { Ticks } from './Bubble';
 
 export function RowPreviewText({ preview, unread }: { preview: RowPreview; unread: boolean }) {
-  if (preview.typing) return <span className="text-msg-sm truncate text-accent">{preview.text}</span>;
+  if (preview.typing)
+    return <span className="text-msg-sm truncate text-accent">{preview.text}</span>;
   return (
-    <span className={cn('text-msg-sm flex min-w-0 items-center gap-1', unread ? 'text-ink' : 'text-muted')}>
+    <span
+      className={cn(
+        'text-msg-sm flex min-w-0 items-center gap-1',
+        unread ? 'text-ink' : 'text-muted',
+      )}
+    >
       {preview.receipt && (
         <span className="shrink-0 text-subtle">
           <Ticks receipt={preview.receipt} />
@@ -3394,7 +3637,11 @@ export function ChatRowMenu({
           className="menu z-50 min-w-48 rounded-md border border-line-strong bg-surface p-1"
         >
           <Item onSelect={() => onPrefs({ pinned: !conv.pinned })}>
-            {conv.pinned ? <PushPinSlashIcon size={16} aria-hidden="true" /> : <PushPinIcon size={16} aria-hidden="true" />}
+            {conv.pinned ? (
+              <PushPinSlashIcon size={16} aria-hidden="true" />
+            ) : (
+              <PushPinIcon size={16} aria-hidden="true" />
+            )}
             {conv.pinned ? 'Unpin' : 'Pin'}
           </Item>
           {muted ? (
@@ -3411,7 +3658,10 @@ export function ChatRowMenu({
               <ContextMenu.Portal>
                 <ContextMenu.SubContent className="menu z-50 min-w-48 rounded-md border border-line-strong bg-surface p-1">
                   {MUTE.map((m) => (
-                    <Item key={m.value} onSelect={() => onPrefs({ muted_until: muteUntil(m.value) })}>
+                    <Item
+                      key={m.value}
+                      onSelect={() => onPrefs({ muted_until: muteUntil(m.value) })}
+                    >
                       {m.label}
                     </Item>
                   ))}
@@ -3436,64 +3686,72 @@ export function ChatRowMenu({
 2. After `previews`:
 
 ```tsx
-  const { prefs: a11y } = useA11y();
-  const recentIds = useMemo(
-    () =>
-      [...convs]
-        .filter((c) => c.id !== activeId && !c.archived)
-        .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt))
-        .slice(0, 20)
-        .map((c) => c.id),
-    [convs, activeId],
-  );
-  const typing = useInboxTyping(recentIds, !!engine);
-  const memberName = (c: SecureConversation, uid: string) => {
-    const m = c.members.find((x) => x.id === uid);
-    return nicknames.data?.[uid] ?? (m?.display_name || m?.username || 'Someone');
-  };
-  const archive = (c: SecureConversation) => {
-    const next = !c.archived;
-    prefs(c, { archived: next });
-    if (next)
-      toast.show('Archived', 'success', { label: 'Undo', onClick: () => prefs(c, { archived: false }) });
-  };
+const { prefs: a11y } = useA11y();
+const recentIds = useMemo(
+  () =>
+    [...convs]
+      .filter((c) => c.id !== activeId && !c.archived)
+      .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt))
+      .slice(0, 20)
+      .map((c) => c.id),
+  [convs, activeId],
+);
+const typing = useInboxTyping(recentIds, !!engine);
+const memberName = (c: SecureConversation, uid: string) => {
+  const m = c.members.find((x) => x.id === uid);
+  return nicknames.data?.[uid] ?? (m?.display_name || m?.username || 'Someone');
+};
+const archive = (c: SecureConversation) => {
+  const next = !c.archived;
+  prefs(c, { archived: next });
+  if (next)
+    toast.show('Archived', 'success', {
+      label: 'Undo',
+      onClick: () => prefs(c, { archived: false }),
+    });
+};
 ```
 
 3. In the row, compute and render:
 
 ```tsx
-            const preview = chatRowPreview(last, {
-              myUserId: userId,
-              isGroup: c.kind === 'group',
-              typingUserIds: typing[c.id] ?? [],
-              nameOf: (uid) => memberName(c, uid),
-              receipt: last ? receiptOf(last, userId, c.members) : undefined,
-            });
-            const muted = isMuted(c) || !c.notificationsEnabled;
+const preview = chatRowPreview(last, {
+  myUserId: userId,
+  isGroup: c.kind === 'group',
+  typingUserIds: typing[c.id] ?? [],
+  nameOf: (uid) => memberName(c, uid),
+  receipt: last ? receiptOf(last, userId, c.members) : undefined,
+});
+const muted = isMuted(c) || !c.notificationsEnabled;
 ```
 
 - Wrap the `<Link …>` in `<ChatRowMenu conv={c} title={title} onPrefs={(p) => prefs(c, p)} onArchive={() => archive(c)}>…</ChatRowMenu>`.
 - Title span: replace `text-[15px]` with `text-msg`.
 - Time: `{formatRowTime(last?.createdAt ?? c.lastMessageAt, new Date())}` (remove `listTime` if now unused).
-- Preview line: replace the `engine ? \`${mine ? 'You: ' : ''}…\`` expression with `engine ? <RowPreviewText preview={preview} unread={unread} /> : (…existing Encrypted fallback…)`.
+- Preview line: replace the `engine ? \`${mine ? 'You: ' : ''}…\``expression with`engine ? <RowPreviewText preview={preview} unread={unread} /> : (…existing Encrypted fallback…)`.
 - Badge: text `{formatUnread(c.unreadCount)}`; class `muted ? 'bg-surface-strong text-ink' : 'bg-accent text-on-accent'` (replacing the fixed `bg-accent text-on-accent`).
 - Hover bar: class `cn('absolute right-2 top-1.5 gap-0.5 rounded-md border border-line bg-surface p-0.5 group-focus-within:flex group-hover:flex', a11y.alwaysShowActions ? 'flex' : 'hidden')`; its archive button calls `archive(c)`; add after it:
 
 ```tsx
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      const link = e.currentTarget.closest('li')?.querySelector<HTMLElement>('[data-chat-link]');
-                      const r = link?.getBoundingClientRect();
-                      link?.dispatchEvent(
-                        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: (r?.right ?? 0) - 40, clientY: (r?.top ?? 0) + 20 }),
-                      );
-                    }}
-                    className="touch-target rounded-sm p-1.5 text-muted hover:bg-surface-muted hover:text-ink"
-                    aria-label={`More actions for ${title}`}
-                  >
-                    <DotsThreeIcon size={14} />
-                  </button>
+<button
+  type="button"
+  onClick={(e) => {
+    const link = e.currentTarget.closest('li')?.querySelector<HTMLElement>('[data-chat-link]');
+    const r = link?.getBoundingClientRect();
+    link?.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: (r?.right ?? 0) - 40,
+        clientY: (r?.top ?? 0) + 20,
+      }),
+    );
+  }}
+  className="touch-target rounded-sm p-1.5 text-muted hover:bg-surface-muted hover:text-ink"
+  aria-label={`More actions for ${title}`}
+>
+  <DotsThreeIcon size={14} />
+</button>
 ```
 
 - Remove the now-unused `mine` and `title=` attributes on those buttons (tooltips come from `aria-label`).
@@ -3515,10 +3773,12 @@ git commit -m "feat(web): chat rows with ticks, sender, typing, badges and row m
 ### Task 12: Web last seen, activity and reciprocal online status
 
 **Files:**
+
 - Modify: `apps/web/src/features/connect/hooks.ts`, `apps/web/src/features/connect/ConnectProvider.tsx`, `apps/web/src/features/connect/ChatPane.tsx`, `apps/web/src/features/connect/InboxPane.tsx`, `apps/web/src/features/connect/PrivacyPage.tsx`
 - Test: `apps/web/src/features/connect/rows.test.tsx` (extend)
 
 **Interfaces:**
+
 - Consumes: `touchActivity`, `fetchLastSeen`, `qk.connect.lastSeen` (Task 5); `headerStatus` (Task 3).
 - Produces: `useLastSeen(userId: string | undefined, enabled: boolean)` → TanStack query whose `data` is `string | null` (never throws to the UI).
 
@@ -3592,22 +3852,22 @@ export function useLastSeen(peerId: string | undefined, enabled: boolean) {
 Add `touchActivity` to the `@vybora/api` import, and after the presence effect:
 
 ```tsx
-  // "Last seen": only recorded while the user shows their online status.
-  useEffect(() => {
-    if (!engine || !userId || !privacy.data?.show_online) return;
-    const touch = () => {
-      if (document.visibilityState === 'visible') void touchActivity(supabase).catch(() => undefined);
-    };
-    touch();
-    const timer = setInterval(touch, 120_000);
-    document.addEventListener('visibilitychange', touch);
-    window.addEventListener('focus', touch);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener('visibilitychange', touch);
-      window.removeEventListener('focus', touch);
-    };
-  }, [engine, userId, privacy.data?.show_online]);
+// "Last seen": only recorded while the user shows their online status.
+useEffect(() => {
+  if (!engine || !userId || !privacy.data?.show_online) return;
+  const touch = () => {
+    if (document.visibilityState === 'visible') void touchActivity(supabase).catch(() => undefined);
+  };
+  touch();
+  const timer = setInterval(touch, 120_000);
+  document.addEventListener('visibilitychange', touch);
+  window.addEventListener('focus', touch);
+  return () => {
+    clearInterval(timer);
+    document.removeEventListener('visibilitychange', touch);
+    window.removeEventListener('focus', touch);
+  };
+}, [engine, userId, privacy.data?.show_online]);
 ```
 
 - [ ] **Step 5: Header and reciprocity in `ChatPane.tsx`**
@@ -3616,15 +3876,18 @@ Add `touchActivity` to the `@vybora/api` import, and after the presence effect:
 2. Reciprocal presence:
 
 ```tsx
-  const showOnline = !!privacy.data?.show_online;
-  useEffect(
-    () => (peerId && showOnline ? watchPresence(supabase, [peerId], (s) => setOnline(s.has(peerId))) : undefined),
-    [peerId, showOnline],
-  );
-  useEffect(() => {
-    if (!showOnline) setOnline(false);
-  }, [showOnline]);
-  const lastSeen = useLastSeen(peerId, showOnline && conv?.kind === 'direct' && !online);
+const showOnline = !!privacy.data?.show_online;
+useEffect(
+  () =>
+    peerId && showOnline
+      ? watchPresence(supabase, [peerId], (s) => setOnline(s.has(peerId)))
+      : undefined,
+  [peerId, showOnline],
+);
+useEffect(() => {
+  if (!showOnline) setOnline(false);
+}, [showOnline]);
+const lastSeen = useLastSeen(peerId, showOnline && conv?.kind === 'direct' && !online);
 ```
 
 (replace the existing `watchPresence` effect.)
@@ -3632,14 +3895,14 @@ Add `touchActivity` to the `@vybora/api` import, and after the presence effect:
 3. Replace the `subtitle` expression:
 
 ```tsx
-  const subtitle = headerStatus({
-    isGroup: conv?.kind === 'group',
-    memberCount: conv?.members.length ?? 0,
-    typingNames,
-    online,
-    lastSeenAt: lastSeen.data ?? null,
-    now: new Date(),
-  });
+const subtitle = headerStatus({
+  isGroup: conv?.kind === 'group',
+  memberCount: conv?.members.length ?? 0,
+  typingNames,
+  online,
+  lastSeenAt: lastSeen.data ?? null,
+  now: new Date(),
+});
 ```
 
 4. In `sendText`, after sending: `if (showOnline) void touchActivity(supabase).catch(() => undefined);`.
@@ -3649,18 +3912,18 @@ Add `touchActivity` to the `@vybora/api` import, and after the presence effect:
 Add a privacy query and gate presence:
 
 ```tsx
-  const privacy = useQuery({
-    queryKey: qk.connect.privacy,
-    queryFn: () => fetchConnectPrivacy(supabase, userId),
-  });
-  const showOnline = !!privacy.data?.show_online;
-  useEffect(() => {
-    if (!peersKey || !showOnline) {
-      setOnline(new Set());
-      return;
-    }
-    return watchPresence(supabase, peersKey.split(','), setOnline);
-  }, [peersKey, showOnline]);
+const privacy = useQuery({
+  queryKey: qk.connect.privacy,
+  queryFn: () => fetchConnectPrivacy(supabase, userId),
+});
+const showOnline = !!privacy.data?.show_online;
+useEffect(() => {
+  if (!peersKey || !showOnline) {
+    setOnline(new Set());
+    return;
+  }
+  return watchPresence(supabase, peersKey.split(','), setOnline);
+}, [peersKey, showOnline]);
 ```
 
 (replace the existing presence effect; import `useQuery`, `fetchConnectPrivacy`.)
@@ -3668,12 +3931,14 @@ Add a privacy query and gate presence:
 - [ ] **Step 7: Privacy copy in `PrivacyPage.tsx`**
 
 ```tsx
-        {toggle(
-          'show_online',
-          'Show when I’m online and last seen',
-          'Only people you share a chat with can see it. If you turn this off, you won’t see other people’s either.',
-          <CircleIcon size={18} />,
-        )}
+{
+  toggle(
+    'show_online',
+    'Show when I’m online and last seen',
+    'Only people you share a chat with can see it. If you turn this off, you won’t see other people’s either.',
+    <CircleIcon size={18} />,
+  );
+}
 ```
 
 - [ ] **Step 8: Run tests and typecheck**
@@ -3693,11 +3958,13 @@ git commit -m "feat(web): last seen in chat header, reciprocal online status"
 ### Task 13: Mobile accessibility provider, screen, text scaling, high contrast
 
 **Files:**
+
 - Create: `apps/mobile/src/lib/a11y.tsx`, `apps/mobile/src/lib/haptics.ts`, `apps/mobile/src/app/messages/accessibility.tsx`
 - Modify: `apps/mobile/src/lib/theme.ts`, `apps/mobile/src/components/Text.tsx`, `apps/mobile/src/app/_layout.tsx`, `apps/mobile/src/app/settings.tsx`
 - Test: `apps/mobile/src/__tests__/a11y.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `A11yPrefs`, `DEFAULT_A11Y_PREFS`, `parseA11yPrefs`, `resolveReduceMotion`, `TEXT_SIZE_PX`, `A11Y_STORAGE_KEY` (Task 4); `highContrastThemes` (Task 4).
 - Produces:
   - `A11yProvider`, `useA11y(): { prefs; setPrefs(patch); reduceMotion: boolean; textScale: number }` (defaults outside the provider)
@@ -3742,7 +4009,10 @@ describe('Accessibility screen', () => {
         expect.stringContaining('"highContrast":true'),
       ),
     );
-    expect(mockSet).toHaveBeenLastCalledWith(A11Y_STORAGE_KEY, expect.stringContaining('"textSize":"lg"'));
+    expect(mockSet).toHaveBeenLastCalledWith(
+      A11Y_STORAGE_KEY,
+      expect.stringContaining('"textSize":"lg"'),
+    );
   });
 
   it('loads saved settings', async () => {
@@ -3753,7 +4023,9 @@ describe('Accessibility screen', () => {
       </A11yProvider>,
     );
     await waitFor(() =>
-      expect(screen.getByRole('radio', { name: 'Extra large' })).toHaveProp('accessibilityState', { checked: true }),
+      expect(screen.getByRole('radio', { name: 'Extra large' })).toHaveProp('accessibilityState', {
+        checked: true,
+      }),
     );
   });
 });
@@ -3828,7 +4100,9 @@ export function A11yProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    void AccessibilityInfo.isReduceMotionEnabled().then(setSystemReduced).catch(() => undefined);
+    void AccessibilityInfo.isReduceMotionEnabled()
+      .then(setSystemReduced)
+      .catch(() => undefined);
     const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setSystemReduced);
     return () => sub.remove();
   }, []);
@@ -3887,7 +4161,14 @@ export function useHaptics() {
 `lib/theme.ts`:
 
 ```ts
-import { highContrastThemes, iconSizes, radii, spacing, themes, type ThemeTokens } from '@vybora/config';
+import {
+  highContrastThemes,
+  iconSizes,
+  radii,
+  spacing,
+  themes,
+  type ThemeTokens,
+} from '@vybora/config';
 import { useColorScheme } from 'react-native';
 import { useA11y } from './a11y';
 
@@ -3907,22 +4188,21 @@ export function useTheme(): ThemeTokens & { dark: boolean } {
 ```tsx
 import { useA11y } from '@/lib/a11y';
 // …
-export const Text = forwardRef<RNText, TextProps & { mono?: boolean; scale?: boolean }>(function Text(
-  { style, mono, scale, ...rest },
-  ref,
-) {
-  const { textScale } = useA11y();
-  const flat = withFamily(style, mono);
-  const scaled =
-    scale && textScale !== 1
-      ? {
-          ...flat,
-          fontSize: flat.fontSize ? flat.fontSize * textScale : undefined,
-          lineHeight: flat.lineHeight ? flat.lineHeight * textScale : undefined,
-        }
-      : flat;
-  return <RNText ref={ref} {...rest} style={scaled} />;
-});
+export const Text = forwardRef<RNText, TextProps & { mono?: boolean; scale?: boolean }>(
+  function Text({ style, mono, scale, ...rest }, ref) {
+    const { textScale } = useA11y();
+    const flat = withFamily(style, mono);
+    const scaled =
+      scale && textScale !== 1
+        ? {
+            ...flat,
+            fontSize: flat.fontSize ? flat.fontSize * textScale : undefined,
+            lineHeight: flat.lineHeight ? flat.lineHeight * textScale : undefined,
+          }
+        : flat;
+    return <RNText ref={ref} {...rest} style={scaled} />;
+  },
+);
 ```
 
 Apply `scale` to message text in `Bubble.tsx` (body, caption), the row title and preview in `app/messages/index.tsx`, and the composer `TextInput` (add the same scaling to `TextInput` via a `scale` prop, used by `Composer.tsx`).
@@ -3984,7 +4264,9 @@ function Segmented<T extends string>({
               backgroundColor: on ? cc.accent : 'transparent',
             }}
           >
-            <Text style={{ color: on ? cc.onAccent : cc.text, fontWeight: '500', fontSize: 14 }}>{o.label}</Text>
+            <Text style={{ color: on ? cc.onAccent : cc.text, fontWeight: '500', fontSize: 14 }}>
+              {o.label}
+            </Text>
           </Pressable>
         );
       })}
@@ -4004,9 +4286,20 @@ export default function AccessibilityScreen() {
     />
   );
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: cc.night }} contentContainerStyle={{ padding: 16, gap: 20 }}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: cc.night }}
+      contentContainerStyle={{ padding: 16, gap: 20 }}
+    >
       <SectionCard title="Motion & gestures">
-        <Text style={{ color: cc.text, fontSize: 15, fontWeight: '500', paddingHorizontal: 16, paddingTop: 12 }}>
+        <Text
+          style={{
+            color: cc.text,
+            fontSize: 15,
+            fontWeight: '500',
+            paddingHorizontal: 16,
+            paddingTop: 12,
+          }}
+        >
           Reduce motion
         </Text>
         <Segmented<ReduceMotionPref>
@@ -4023,7 +4316,9 @@ export default function AccessibilityScreen() {
           icon="corner-up-left"
           label="Swipe to reply"
           description="Drag a message right to reply. Reply is always in the long-press menu."
-          right={toggle('Swipe to reply', prefs.swipeToReply, (swipeToReply) => setPrefs({ swipeToReply }))}
+          right={toggle('Swipe to reply', prefs.swipeToReply, (swipeToReply) =>
+            setPrefs({ swipeToReply }),
+          )}
         />
         <Row
           icon="smartphone"
@@ -4070,18 +4365,24 @@ export default function AccessibilityScreen() {
           icon="eye"
           label="High contrast"
           description="Stronger text and borders in light and dark themes."
-          right={toggle('High contrast', prefs.highContrast, (highContrast) => setPrefs({ highContrast }))}
+          right={toggle('High contrast', prefs.highContrast, (highContrast) =>
+            setPrefs({ highContrast }),
+          )}
         />
         <Row
           icon="more-horizontal"
           label="Always show message actions"
           description="Show a reply button on every message instead of only in the long-press menu."
-          right={toggle('Always show message actions', prefs.alwaysShowActions, (alwaysShowActions) =>
-            setPrefs({ alwaysShowActions }),
+          right={toggle(
+            'Always show message actions',
+            prefs.alwaysShowActions,
+            (alwaysShowActions) => setPrefs({ alwaysShowActions }),
           )}
         />
       </SectionCard>
-      <Text style={{ color: cc.textSubtle, fontSize: 12, paddingHorizontal: 4 }}>Saved on this device only.</Text>
+      <Text style={{ color: cc.textSubtle, fontSize: 12, paddingHorizontal: 4 }}>
+        Saved on this device only.
+      </Text>
     </ScrollView>
   );
 }
@@ -4090,6 +4391,7 @@ export default function AccessibilityScreen() {
 - [ ] **Step 6: Wire provider, route, settings link**
 
 `app/_layout.tsx`:
+
 - `import { A11yProvider } from '@/lib/a11y';`
 - In `RootLayout`, wrap: `<GestureHandlerRootView style={{ flex: 1 }}><A11yProvider><SafeAreaProvider>…</SafeAreaProvider></A11yProvider></GestureHandlerRootView>`.
 - In `Navigator`'s `<Stack>`, add `<Stack.Screen name="messages/accessibility" options={{ title: 'Accessibility' }} />`.
@@ -4097,14 +4399,14 @@ export default function AccessibilityScreen() {
 `app/settings.tsx` — new card after "Privacy & security":
 
 ```tsx
-        <SectionCard title="Accessibility">
-          <Row
-            icon="eye"
-            label="Accessibility"
-            description="Motion, text size, contrast, gestures"
-            onPress={() => router.push('/messages/accessibility')}
-          />
-        </SectionCard>
+<SectionCard title="Accessibility">
+  <Row
+    icon="eye"
+    label="Accessibility"
+    description="Motion, text size, contrast, gestures"
+    onPress={() => router.push('/messages/accessibility')}
+  />
+</SectionCard>
 ```
 
 - [ ] **Step 7: Run tests and typecheck**
@@ -4125,11 +4427,13 @@ git commit -m "feat(mobile): Settings → Accessibility, text scaling, high cont
 ### Task 14: Mobile conversation layout (runs, tails, date chips, unread, jump, announcements)
 
 **Files:**
+
 - Create: `apps/mobile/src/features/connect/ui/ThreadParts.tsx`
 - Modify: `apps/mobile/src/features/connect/ui/Bubble.tsx`, `apps/mobile/src/app/messages/[id].tsx`
 - Test: `apps/mobile/src/__tests__/thread.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `layoutThread`, `ThreadItem`, `receiptOf`, `messageSummary`, `dayLabel`, `formatClock`, `formatUnread` (Tasks 1–3); `useA11y`, `useHaptics` (Task 13).
 - Produces:
   - `DateChip({ label, floating }: { label: string; floating?: boolean })`, `UnreadDivider({ count })`, `JumpToLatest({ count, onPress })`
@@ -4249,9 +4553,21 @@ export function DateChip({ label, floating }: { label: string; floating?: boolea
 export function UnreadDivider({ count }: { count: number }) {
   const cc = useCc();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 10, paddingHorizontal: 12 }}>
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        marginVertical: 10,
+        paddingHorizontal: 12,
+      }}
+    >
       <View style={{ flex: 1, height: 1, backgroundColor: cc.accent }} />
-      <Text mono accessibilityRole="header" style={{ color: cc.accent, fontSize: 11, fontWeight: '500' }}>
+      <Text
+        mono
+        accessibilityRole="header"
+        style={{ color: cc.accent, fontSize: 11, fontWeight: '500' }}
+      >
         {count === 1 ? '1 unread message' : `${count} unread messages`}
       </Text>
       <View style={{ flex: 1, height: 1, backgroundColor: cc.accent }} />
@@ -4328,7 +4644,9 @@ function Tail({ mine, fill, stroke }: { mine: boolean; fill: string; stroke?: st
       }}
     >
       <Path d="M0 0C0.5 6 3.5 9 8 10H0Z" fill={fill} />
-      {stroke ? <Path d="M0 0C0.5 6 3.5 9 8 10H0" fill="none" stroke={stroke} strokeWidth={1} /> : null}
+      {stroke ? (
+        <Path d="M0 0C0.5 6 3.5 9 8 10H0" fill="none" stroke={stroke} strokeWidth={1} />
+      ) : null}
     </Svg>
   );
 }
@@ -4364,147 +4682,165 @@ function Tail({ mine, fill, stroke }: { mine: boolean; fill: string; stroke?: st
 2. Rows for the inverted list:
 
 ```tsx
-  const [readMark, setReadMark] = useState<{ id: string; seq: number } | null>(null);
-  useEffect(() => {
-    if (conv && readMark?.id !== id) setReadMark({ id, seq: conv.lastReadSeq });
-  }, [conv, id, readMark?.id]);
-  const rows = useMemo(
-    () =>
-      layoutThread([...ordered].reverse(), {
-        myUserId: userId,
-        lastReadSeq: readMark?.id === id ? readMark.seq : Number.MAX_SAFE_INTEGER,
-        now: new Date(),
-      }).reverse(),
-    [ordered, userId, readMark, id],
-  );
+const [readMark, setReadMark] = useState<{ id: string; seq: number } | null>(null);
+useEffect(() => {
+  if (conv && readMark?.id !== id) setReadMark({ id, seq: conv.lastReadSeq });
+}, [conv, id, readMark?.id]);
+const rows = useMemo(
+  () =>
+    layoutThread([...ordered].reverse(), {
+      myUserId: userId,
+      lastReadSeq: readMark?.id === id ? readMark.seq : Number.MAX_SAFE_INTEGER,
+      now: new Date(),
+    }).reverse(),
+  [ordered, userId, readMark, id],
+);
 ```
 
 3. Floating date chip, jump button and announcements:
 
 ```tsx
-  const { reduceMotion } = useA11y();
-  const list = useRef<FlatList<(typeof rows)[number]>>(null);
-  const [floatingDay, setFloatingDay] = useState<string | null>(null);
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [away, setAway] = useState(false);
-  const [newCount, setNewCount] = useState(0);
-  const lastSeenSeq = useRef(0);
-  const onViewable = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    // Inverted list: the highest index on screen is the oldest (top) row.
-    const top = viewableItems.reduce<ViewToken | null>((a, b) => ((b.index ?? 0) > (a?.index ?? -1) ? b : a), null);
-    const item = top?.item as (typeof rows)[number] | undefined;
-    if (!item) return;
-    setFloatingDay(item.type === 'message' ? dayLabel(item.message.createdAt, new Date()) : item.type === 'date' ? item.label : null);
-  }).current;
-  const scheduleHide = () => {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setFloatingDay(null), reduceMotion ? 0 : 1500);
-  };
+const { reduceMotion } = useA11y();
+const list = useRef<FlatList<(typeof rows)[number]>>(null);
+const [floatingDay, setFloatingDay] = useState<string | null>(null);
+const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+const [away, setAway] = useState(false);
+const [newCount, setNewCount] = useState(0);
+const lastSeenSeq = useRef(0);
+const onViewable = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+  // Inverted list: the highest index on screen is the oldest (top) row.
+  const top = viewableItems.reduce<ViewToken | null>(
+    (a, b) => ((b.index ?? 0) > (a?.index ?? -1) ? b : a),
+    null,
+  );
+  const item = top?.item as (typeof rows)[number] | undefined;
+  if (!item) return;
+  setFloatingDay(
+    item.type === 'message'
+      ? dayLabel(item.message.createdAt, new Date())
+      : item.type === 'date'
+        ? item.label
+        : null,
+  );
+}).current;
+const scheduleHide = () => {
+  if (hideTimer.current) clearTimeout(hideTimer.current);
+  hideTimer.current = setTimeout(() => setFloatingDay(null), reduceMotion ? 0 : 1500);
+};
 
-  useEffect(() => {
-    lastSeenSeq.current = 0;
-    setNewCount(0);
-  }, [id]);
-  useEffect(() => {
-    const newest = ordered[0]?.seq ?? 0;
-    if (!away || !lastSeenSeq.current) {
-      lastSeenSeq.current = Math.max(lastSeenSeq.current, newest);
-      setNewCount(0);
-      return;
-    }
-    const fresh = ordered.filter((m) => (m.seq ?? 0) > lastSeenSeq.current && m.senderId !== userId).length;
-    if (fresh) setNewCount((c) => c + fresh);
+useEffect(() => {
+  lastSeenSeq.current = 0;
+  setNewCount(0);
+}, [id]);
+useEffect(() => {
+  const newest = ordered[0]?.seq ?? 0;
+  if (!away || !lastSeenSeq.current) {
     lastSeenSeq.current = Math.max(lastSeenSeq.current, newest);
-  }, [ordered, userId, away]);
+    setNewCount(0);
+    return;
+  }
+  const fresh = ordered.filter(
+    (m) => (m.seq ?? 0) > lastSeenSeq.current && m.senderId !== userId,
+  ).length;
+  if (fresh) setNewCount((c) => c + fresh);
+  lastSeenSeq.current = Math.max(lastSeenSeq.current, newest);
+}, [ordered, userId, away]);
 
-  const announced = useRef<{ conv: string; id: string } | null>(null);
-  useEffect(() => {
-    if (!messages.isSuccess) return;
-    const newest = ordered.find((m) => m.senderId !== userId);
-    if (announced.current?.conv !== id) {
-      announced.current = { conv: id, id: newest?.id ?? '' };
-      return;
-    }
-    if (!newest || newest.id === announced.current.id) return;
-    announced.current = { conv: id, id: newest.id };
-    const muted = conv ? isMuted(conv) || !conv.notificationsEnabled : true;
-    if (!muted) AccessibilityInfo.announceForAccessibility(`${nameOf(newest.senderId)}: ${messageSummary(newest)}`);
-  }, [ordered, messages.isSuccess, userId, id, conv, nameOf]);
+const announced = useRef<{ conv: string; id: string } | null>(null);
+useEffect(() => {
+  if (!messages.isSuccess) return;
+  const newest = ordered.find((m) => m.senderId !== userId);
+  if (announced.current?.conv !== id) {
+    announced.current = { conv: id, id: newest?.id ?? '' };
+    return;
+  }
+  if (!newest || newest.id === announced.current.id) return;
+  announced.current = { conv: id, id: newest.id };
+  const muted = conv ? isMuted(conv) || !conv.notificationsEnabled : true;
+  if (!muted)
+    AccessibilityInfo.announceForAccessibility(
+      `${nameOf(newest.senderId)}: ${messageSummary(newest)}`,
+    );
+}, [ordered, messages.isSuccess, userId, id, conv, nameOf]);
 
-  // Open at the unread divider once per chat.
-  const positioned = useRef<string | null>(null);
-  useEffect(() => {
-    if (positioned.current === id || readMark?.id !== id || !rows.length) return;
-    positioned.current = id;
-    const index = rows.findIndex((r) => r.type === 'unread');
-    if (index > 0) list.current?.scrollToIndex({ index, viewPosition: 1, animated: false });
-  }, [rows, id, readMark]);
+// Open at the unread divider once per chat.
+const positioned = useRef<string | null>(null);
+useEffect(() => {
+  if (positioned.current === id || readMark?.id !== id || !rows.length) return;
+  positioned.current = id;
+  const index = rows.findIndex((r) => r.type === 'unread');
+  if (index > 0) list.current?.scrollToIndex({ index, viewPosition: 1, animated: false });
+}, [rows, id, readMark]);
 ```
 
 4. Replace the `FlatList` props:
 
 ```tsx
-        <View style={{ flex: 1 }}>
-          <FlatList
-            ref={list}
-            inverted
-            data={rows}
-            keyExtractor={(r) => r.key}
-            contentContainerStyle={{ paddingVertical: 12 }}
-            onViewableItemsChanged={onViewable}
-            viewabilityConfig={{ itemVisiblePercentThreshold: 10 }}
-            onScroll={(e) => {
-              const { contentOffset, layoutMeasurement } = e.nativeEvent;
-              setAway(contentOffset.y > layoutMeasurement.height);
-            }}
-            scrollEventThrottle={100}
-            onScrollEndDrag={scheduleHide}
-            onMomentumScrollEnd={scheduleHide}
-            onScrollToIndexFailed={(info) =>
-              list.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false })
-            }
-            renderItem={({ item }) => {
-              if (item.type === 'date') return <DateChip label={item.label} />;
-              if (item.type === 'unread') return <UnreadDivider count={item.count} />;
-              const m = item.message;
-              const group = conv?.kind === 'group';
-              const sender = conv?.members.find((x) => x.id === m.senderId);
-              return (
-                <Bubble
-                  message={m}
-                  mine={item.mine}
-                  theme={def}
-                  senderName={group ? nameOf(m.senderId) : undefined}
-                  showSender={!!group && item.runStart}
-                  runStart={item.runStart}
-                  runEnd={item.runEnd}
-                  avatar={group && !item.mine ? { path: sender?.avatar_path ?? null, name: sender?.username ?? '?' } : undefined}
-                  receipt={receiptOf(m, userId, conv?.members ?? [])}
-                  onLongPress={setSelected}
-                  onRetry={(x) => void run(() => engine!.retry(id, x.id))}
-                  onOpenImage={setViewer}
-                  nameOf={nameOf}
-                />
-              );
-            }}
-            ListFooterComponent={/* unchanged */}
-            ListEmptyComponent={/* unchanged */}
-          />
-          {floatingDay && (
-            <View style={{ position: 'absolute', top: 8, left: 0, right: 0 }} pointerEvents="none">
-              <DateChip label={floatingDay} floating />
-            </View>
-          )}
-          {away && (
-            <JumpToLatest
-              count={newCount}
-              onPress={() => {
-                setNewCount(0);
-                list.current?.scrollToOffset({ offset: 0, animated: !reduceMotion });
-              }}
-            />
-          )}
-        </View>
+<View style={{ flex: 1 }}>
+  <FlatList
+    ref={list}
+    inverted
+    data={rows}
+    keyExtractor={(r) => r.key}
+    contentContainerStyle={{ paddingVertical: 12 }}
+    onViewableItemsChanged={onViewable}
+    viewabilityConfig={{ itemVisiblePercentThreshold: 10 }}
+    onScroll={(e) => {
+      const { contentOffset, layoutMeasurement } = e.nativeEvent;
+      setAway(contentOffset.y > layoutMeasurement.height);
+    }}
+    scrollEventThrottle={100}
+    onScrollEndDrag={scheduleHide}
+    onMomentumScrollEnd={scheduleHide}
+    onScrollToIndexFailed={(info) =>
+      list.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false })
+    }
+    renderItem={({ item }) => {
+      if (item.type === 'date') return <DateChip label={item.label} />;
+      if (item.type === 'unread') return <UnreadDivider count={item.count} />;
+      const m = item.message;
+      const group = conv?.kind === 'group';
+      const sender = conv?.members.find((x) => x.id === m.senderId);
+      return (
+        <Bubble
+          message={m}
+          mine={item.mine}
+          theme={def}
+          senderName={group ? nameOf(m.senderId) : undefined}
+          showSender={!!group && item.runStart}
+          runStart={item.runStart}
+          runEnd={item.runEnd}
+          avatar={
+            group && !item.mine
+              ? { path: sender?.avatar_path ?? null, name: sender?.username ?? '?' }
+              : undefined
+          }
+          receipt={receiptOf(m, userId, conv?.members ?? [])}
+          onLongPress={setSelected}
+          onRetry={(x) => void run(() => engine!.retry(id, x.id))}
+          onOpenImage={setViewer}
+          nameOf={nameOf}
+        />
+      );
+    }}
+    ListFooterComponent={/* unchanged */}
+    ListEmptyComponent={/* unchanged */}
+  />
+  {floatingDay && (
+    <View style={{ position: 'absolute', top: 8, left: 0, right: 0 }} pointerEvents="none">
+      <DateChip label={floatingDay} floating />
+    </View>
+  )}
+  {away && (
+    <JumpToLatest
+      count={newCount}
+      onPress={() => {
+        setNewCount(0);
+        list.current?.scrollToOffset({ offset: 0, animated: !reduceMotion });
+      }}
+    />
+  )}
+</View>
 ```
 
 - [ ] **Step 6: Run tests and typecheck**
@@ -4524,11 +4860,13 @@ git commit -m "feat(mobile): runs with tails, date chips, unread divider, jump t
 ### Task 15: Mobile swipe-to-reply, message menu, select mode
 
 **Files:**
+
 - Create: `apps/mobile/src/features/connect/ui/SwipeToReply.tsx`
 - Modify: `apps/mobile/src/features/connect/ui/MessageActions.tsx`, `apps/mobile/src/features/connect/ui/Bubble.tsx`, `apps/mobile/src/app/messages/[id].tsx`
 - Test: `apps/mobile/src/__tests__/thread.test.tsx` (extend)
 
 **Interfaces:**
+
 - Consumes: `SWIPE_REPLY_THRESHOLD`, `swipeReplyDecision`, `messageActions`, `MessageAction`, `selectionToText` (Task 3); `useA11y`, `useHaptics` (Task 13).
 - Produces:
   - `SwipeToReply({ children, onReply, enabled, color }: { children: ReactNode; onReply: () => void; enabled: boolean; color: string })`
@@ -4691,7 +5029,10 @@ export function SwipeToReply({
       <View>
         <Animated.View
           pointerEvents="none"
-          style={[{ position: 'absolute', left: 16, top: 0, bottom: 0, justifyContent: 'center' }, icon]}
+          style={[
+            { position: 'absolute', left: 16, top: 0, bottom: 0, justifyContent: 'center' },
+            icon,
+          ]}
         >
           <Icon name="corner-up-left" size={20} color={color} />
         </Animated.View>
@@ -4710,25 +5051,27 @@ In mobile `Bubble.tsx` add props `selecting?: boolean; selected?: boolean; onTog
 - Before the avatar slot, when `selecting`:
 
 ```tsx
-        {selecting && (
-          <View
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: radii.sm,
-              borderWidth: 1,
-              borderColor: selected ? cc.accent : cc.lineStrong,
-              backgroundColor: selected ? cc.accent : 'transparent',
-              alignItems: 'center',
-              justifyContent: 'center',
-              alignSelf: 'center',
-            }}
-          >
-            {selected && <Icon name="check" size={14} color={cc.onAccent} />}
-          </View>
-        )}
+{
+  selecting && (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={{
+        width: 22,
+        height: 22,
+        borderRadius: radii.sm,
+        borderWidth: 1,
+        borderColor: selected ? cc.accent : cc.lineStrong,
+        backgroundColor: selected ? cc.accent : 'transparent',
+        alignItems: 'center',
+        justifyContent: 'center',
+        alignSelf: 'center',
+      }}
+    >
+      {selected && <Icon name="check" size={14} color={cc.onAccent} />}
+    </View>
+  );
+}
 ```
 
 - When `showReplyButton && !selecting`, render a 44×44 `Pressable` with `accessibilityLabel="Reply"` and the `corner-up-left` icon beside the bubble that calls `onReply?.(m)`.
@@ -4739,22 +5082,22 @@ In mobile `Bubble.tsx` add props `selecting?: boolean; selected?: boolean; onTog
 2. State:
 
 ```tsx
-  const haptic = useHaptics();
-  const { prefs: a11y } = useA11y();
-  const [selection, setSelection] = useState<Set<string> | null>(null);
-  useEffect(() => setSelection(null), [id]);
-  const toggle = (mid: string) =>
-    setSelection((s) => {
-      const next = new Set(s ?? []);
-      if (next.has(mid)) next.delete(mid);
-      else next.add(mid);
-      return next;
-    });
-  const selectedMessages = [...ordered].reverse().filter((m) => selection?.has(m.id));
-  const canBulkDelete =
-    selectedMessages.length > 0 &&
-    selectedMessages.every((m) => messageActions(m, m.senderId === userId).includes('delete'));
-  const startReply = (m: LocalMessage) => setReplyTo(m);
+const haptic = useHaptics();
+const { prefs: a11y } = useA11y();
+const [selection, setSelection] = useState<Set<string> | null>(null);
+useEffect(() => setSelection(null), [id]);
+const toggle = (mid: string) =>
+  setSelection((s) => {
+    const next = new Set(s ?? []);
+    if (next.has(mid)) next.delete(mid);
+    else next.add(mid);
+    return next;
+  });
+const selectedMessages = [...ordered].reverse().filter((m) => selection?.has(m.id));
+const canBulkDelete =
+  selectedMessages.length > 0 &&
+  selectedMessages.every((m) => messageActions(m, m.senderId === userId).includes('delete'));
+const startReply = (m: LocalMessage) => setReplyTo(m);
 ```
 
 3. Wrap each `Bubble` in `renderItem`:
@@ -4783,33 +5126,43 @@ In mobile `Bubble.tsx` add props `selecting?: boolean; selected?: boolean; onTog
 4. Replace the `MessageActions` usage:
 
 ```tsx
-      <MessageActions
-        message={selected}
-        actions={selected ? messageActions(selected, selected.senderId === userId) : []}
-        myReaction={
-          selected ? (Object.entries(selected.reactions).find(([, u]) => u.includes(userId))?.[0] ?? null) : null
-        }
-        onClose={() => setSelected(null)}
-        onReact={(emoji) => {
-          const m = selected!;
-          const mine = m.reactions[emoji]?.includes(userId);
-          haptic('selection');
-          setSelected(null);
-          void run(() => engine!.send(id, { t: 'reaction', target: m.id, emoji, remove: mine }));
-        }}
-        onAction={(a: MessageAction) => {
-          const m = selected!;
-          setSelected(null);
-          if (a === 'reply') startReply(m);
-          else if (a === 'copy') void Clipboard.setStringAsync(m.body ?? '');
-          else if (a === 'select') setSelection(new Set([m.id]));
-          else if (a === 'delete')
-            Alert.alert('Delete for everyone?', 'This removes the message on every device in this chat.', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Delete', style: 'destructive', onPress: () => void run(() => engine!.send(id, { t: 'delete', target: m.id })) },
-            ]);
-        }}
-      />
+<MessageActions
+  message={selected}
+  actions={selected ? messageActions(selected, selected.senderId === userId) : []}
+  myReaction={
+    selected
+      ? (Object.entries(selected.reactions).find(([, u]) => u.includes(userId))?.[0] ?? null)
+      : null
+  }
+  onClose={() => setSelected(null)}
+  onReact={(emoji) => {
+    const m = selected!;
+    const mine = m.reactions[emoji]?.includes(userId);
+    haptic('selection');
+    setSelected(null);
+    void run(() => engine!.send(id, { t: 'reaction', target: m.id, emoji, remove: mine }));
+  }}
+  onAction={(a: MessageAction) => {
+    const m = selected!;
+    setSelected(null);
+    if (a === 'reply') startReply(m);
+    else if (a === 'copy') void Clipboard.setStringAsync(m.body ?? '');
+    else if (a === 'select') setSelection(new Set([m.id]));
+    else if (a === 'delete')
+      Alert.alert(
+        'Delete for everyone?',
+        'This removes the message on every device in this chat.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => void run(() => engine!.send(id, { t: 'delete', target: m.id })),
+          },
+        ],
+      );
+  }}
+/>
 ```
 
 5. Header while selecting — in the `Stack.Screen options`, when `selection` is set, use:
@@ -4892,11 +5245,13 @@ git commit -m "feat(mobile): swipe to reply with haptics, message menu with Sele
 ### Task 16: Mobile chat-list rows
 
 **Files:**
+
 - Create: `apps/mobile/src/features/connect/ui/UndoBar.tsx`
 - Modify: `apps/mobile/src/app/messages/index.tsx`, `apps/mobile/src/features/connect/hooks.ts`
 - Test: `apps/mobile/src/__tests__/thread.test.tsx` (extend)
 
 **Interfaces:**
+
 - Consumes: `chatRowPreview`, `RowPreview`, `receiptOf`, `formatRowTime`, `formatUnread` (Tasks 1, 3); `Ticks` (Task 14); `useHaptics` (Task 13).
 - Produces:
   - `UndoBar({ message, onUndo, onDone }: { message: string; onUndo: () => void; onDone: () => void })` — visible 5 s
@@ -4911,11 +5266,19 @@ import { RowPreviewLine } from '@/app/messages/index';
 describe('mobile chat row preview', () => {
   it('shows You: with ticks, and typing in the accent colour', () => {
     const { rerender } = render(
-      <RowPreviewLine unread={false} preview={{ prefix: 'You', text: 'See you', receipt: 'read', typing: false }} />,
+      <RowPreviewLine
+        unread={false}
+        preview={{ prefix: 'You', text: 'See you', receipt: 'read', typing: false }}
+      />,
     );
     expect(screen.getByText('You: See you')).toBeTruthy();
     expect(screen.getByLabelText('Read')).toBeTruthy();
-    rerender(<RowPreviewLine unread={false} preview={{ prefix: null, text: 'typing…', receipt: null, typing: true }} />);
+    rerender(
+      <RowPreviewLine
+        unread={false}
+        preview={{ prefix: null, text: 'typing…', receipt: null, typing: true }}
+      />,
+    );
     expect(screen.getByText('typing…')).toBeTruthy();
   });
 });
@@ -4936,7 +5299,15 @@ import { radii } from '@/lib/theme';
 import { useCc } from './primitives';
 
 /** "Archived · Undo" bar above the bottom edge; disappears after 5 seconds. */
-export function UndoBar({ message, onUndo, onDone }: { message: string; onUndo: () => void; onDone: () => void }) {
+export function UndoBar({
+  message,
+  onUndo,
+  onDone,
+}: {
+  message: string;
+  onUndo: () => void;
+  onDone: () => void;
+}) {
   const cc = useCc();
   useEffect(() => {
     const t = setTimeout(onDone, 5000);
@@ -4990,7 +5361,11 @@ export function RowPreviewLine({ preview, unread }: { preview: RowPreview; unrea
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
       {preview.receipt && <Ticks receipt={preview.receipt} color={cc.textSubtle} />}
-      <Text scale style={{ color: unread ? cc.text : cc.textMuted, fontSize: 14, flex: 1 }} numberOfLines={1}>
+      <Text
+        scale
+        style={{ color: unread ? cc.text : cc.textMuted, fontSize: 14, flex: 1 }}
+        numberOfLines={1}
+      >
         {preview.prefix ? `${preview.prefix}: ${preview.text}` : preview.text}
       </Text>
     </View>
@@ -5002,29 +5377,37 @@ export function RowPreviewLine({ preview, unread }: { preview: RowPreview; unrea
 4. In `Inbox`:
 
 ```tsx
-  const focused = useIsFocused();
-  const haptic = useHaptics();
-  const [undo, setUndo] = useState<{ message: string; run: () => void } | null>(null);
-  const recentIds = useMemo(
-    () => [...convs].filter((c) => !c.archived).sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt)).slice(0, 20).map((c) => c.id),
-    [convs],
+const focused = useIsFocused();
+const haptic = useHaptics();
+const [undo, setUndo] = useState<{ message: string; run: () => void } | null>(null);
+const recentIds = useMemo(
+  () =>
+    [...convs]
+      .filter((c) => !c.archived)
+      .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt))
+      .slice(0, 20)
+      .map((c) => c.id),
+  [convs],
+);
+// Leave the typing channels while a chat is open on top (it joins its own).
+const typing = useInboxTyping(recentIds, focused);
+const memberName = (c: SecureConversation, uid: string) => {
+  const m = c.members.find((x) => x.id === uid);
+  return nicknames.data?.[uid] ?? m?.display_name ?? m?.username ?? 'Someone';
+};
+const setPrefs = (
+  c: SecureConversation,
+  patch: Parameters<typeof updateConversationPreferences>[3],
+) =>
+  void updateConversationPreferences(supabase, userId, c.id, patch).then(
+    () => qc.invalidateQueries({ queryKey: qk.connect.inbox }),
+    () => Alert.alert('Not updated', 'Check your connection and try again.'),
   );
-  // Leave the typing channels while a chat is open on top (it joins its own).
-  const typing = useInboxTyping(recentIds, focused);
-  const memberName = (c: SecureConversation, uid: string) => {
-    const m = c.members.find((x) => x.id === uid);
-    return nicknames.data?.[uid] ?? m?.display_name ?? m?.username ?? 'Someone';
-  };
-  const setPrefs = (c: SecureConversation, patch: Parameters<typeof updateConversationPreferences>[3]) =>
-    void updateConversationPreferences(supabase, userId, c.id, patch).then(
-      () => qc.invalidateQueries({ queryKey: qk.connect.inbox }),
-      () => Alert.alert('Not updated', 'Check your connection and try again.'),
-    );
-  const archive = (c: SecureConversation) => {
-    const next = !c.archived;
-    setPrefs(c, { archived: next });
-    if (next) setUndo({ message: 'Archived', run: () => setPrefs(c, { archived: false }) });
-  };
+const archive = (c: SecureConversation) => {
+  const next = !c.archived;
+  setPrefs(c, { archived: next });
+  if (next) setUndo({ message: 'Archived', run: () => setPrefs(c, { archived: false }) });
+};
 ```
 
 5. Long-press menu (`actions`) uses `setPrefs`/`archive` and gains Mute/Unmute: options `[pin, isMuted(c) ? 'Unmute' : 'Mute for 8 hours', archived ? 'Unarchive' : 'Archive', 'Chat details']`, mapping Mute → `setPrefs(c, { muted_until: muteUntil('8h') })`, Unmute → `setPrefs(c, { muted_until: null })`; call `haptic('medium')` when it opens.
@@ -5102,9 +5485,11 @@ git commit -m "feat(mobile): chat rows with ticks, typing, badges, swipe actions
 ### Task 17: Mobile last seen, activity and reciprocal online status
 
 **Files:**
+
 - Modify: `apps/mobile/src/features/connect/hooks.ts`, `apps/mobile/src/features/connect/ConnectProvider.tsx`, `apps/mobile/src/app/messages/[id].tsx`, `apps/mobile/src/app/messages/index.tsx`, `apps/mobile/src/app/messages/privacy.tsx`
 
 **Interfaces:**
+
 - Consumes: `touchActivity`, `fetchLastSeen`, `qk.connect.lastSeen` (Task 5); `headerStatus` (Task 3).
 - Produces: mobile `useLastSeen(peerId: string | undefined, enabled: boolean)` (same contract as web Task 12).
 
@@ -5126,20 +5511,20 @@ export function useLastSeen(peerId: string | undefined, enabled: boolean) {
 - [ ] **Step 2: Record activity in `ConnectProvider.tsx`**
 
 ```tsx
-  // "Last seen": only recorded while the user shows their online status.
-  useEffect(() => {
-    if (!engine || !userId || !privacy.data?.show_online) return;
-    const touch = () => {
-      if (AppState.currentState === 'active') void touchActivity(supabase).catch(() => undefined);
-    };
-    touch();
-    const timer = setInterval(touch, 120_000);
-    const sub = AppState.addEventListener('change', (s) => s === 'active' && touch());
-    return () => {
-      clearInterval(timer);
-      sub.remove();
-    };
-  }, [engine, userId, privacy.data?.show_online]);
+// "Last seen": only recorded while the user shows their online status.
+useEffect(() => {
+  if (!engine || !userId || !privacy.data?.show_online) return;
+  const touch = () => {
+    if (AppState.currentState === 'active') void touchActivity(supabase).catch(() => undefined);
+  };
+  touch();
+  const timer = setInterval(touch, 120_000);
+  const sub = AppState.addEventListener('change', (s) => s === 'active' && touch());
+  return () => {
+    clearInterval(timer);
+    sub.remove();
+  };
+}, [engine, userId, privacy.data?.show_online]);
 ```
 
 (import `AppState` from `react-native`, `touchActivity` from `@vybora/api`.)
@@ -5147,23 +5532,26 @@ export function useLastSeen(peerId: string | undefined, enabled: boolean) {
 - [ ] **Step 3: Header and reciprocity in `app/messages/[id].tsx`**
 
 ```tsx
-  const showOnline = !!privacy.data?.show_online;
-  useEffect(
-    () => (peerId && showOnline ? watchPresence(supabase, [peerId], (s) => setOnline(s.has(peerId))) : undefined),
-    [peerId, showOnline],
-  );
-  useEffect(() => {
-    if (!showOnline) setOnline(false);
-  }, [showOnline]);
-  const lastSeen = useLastSeen(peerId, showOnline && conv?.kind === 'direct' && !online);
-  const subtitle = headerStatus({
-    isGroup: conv?.kind === 'group',
-    memberCount: conv?.members.length ?? 0,
-    typingNames,
-    online,
-    lastSeenAt: lastSeen.data ?? null,
-    now: new Date(),
-  });
+const showOnline = !!privacy.data?.show_online;
+useEffect(
+  () =>
+    peerId && showOnline
+      ? watchPresence(supabase, [peerId], (s) => setOnline(s.has(peerId)))
+      : undefined,
+  [peerId, showOnline],
+);
+useEffect(() => {
+  if (!showOnline) setOnline(false);
+}, [showOnline]);
+const lastSeen = useLastSeen(peerId, showOnline && conv?.kind === 'direct' && !online);
+const subtitle = headerStatus({
+  isGroup: conv?.kind === 'group',
+  memberCount: conv?.members.length ?? 0,
+  typingNames,
+  online,
+  lastSeenAt: lastSeen.data ?? null,
+  now: new Date(),
+});
 ```
 
 (replace the old presence effect and `subtitle`; after sending text call `if (showOnline) void touchActivity(supabase).catch(() => undefined);`.)
@@ -5193,6 +5581,7 @@ git commit -m "feat(mobile): last seen in chat header, reciprocal online status"
 ### Task 18: Docs and full verification
 
 **Files:**
+
 - Modify: `docs/DESIGN_SYSTEM.md`, `docs/FEATURE_STATUS.md`, `docs/SECURITY.md`, `docs/CONNECT.md`, `CHANGELOG.md`
 
 - [ ] **Step 1: Docs**

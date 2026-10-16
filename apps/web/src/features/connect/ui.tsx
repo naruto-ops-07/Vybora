@@ -1,7 +1,14 @@
 import { UsersThreeIcon } from '@phosphor-icons/react';
 import type { ChatTheme } from '@vybora/api';
-import { chatAccent, resolveChatTheme, wallpaperSvg, type ChatThemeDef } from '@vybora/config';
+import {
+  chatAccent,
+  highContrastThemes,
+  resolveChatTheme,
+  wallpaperSvg,
+  type ChatThemeDef,
+} from '@vybora/config';
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useA11y } from '@/features/a11y/A11yProvider';
 import { cn } from '@/lib/cn';
 
 /** The theme a participant actually sees: shared, unless they chose a personal override. */
@@ -28,19 +35,27 @@ export function useIsDark() {
 
 export interface ResolvedChatTheme extends ChatThemeDef {
   accent: string;
+  /** Accessibility → High contrast: chat colours follow the high-contrast accent. */
+  highContrast?: boolean;
 }
 
 export function useChatTheme(theme: ChatTheme): ResolvedChatTheme {
   const dark = useIsDark();
+  const { highContrast } = useA11y().prefs;
   return useMemo(() => {
     const def = resolveChatTheme(theme);
+    if (highContrast) {
+      const t = highContrastThemes[dark ? 'dark' : 'light'];
+      return { ...def, bubble: t.accent, bubbleText: t.onAccent, accent: t.accent, highContrast };
+    }
     return { ...def, accent: chatAccent(def, dark) };
-  }, [theme, dark]);
+  }, [theme, dark, highContrast]);
 }
 
-/** Chat canvas: app background + optional flat wallpaper pattern. */
-export function chatBackground(theme: ChatTheme, accent: string): CSSProperties {
-  const svg = wallpaperSvg(theme.wallpaper, accent);
+/** Chat canvas: app background + optional flat wallpaper pattern (none in high contrast). */
+export function chatBackground(theme: ChatTheme, def: ResolvedChatTheme): CSSProperties {
+  if (def.highContrast) return {};
+  const svg = wallpaperSvg(theme.wallpaper, def.accent);
   return svg
     ? {
         backgroundImage: `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`,

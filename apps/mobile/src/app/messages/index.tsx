@@ -1,17 +1,18 @@
 import {
+  fetchConnectPrivacy,
   fetchConversations,
   isMuted,
+  muteUntil,
   peerOf,
   qk,
   updateConversationPreferences,
   watchPresence,
   type SecureConversation,
 } from '@vybora/api';
-import { truncate } from '@vybora/core';
-import type { LocalMessage } from '@vybora/e2ee';
+import { chatRowPreview, formatRowTime, receiptOf } from '@vybora/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { router } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { router, useIsFocused } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActionSheetIOS,
   Alert,
@@ -23,8 +24,9 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Icon } from '@/components/Icon';
+import { Icon, type IconName } from '@/components/Icon';
 import { Text, TextInput } from '@/components/Text';
 import { Avatar, IconButton } from '@/components/ui';
 import { useMe } from '@/features/auth/AuthProvider';
@@ -32,175 +34,20 @@ import { useConnect } from '@/features/connect/ConnectProvider';
 import { ConnectGate } from '@/features/connect/ConnectGate';
 import {
   conversationTitle,
+  useInboxTyping,
   useNicknames,
   usePreviews,
   useSecureInbox,
 } from '@/features/connect/hooks';
+import { ChatRow } from '@/features/connect/ui/ChatRowParts';
 import { ConnectEmpty, PrimaryButton, useCc } from '@/features/connect/ui/primitives';
+import { UndoBar } from '@/features/connect/ui/UndoBar';
+import { useHaptics } from '@/lib/haptics';
 import { radii } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
 
 type Filter = 'all' | 'unread' | 'groups' | 'pinned' | 'archived';
 const FILTERS: Filter[] = ['all', 'unread', 'groups', 'pinned', 'archived'];
-
-function previewText(m: LocalMessage | undefined, myId: string): string {
-  if (!m) return 'End-to-end encrypted';
-  if (m.kind === 'undecryptable') return 'Message unavailable on this device';
-  if (m.deleted) return 'Message deleted';
-  const prefix = m.senderId === myId ? 'You: ' : '';
-  if (m.kind === 'attachment') {
-    const label = {
-      image: 'Photo',
-      video: 'Video',
-      voice: 'Voice message',
-      file: m.attachment?.name ?? 'File',
-    }[m.attachment?.kind ?? 'file'];
-    return `${prefix}${label}${m.caption ? ` · ${m.caption}` : ''}`;
-  }
-  return prefix + truncate(m.body ?? '', 60);
-}
-
-/** Short, fixed-width timestamp for list rows. */
-function listTime(iso: string) {
-  const d = new Date(iso);
-  const now = new Date();
-  if (d.toDateString() === now.toDateString())
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (now.getTime() - d.getTime() < 6 * 86_400_000)
-    return d.toLocaleDateString([], { weekday: 'short' });
-  return d.toLocaleDateString([], { day: '2-digit', month: 'short' });
-}
-
-function GroupAvatar({ size }: { size: number }) {
-  const cc = useCc();
-  return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        backgroundColor: cc.strong,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-      accessibilityLabel="Group"
-    >
-      <Icon name="users" size={Math.round(size * 0.46)} color={cc.accent} />
-    </View>
-  );
-}
-
-function ChatRow({
-  conv,
-  myId,
-  title,
-  preview,
-  time,
-  online,
-  onLongPress,
-}: {
-  conv: SecureConversation;
-  myId: string;
-  title: string;
-  preview: string;
-  time: string;
-  online: boolean;
-  onLongPress: () => void;
-}) {
-  const cc = useCc();
-  const peer = peerOf(conv, myId);
-  const unread = conv.unreadCount > 0;
-  const muted = isMuted(conv) || !conv.notificationsEnabled;
-  return (
-    <Pressable
-      onPress={() => router.push({ pathname: '/messages/[id]', params: { id: conv.id } })}
-      onLongPress={onLongPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${title}${unread ? `, ${conv.unreadCount} unread` : ''}${muted ? ', muted' : ''}${conv.pinned ? ', pinned' : ''}`}
-      accessibilityHint="Long press for pin, archive and details"
-      style={({ pressed }) => ({
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        backgroundColor: pressed ? cc.raised : 'transparent',
-      })}
-    >
-      <View>
-        {conv.kind === 'group' ? (
-          <GroupAvatar size={48} />
-        ) : (
-          <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={48} />
-        )}
-        {online && (
-          <View
-            style={{
-              position: 'absolute',
-              right: 0,
-              bottom: 0,
-              width: 13,
-              height: 13,
-              borderRadius: 7,
-              backgroundColor: cc.success,
-              borderWidth: 2,
-              borderColor: cc.panel,
-            }}
-            accessibilityLabel="Online"
-          />
-        )}
-      </View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text
-            style={{
-              color: cc.text,
-              fontSize: 16,
-              fontWeight: unread ? '600' : '500',
-              flexShrink: 1,
-            }}
-            numberOfLines={1}
-          >
-            {title}
-          </Text>
-          {conv.pinned && <Icon name="pin" size={12} color={cc.textSubtle} />}
-          {muted && <Icon name="bell-off" size={12} color={cc.textSubtle} />}
-          <Text
-            mono
-            style={{ color: unread ? cc.accent : cc.textSubtle, fontSize: 11, marginLeft: 'auto' }}
-          >
-            {time}
-          </Text>
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text
-            style={{ color: unread ? cc.text : cc.textMuted, fontSize: 14, flex: 1 }}
-            numberOfLines={1}
-          >
-            {preview}
-          </Text>
-          {unread && (
-            <View
-              style={{
-                minWidth: 20,
-                height: 20,
-                borderRadius: radii.sm,
-                alignItems: 'center',
-                justifyContent: 'center',
-                paddingHorizontal: 5,
-                backgroundColor: cc.accent,
-              }}
-            >
-              <Text mono style={{ color: cc.onAccent, fontSize: 11, fontWeight: '500' }}>
-                {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
-    </Pressable>
-  );
-}
 
 function Inbox() {
   const cc = useCc();
@@ -219,6 +66,21 @@ function Inbox() {
   const [online, setOnline] = useState<Set<string>>(new Set());
   const convs = useMemo(() => inbox.data ?? [], [inbox.data]);
   const previews = usePreviews(convs.map((c) => c.id));
+  const focused = useIsFocused();
+  const haptic = useHaptics();
+  const [undo, setUndo] = useState<{ id: number; message: string; run: () => void } | null>(null);
+  const recentIds = useMemo(
+    () =>
+      [...convs]
+        .filter((c) => !c.archived)
+        .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt))
+        .slice(0, 20)
+        .map((c) => c.id),
+    [convs],
+  );
+  // Leave the typing channels while a chat is open on top (it joins its own).
+  const typing = useInboxTyping(recentIds, focused);
+  const dismissUndo = useCallback(() => setUndo(null), []);
 
   const directPeers = useMemo(
     () => convs.map((c) => peerOf(c, userId)?.id).filter((x): x is string => !!x),
@@ -226,9 +88,22 @@ function Inbox() {
   );
   // Re-subscribe only when the set of people changes, not on every inbox refetch.
   const peersKey = directPeers.join(',');
-  useEffect(
-    () => (peersKey ? watchPresence(supabase, peersKey.split(','), setOnline) : undefined),
-    [peersKey],
+  const privacy = useQuery({
+    queryKey: qk.connect.privacy,
+    queryFn: () => fetchConnectPrivacy(supabase, userId),
+  });
+  const showOnline = !!privacy.data?.show_online;
+  useEffect(() => {
+    if (!peersKey || !showOnline) {
+      setOnline(new Set());
+      return;
+    }
+    return watchPresence(supabase, peersKey.split(','), setOnline);
+  }, [peersKey, showOnline]);
+  // Derived so dots never outlive the toggle, even for one render.
+  const shownOnline = useMemo(
+    () => (showOnline ? online : new Set<string>()),
+    [showOnline, online],
   );
 
   const shown = convs
@@ -249,17 +124,43 @@ function Inbox() {
         Number(b.pinned) - Number(a.pinned) || b.lastMessageAt.localeCompare(a.lastMessageAt),
     );
 
+  const memberName = (c: SecureConversation, uid: string) => {
+    const m = c.members.find((x) => x.id === uid);
+    return nicknames.data?.[uid] ?? m?.display_name ?? m?.username ?? 'Someone';
+  };
+  const setPrefs = (
+    c: SecureConversation,
+    patch: Parameters<typeof updateConversationPreferences>[3],
+  ) =>
+    void updateConversationPreferences(supabase, userId, c.id, patch).then(
+      () => qc.invalidateQueries({ queryKey: qk.connect.inbox }),
+      () => Alert.alert('Not updated', 'Check your connection and try again.'),
+    );
+  const archive = (c: SecureConversation) => {
+    const next = !c.archived;
+    setPrefs(c, { archived: next });
+    if (next)
+      setUndo({
+        id: Date.now(),
+        message: 'Archived',
+        run: () => setPrefs(c, { archived: false }),
+      });
+  };
+
   const actions = (c: SecureConversation) => {
-    const set = (patch: Parameters<typeof updateConversationPreferences>[3]) =>
-      void updateConversationPreferences(supabase, userId, c.id, patch).then(
-        () => qc.invalidateQueries({ queryKey: qk.connect.inbox }),
-        () => Alert.alert('Not updated', 'Check your connection and try again.'),
-      );
-    const opts = [c.pinned ? 'Unpin' : 'Pin', c.archived ? 'Unarchive' : 'Archive', 'Chat details'];
+    haptic('medium');
+    const muted = isMuted(c);
+    const opts = [
+      c.pinned ? 'Unpin' : 'Pin',
+      muted ? 'Unmute' : 'Mute for 8 hours',
+      c.archived ? 'Unarchive' : 'Archive',
+      'Chat details',
+    ];
     const run = (i: number) => {
-      if (i === 0) set({ pinned: !c.pinned });
-      if (i === 1) set({ archived: !c.archived });
-      if (i === 2) router.push({ pathname: '/messages/details/[id]', params: { id: c.id } });
+      if (i === 0) setPrefs(c, { pinned: !c.pinned });
+      if (i === 1) setPrefs(c, { muted_until: muted ? null : muteUntil('8h') });
+      if (i === 2) archive(c);
+      if (i === 3) router.push({ pathname: '/messages/details/[id]', params: { id: c.id } });
     };
     if (Platform.OS === 'ios')
       ActionSheetIOS.showActionSheetWithOptions(
@@ -373,17 +274,91 @@ function Inbox() {
             </ScrollView>
           </View>
         }
-        renderItem={({ item }) => (
-          <ChatRow
-            conv={item}
-            myId={userId}
-            title={conversationTitle(item, userId, nicknames.data)}
-            preview={previewText(previews.data?.[item.id], userId)}
-            time={listTime(previews.data?.[item.id]?.createdAt ?? item.lastMessageAt)}
-            online={item.kind === 'direct' && online.has(peerOf(item, userId)?.id ?? '')}
-            onLongPress={() => actions(item)}
-          />
-        )}
+        renderItem={({ item: c }) => {
+          const last = previews.data?.[c.id];
+          const preview = chatRowPreview(last, {
+            myUserId: userId,
+            isGroup: c.kind === 'group',
+            typingUserIds: typing[c.id] ?? [],
+            nameOf: (uid) => memberName(c, uid),
+            receipt: last ? receiptOf(last, userId, c.members) : undefined,
+          });
+          const muted = isMuted(c);
+          const action = (
+            label: string,
+            icon: IconName,
+            onPress: () => void,
+            bg: string,
+            close: () => void,
+          ) => (
+            <Pressable
+              key={label}
+              onPress={() => {
+                close();
+                onPress();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={label}
+              style={{
+                width: 72,
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 4,
+                backgroundColor: bg,
+              }}
+            >
+              <Icon name={icon} size={20} color={cc.text} />
+              <Text style={{ color: cc.text, fontSize: 12 }}>{label}</Text>
+            </Pressable>
+          );
+          return (
+            <ReanimatedSwipeable
+              friction={2}
+              rightThreshold={40}
+              overshootRight={false}
+              onSwipeableWillOpen={() => haptic('light')}
+              renderRightActions={(_progress, _translation, methods) => (
+                <View style={{ flexDirection: 'row' }}>
+                  {action(
+                    c.pinned ? 'Unpin' : 'Pin',
+                    'pin',
+                    () => setPrefs(c, { pinned: !c.pinned }),
+                    cc.raised,
+                    methods.close,
+                  )}
+                  {action(
+                    muted ? 'Unmute' : 'Mute',
+                    muted ? 'bell' : 'bell-off',
+                    () => setPrefs(c, { muted_until: muted ? null : muteUntil('8h') }),
+                    cc.strong,
+                    methods.close,
+                  )}
+                  {action(
+                    c.archived ? 'Unarchive' : 'Archive',
+                    'archive',
+                    () => archive(c),
+                    cc.lineStrong,
+                    methods.close,
+                  )}
+                </View>
+              )}
+            >
+              <ChatRow
+                conv={c}
+                myId={userId}
+                title={conversationTitle(c, userId, nicknames.data)}
+                preview={preview}
+                time={formatRowTime(last?.createdAt ?? c.lastMessageAt, new Date())}
+                online={c.kind === 'direct' && shownOnline.has(peerOf(c, userId)?.id ?? '')}
+                onPress={() => router.push({ pathname: '/messages/[id]', params: { id: c.id } })}
+                onLongPress={() => actions(c)}
+                onTogglePin={() => setPrefs(c, { pinned: !c.pinned })}
+                onToggleMute={() => setPrefs(c, { muted_until: muted ? null : muteUntil('8h') })}
+                onArchive={() => archive(c)}
+              />
+            </ReanimatedSwipeable>
+          );
+        }}
         ListEmptyComponent={
           inbox.isPending ? null : inbox.isError ? (
             <ConnectEmpty
@@ -442,6 +417,17 @@ function Inbox() {
           ) : null
         }
       />
+      {undo && (
+        <UndoBar
+          key={undo.id}
+          message={undo.message}
+          onUndo={() => {
+            undo.run();
+            setUndo(null);
+          }}
+          onDone={dismissUndo}
+        />
+      )}
     </View>
   );
 }

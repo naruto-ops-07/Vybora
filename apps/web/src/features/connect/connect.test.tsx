@@ -38,6 +38,9 @@ function renderBubble(m: Partial<LocalMessage> = {}, mine = true) {
       mine={mine}
       theme={{ ...resolveChatTheme(null), accent: '#0F766E' }}
       showSender={false}
+      runStart
+      runEnd
+      onSelect={vi.fn()}
       receipt={mine ? 'read' : undefined}
       myUserId="me"
       nameOf={(id) => (id === 'me' ? 'You' : 'Maya')}
@@ -102,6 +105,14 @@ describe('Composer', () => {
     await user.keyboard('{Enter}');
     expect(onSend).toHaveBeenCalledWith('hello\nthere');
     expect(box).toHaveValue('');
+  });
+
+  it('follows the message text size setting', () => {
+    render(<Composer {...props} draftKey="c4" onSend={vi.fn()} />, { wrapper: TooltipProvider });
+    const box = screen.getByRole('textbox', { name: 'Message' });
+    // .text-msg reads --vy-msg-size, which Accessibility → Text size sets.
+    expect(box).toHaveClass('text-msg');
+    expect(box.className).not.toMatch(/text-\[\d+px\]/);
   });
 
   it('explains why sending is unavailable while the device joins the group', () => {

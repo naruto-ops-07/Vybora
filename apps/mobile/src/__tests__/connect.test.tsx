@@ -93,6 +93,8 @@ const bubble = (
     }}
     receipt={extra.receipt}
     showSender={false}
+    runStart
+    runEnd
     onLongPress={noop}
     onRetry={extra.onRetry ?? noop}
     onOpenImage={noop}

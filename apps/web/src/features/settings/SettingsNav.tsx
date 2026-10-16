@@ -1,5 +1,6 @@
 import {
   CaretRightIcon,
+  EyeIcon,
   ShieldCheckIcon,
   UserCircleIcon,
   UserGearIcon,
@@ -20,6 +21,12 @@ const SECTIONS: { to: string; label: string; description: string; icon: ReactNod
     label: 'Privacy & security',
     description: 'Devices, receipts, notifications, blocked',
     icon: <ShieldCheckIcon size={20} />,
+  },
+  {
+    to: '/settings/accessibility',
+    label: 'Accessibility',
+    description: 'Motion, text size, contrast, gestures',
+    icon: <EyeIcon size={20} />,
   },
   {
     to: '/settings/account',

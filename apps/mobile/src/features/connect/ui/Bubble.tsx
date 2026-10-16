@@ -1,18 +1,29 @@
 import type { LocalMessage } from '@vybora/e2ee';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
+import { formatClock, messageSummary, type Receipt } from '@vybora/core';
 import { Pressable, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { Icon } from '@/components/Icon';
 import { Text } from '@/components/Text';
+import { Avatar } from '@/components/ui';
 import { radii } from '@/lib/theme';
 import { FileAttachment, ImageAttachment, VideoAttachment, VoiceAttachment } from './Attachment';
 import { useCc, type ResolvedTheme } from './primitives';
 
-export type Receipt = 'sending' | 'failed' | 'sent' | 'delivered' | 'read';
+export type { Receipt } from '@vybora/core';
 
-const time = (iso: string) =>
-  new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+/** Avatar width (28) + gap (8): group bubbles are inset by this much. */
+const AVATAR_COLUMN = 36;
 
-function Ticks({ receipt, color }: { receipt: Receipt; color: string }) {
+const RECEIPT_LABEL: Record<Receipt, string> = {
+  sending: 'sending',
+  failed: 'not sent',
+  sent: 'sent',
+  delivered: 'delivered',
+  read: 'read',
+};
+
+export function Ticks({ receipt, color }: { receipt: Receipt; color: string }) {
   const cc = useCc();
   if (receipt === 'sending')
     return <Icon name="clock" size={11} color={color} accessibilityLabel="Sending" />;
@@ -31,6 +42,28 @@ function Ticks({ receipt, color }: { receipt: Receipt; color: string }) {
   );
 }
 
+/** Flat notch on the last bubble of a run, in the bubble's own colour. */
+function Tail({ mine, fill, stroke }: { mine: boolean; fill: string; stroke?: string }) {
+  return (
+    <Svg
+      testID="bubble-tail"
+      width={8}
+      height={10}
+      viewBox="0 0 8 10"
+      style={{
+        position: 'absolute',
+        bottom: 0,
+        ...(mine ? { right: -7 } : { left: -7, transform: [{ scaleX: -1 }] }),
+      }}
+    >
+      <Path d="M0 0C0.5 6 3.5 9 8 10H0Z" fill={fill} />
+      {stroke ? (
+        <Path d="M0 0C0.5 6 3.5 9 8 10H0" fill="none" stroke={stroke} strokeWidth={1} />
+      ) : null}
+    </Svg>
+  );
+}
+
 export interface BubbleProps {
   message: LocalMessage;
   mine: boolean;
@@ -38,10 +71,18 @@ export interface BubbleProps {
   senderName?: string;
   receipt?: Receipt;
   showSender: boolean;
+  runStart: boolean;
+  runEnd: boolean;
+  avatar?: { path: string | null; name: string };
   onLongPress: (m: LocalMessage) => void;
   onRetry: (m: LocalMessage) => void;
   onOpenImage: (uri: string) => void;
   onReplyPress?: (id: string) => void;
+  selecting?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (m: LocalMessage) => void;
+  showReplyButton?: boolean;
+  onReply?: (m: LocalMessage) => void;
   nameOf: (userId: string) => string;
 }
 
@@ -52,15 +93,37 @@ export const Bubble = memo(function Bubble({
   senderName,
   receipt,
   showSender,
+  runStart,
+  runEnd,
+  avatar,
   onLongPress,
   onRetry,
   onOpenImage,
+  selecting,
+  selected,
+  onToggleSelect,
+  showReplyButton,
+  onReply,
   nameOf,
 }: BubbleProps) {
   const cc = useCc();
+  const senderLabel = mine ? 'You' : nameOf(m.senderId);
+  const time = useMemo(() => formatClock(m.createdAt), [m.createdAt]);
+  const label = useMemo(
+    () =>
+      [senderLabel, time, messageSummary(m), receipt ? RECEIPT_LABEL[receipt] : null]
+        .filter(Boolean)
+        .join(', '),
+    [senderLabel, time, m, receipt],
+  );
   const filled = mine && !m.deleted && m.kind !== 'undecryptable';
   const textColor = filled ? theme.outgoingText : theme.incomingText;
-  const meta = filled ? 'rgba(255,255,255,0.75)' : cc.textSubtle;
+  // High contrast: meta text keeps the bubble's own (on-accent) colour at full strength.
+  const meta = filled
+    ? theme.highContrast
+      ? theme.outgoingText
+      : 'rgba(255,255,255,0.75)'
+    : cc.textSubtle;
   const media =
     m.kind === 'attachment' && m.attachment?.kind !== 'voice' && m.attachment?.kind !== 'file';
 
@@ -88,6 +151,7 @@ export const Bubble = memo(function Bubble({
         {a.kind === 'file' && <FileAttachment attachment={a} tint={textColor} />}
         {!!m.caption && (
           <Text
+            scale
             style={{
               color: textColor,
               fontSize: 15,
@@ -101,17 +165,23 @@ export const Bubble = memo(function Bubble({
       </View>
     );
   } else {
-    content = <Text style={{ color: textColor, fontSize: 15, lineHeight: 22 }}>{m.body}</Text>;
+    content = (
+      <Text scale style={{ color: textColor, fontSize: 15, lineHeight: 22 }}>
+        {m.body}
+      </Text>
+    );
   }
 
   const reactions = Object.entries(m.reactions).filter(([, users]) => users.length);
   const bubbleStyle = {
     maxWidth: '82%' as const,
+    flexShrink: 1,
+    minWidth: 0,
     paddingHorizontal: media ? 4 : 12,
     paddingVertical: media ? 4 : 8,
     borderRadius: radii.lg,
-    borderBottomRightRadius: mine ? radii.sm : radii.lg,
-    borderBottomLeftRadius: mine ? radii.lg : radii.sm,
+    borderBottomRightRadius: mine && runEnd ? radii.sm : radii.lg,
+    borderBottomLeftRadius: !mine && runEnd ? radii.sm : radii.lg,
   };
 
   const inner = (
@@ -120,7 +190,11 @@ export const Bubble = memo(function Bubble({
         <View
           style={{
             borderLeftWidth: 2,
-            borderLeftColor: filled ? 'rgba(255,255,255,0.7)' : theme.accent,
+            borderLeftColor: filled
+              ? theme.highContrast
+                ? meta
+                : 'rgba(255,255,255,0.7)'
+              : theme.accent,
             paddingLeft: 8,
             marginBottom: 6,
           }}
@@ -155,19 +229,50 @@ export const Bubble = memo(function Bubble({
           <Icon name="timer" size={11} color={meta} accessibilityLabel="Disappearing message" />
         )}
         <Text mono style={{ color: meta, fontSize: 11 }}>
-          {time(m.createdAt)}
+          {time}
         </Text>
         {mine && receipt && <Ticks receipt={receipt} color={meta} />}
       </View>
     </>
   );
 
+  const actionable = !m.deleted && m.kind !== 'undecryptable';
+  // The merged label hides the inner Pressable from screen readers, so its
+  // gestures are re-exposed as accessibility actions. Opening a photo is not:
+  // the decrypted image URI lives inside ImageAttachment, not here.
+  // While selecting, activating toggles the message and the menu is unavailable.
+  const actions = selecting
+    ? [{ name: 'activate', label: selected ? 'Deselect message' : 'Select message' }]
+    : [
+        ...(receipt === 'failed' ? [{ name: 'activate', label: 'Retry sending' }] : []),
+        ...(actionable ? [{ name: 'longpress', label: 'Message actions' }] : []),
+      ];
+
   return (
     <View
+      accessible
+      accessibilityActions={actions}
+      onAccessibilityAction={(e) => {
+        const name = e.nativeEvent.actionName;
+        if (selecting) {
+          if (name === 'activate') onToggleSelect?.(m);
+        } else if (name === 'activate' && receipt === 'failed') onRetry(m);
+        else if (name === 'longpress' && actionable) onLongPress(m);
+      }}
+      accessibilityState={selecting ? { selected: !!selected } : undefined}
+      accessibilityHint={
+        selecting
+          ? undefined
+          : receipt === 'failed'
+            ? 'Tap to retry sending'
+            : 'Long press for reactions and actions'
+      }
+      accessibilityLabel={label}
       style={{
         alignItems: mine ? 'flex-end' : 'flex-start',
         paddingHorizontal: 12,
-        marginVertical: 2,
+        marginTop: runStart ? 8 : 2,
+        marginBottom: 0,
       }}
     >
       {showSender && !mine && senderName && (
@@ -176,31 +281,93 @@ export const Bubble = memo(function Bubble({
             color: theme.accent,
             fontSize: 12,
             fontWeight: '600',
-            marginLeft: 4,
+            marginLeft: avatar ? 4 + AVATAR_COLUMN : 4,
             marginBottom: 2,
           }}
         >
           {senderName}
         </Text>
       )}
-      <Pressable
-        onLongPress={() => !m.deleted && m.kind !== 'undecryptable' && onLongPress(m)}
-        onPress={() => receipt === 'failed' && onRetry(m)}
-        delayLongPress={280}
-        accessibilityHint={
-          receipt === 'failed' ? 'Tap to retry sending' : 'Long press for reactions and actions'
-        }
-        style={[
-          bubbleStyle,
-          filled
-            ? { backgroundColor: theme.outgoing }
-            : { backgroundColor: theme.incoming, borderWidth: 1, borderColor: cc.line },
-        ]}
+      <View
+        style={{
+          flexDirection: mine ? 'row-reverse' : 'row',
+          alignItems: 'flex-end',
+          gap: 8,
+          maxWidth: '100%',
+        }}
       >
-        {inner}
-      </Pressable>
+        {selecting && (
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: radii.sm,
+              borderWidth: 1,
+              borderColor: selected ? cc.accent : cc.lineStrong,
+              backgroundColor: selected ? cc.accent : 'transparent',
+              alignItems: 'center',
+              justifyContent: 'center',
+              alignSelf: 'center',
+            }}
+          >
+            {selected && <Icon name="check" size={14} color={cc.onAccent} />}
+          </View>
+        )}
+        {avatar &&
+          !mine &&
+          (runEnd ? (
+            <Avatar path={avatar.path} name={avatar.name} size={28} />
+          ) : (
+            <View style={{ width: 28 }} />
+          ))}
+        <Pressable
+          onLongPress={
+            selecting ? undefined : () => !m.deleted && m.kind !== 'undecryptable' && onLongPress(m)
+          }
+          onPress={() => (selecting ? onToggleSelect?.(m) : receipt === 'failed' && onRetry(m))}
+          delayLongPress={280}
+          style={[
+            bubbleStyle,
+            filled
+              ? { backgroundColor: theme.outgoing }
+              : { backgroundColor: theme.incoming, borderWidth: 1, borderColor: cc.line },
+          ]}
+        >
+          {/* While selecting, taps on photos, voice, files fall through to the bubble. */}
+          <View testID="bubble-content" pointerEvents={selecting ? 'none' : 'auto'}>
+            {inner}
+          </View>
+          {runEnd && (
+            <Tail
+              mine={mine}
+              fill={filled ? theme.outgoing : theme.incoming}
+              stroke={filled ? undefined : cc.line}
+            />
+          )}
+        </Pressable>
+        {showReplyButton && !selecting && (
+          <Pressable
+            onPress={() => onReply?.(m)}
+            accessibilityRole="button"
+            accessibilityLabel="Reply"
+            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Icon name="corner-up-left" size={18} color={cc.textMuted} />
+          </Pressable>
+        )}
+      </View>
       {reactions.length > 0 && (
-        <View style={{ flexDirection: 'row', gap: 4, marginTop: 4, marginHorizontal: 4 }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            gap: 4,
+            marginTop: 4,
+            marginLeft: !mine && avatar ? 4 + AVATAR_COLUMN : 4,
+            marginRight: 4,
+          }}
+        >
           {reactions.map(([emoji, users]) => (
             <View
               key={emoji}
@@ -230,7 +397,7 @@ export const Bubble = memo(function Bubble({
       {receipt === 'failed' && (
         <Text
           style={{ color: cc.danger, fontSize: 12, marginTop: 3, marginRight: 4 }}
-          onPress={() => onRetry(m)}
+          onPress={() => (selecting ? onToggleSelect?.(m) : onRetry(m))}
           accessibilityRole="button"
         >
           Not sent · Tap to retry
