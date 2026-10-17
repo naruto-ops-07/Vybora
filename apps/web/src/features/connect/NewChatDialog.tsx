@@ -1,6 +1,17 @@
 import { CheckIcon, LockSimpleIcon, MagnifyingGlassIcon, XIcon } from '@phosphor-icons/react';
-import { createSecureConversation, fetchFriends, qk, searchProfiles } from '@vybora/api';
-import { friendlyError } from '@vybora/core';
+import {
+  createSecureConversation,
+  directChatActivity,
+  fetchFriends,
+  qk,
+  searchProfiles,
+} from '@vybora/api';
+import {
+  friendlyError,
+  orderQuickPick,
+  QUICK_PICK_LIMIT,
+  usernameFromAddParam,
+} from '@vybora/core';
 import type { UserSummary } from '@vybora/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferredValue, useId, useMemo, useState } from 'react';
@@ -11,8 +22,11 @@ import { Dialog } from '@/components/ui/Dialog';
 import { Input } from '@/components/ui/Field';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
+import { useMe } from '@/features/auth/AuthProvider';
+import { NoResultsEmpty } from '@/features/onboarding/EmptyStates';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
+import { useSecureInbox } from './hooks';
 
 function PersonOption({
   user,
@@ -79,21 +93,27 @@ export function NewChatDialog({ open, onClose }: { open: boolean; onClose: () =>
     queryFn: () => fetchFriends(supabase),
     enabled: open,
   });
+  // Recent direct chats first, then by name; the first eight unless expanded.
+  const { userId } = useMe();
+  const inbox = useSecureInbox();
+  const [showAll, setShowAll] = useState(false);
   const friendOptions = useMemo<UserSummary[]>(
     () =>
-      (friends.data ?? []).map((f) => ({
+      orderQuickPick(friends.data ?? [], directChatActivity(inbox.data, userId)).map((f) => ({
         id: f.userId,
         username: f.username,
         display_name: f.displayName ?? '',
         avatar_path: f.avatarPath,
       })),
-    [friends.data],
+    [friends.data, inbox.data, userId],
   );
+  const shownFriends = showAll ? friendOptions : friendOptions.slice(0, QUICK_PICK_LIMIT);
   const friendsHeadingId = useId();
   const isGroup = picked.length > 1;
 
   const close = () => {
     setTerm('');
+    setShowAll(false);
     setTitle('');
     setPicked([]);
     onClose();
@@ -191,7 +211,7 @@ export function NewChatDialog({ open, onClose }: { open: boolean; onClose: () =>
             Friends
           </h3>
           <ul className="mt-1 divide-y divide-line" aria-labelledby={friendsHeadingId}>
-            {friendOptions.map((u) => (
+            {shownFriends.map((u) => (
               <PersonOption
                 key={u.id}
                 user={u}
@@ -200,6 +220,16 @@ export function NewChatDialog({ open, onClose }: { open: boolean; onClose: () =>
               />
             ))}
           </ul>
+          {!showAll && friendOptions.length > QUICK_PICK_LIMIT && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="touch-target mt-1 text-accent"
+              onClick={() => setShowAll(true)}
+            >
+              Show all friends ({friendOptions.length})
+            </Button>
+          )}
         </>
       )}
       <ul className="mt-2 divide-y divide-line" aria-busy={results.isFetching}>
@@ -218,7 +248,25 @@ export function NewChatDialog({ open, onClose }: { open: boolean; onClose: () =>
         </div>
       )}
       {q && results.isSuccess && results.data.length === 0 && (
-        <p className="py-6 text-center text-sm text-muted">No people found for “{q}”.</p>
+        <NoResultsEmpty
+          className="px-2 py-6"
+          action={
+            <Button
+              variant="outline"
+              size="sm"
+              className="touch-target"
+              onClick={() => {
+                const u = usernameFromAddParam(q);
+                close();
+                navigate(u ? `/friends?add=${encodeURIComponent(u)}` : '/friends', {
+                  state: { focusAddFriend: true },
+                });
+              }}
+            >
+              Add a friend
+            </Button>
+          }
+        />
       )}
       {results.isError && (
         <p className="py-6 text-center text-sm text-danger" role="alert">

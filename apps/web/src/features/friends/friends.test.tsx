@@ -24,7 +24,13 @@ const api = vi.hoisted(() => ({
   watchPresence: vi.fn(),
 }));
 vi.mock('@vybora/api', async (orig) => ({ ...(await orig<typeof Api>()), ...api }));
-vi.mock('@/features/auth/AuthProvider', () => ({ useMe: () => ({ userId: 'me' }) }));
+vi.mock('@/features/auth/AuthProvider', () => {
+  const profile = { id: 'me', username: 'me_too', display_name: 'Me', avatar_path: null };
+  return {
+    useMe: () => ({ userId: 'me', profile }),
+    useAuth: () => ({ userId: 'me', profile }),
+  };
+});
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 vi.mock('@/features/connect/ConnectProvider', () => ({ useConnect: () => ({ engine: null }) }));
 
@@ -43,6 +49,16 @@ const request = (username: string, displayName: string | null = null): FriendReq
   createdAt: '2026-10-16T09:00:00Z',
 });
 const never = () => new Promise<never>(() => undefined);
+const directChat = (id: string, peerId: string) =>
+  ({
+    id,
+    kind: 'direct',
+    lastMessageAt: '2026-10-16T09:00:00Z',
+    members: [
+      { id: 'me', username: 'me_too', display_name: '', avatar_path: null },
+      { id: peerId, username: peerId.slice(3), display_name: '', avatar_path: null },
+    ],
+  }) as unknown as SecureConversation;
 
 function client() {
   return new QueryClient({
@@ -125,6 +141,33 @@ describe('add a friend', () => {
   });
 });
 
+describe('add links (/friends?add=)', () => {
+  function renderAt(route: string) {
+    return renderWithProviders(
+      <Routes>
+        <Route path="/friends" element={<FriendsPane />} />
+      </Routes>,
+      { route },
+    );
+  }
+
+  it('prefills the username and focuses the field, without sending', async () => {
+    renderAt('/friends?add=%40Maya.Rose');
+    const input = screen.getByRole('textbox', { name: 'Friend’s username' });
+    await waitFor(() => expect(input).toHaveFocus());
+    expect(input).toHaveValue('maya.rose');
+    expect(screen.getByRole('button', { name: 'Send request' })).toBeEnabled();
+    await act(() => new Promise((r) => setTimeout(r, 50)));
+    expect(api.sendFriendRequest).not.toHaveBeenCalled();
+  });
+
+  it('ignores something that can’t be a username', async () => {
+    renderAt('/friends?add=%3Cscript%3E');
+    await screen.findByText('Your circle starts here');
+    expect(screen.getByRole('textbox', { name: 'Friend’s username' })).toHaveValue('');
+  });
+});
+
 describe('friend requests', () => {
   it('accepting removes the request at once and shows them as a friend', async () => {
     api.fetchFriendRequests.mockResolvedValue({ incoming: [request('sam', 'Sam')], outgoing: [] });
@@ -204,14 +247,42 @@ describe('friend requests', () => {
 });
 
 describe('friends list', () => {
-  it('shows calm empty states and no requests section when there is nothing yet', async () => {
+  it('shows the illustrated empty state with my handle, and no requests section', async () => {
     renderPane();
-    expect(await screen.findByText('No friends yet')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 3, name: 'Your circle starts here' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Share your username or add someone by theirs.')).toBeInTheDocument();
+    expect(document.querySelector('svg[data-illustration="no-friends"]')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    );
+    expect(screen.getByText('@me_too')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy @me_too' })).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Requests' })).toBeNull();
+  });
+
+  it('names each list once: no region repeats the list’s name', async () => {
+    api.fetchFriends.mockResolvedValue([friend('maya', 'Maya')]);
+    api.fetchFriendRequests.mockResolvedValue({ incoming: [request('sam', 'Sam')], outgoing: [] });
+    renderPane();
+    await screen.findByRole('list', { name: 'Friends' });
+    expect(screen.getByRole('list', { name: 'Requests' })).toBeInTheDocument();
+    expect(screen.queryAllByRole('region')).toHaveLength(0);
+  });
+
+  it('reads request times in full to screen readers', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: new Date('2026-10-16T12:00:00Z') });
+    api.fetchFriendRequests.mockResolvedValue({ incoming: [request('sam', 'Sam')], outgoing: [] });
+    renderPane();
+    const requests = await screen.findByRole('list', { name: 'Requests' });
+    expect(within(requests).getByText('3h')).toHaveAttribute('aria-hidden', 'true');
+    expect(within(requests).getByText('3 hours ago')).toHaveClass('sr-only');
   });
 
   it('lists friends with a count, @username and an online dot', async () => {
     api.fetchFriends.mockResolvedValue([friend('maya', 'Maya'), friend('sam')]);
+    api.fetchSecureInbox.mockResolvedValue([directChat('c-maya', 'id-maya')]);
     api.watchPresence.mockImplementation(
       (_c: unknown, _ids: string[], cb: (s: Set<string>) => void) => {
         cb(new Set(['id-maya']));
@@ -225,7 +296,8 @@ describe('friends list', () => {
     await waitFor(() =>
       expect(within(list).getAllByRole('img', { name: 'Online' })).toHaveLength(1),
     );
-    expect(api.watchPresence.mock.calls[0]![1]).toEqual(['id-maya', 'id-sam']);
+    // Presence is only shared between people with a chat: sam has none, so isn't watched.
+    expect(api.watchPresence.mock.calls[0]![1]).toEqual(['id-maya']);
   });
 
   it('shows no one online while my own online status is off', async () => {
@@ -239,8 +311,10 @@ describe('friends list', () => {
   it('offers a retry when friends fail to load', async () => {
     api.fetchFriends.mockRejectedValueOnce(new Error('boom'));
     renderPane();
-    await userEvent.click(await screen.findByRole('button', { name: 'Try again' }));
-    expect(await screen.findByText('No friends yet')).toBeInTheDocument();
+    const retry = await screen.findByRole('button', { name: 'Try again' });
+    expect(retry).toHaveClass('touch-target');
+    await userEvent.click(retry);
+    expect(await screen.findByText('Your circle starts here')).toBeInTheDocument();
   });
 
   it('removes a friend only after confirming', async () => {
@@ -254,7 +328,7 @@ describe('friends list', () => {
     api.fetchFriends.mockResolvedValue([]);
     await userEvent.click(within(dialog).getByRole('button', { name: 'Remove friend' }));
     expect(api.removeFriend).toHaveBeenCalledWith({}, 'id-maya');
-    expect(await screen.findByText('No friends yet')).toBeInTheDocument();
+    expect(await screen.findByText('Your circle starts here')).toBeInTheDocument();
   });
 
   it('opens the existing direct chat with a friend', async () => {

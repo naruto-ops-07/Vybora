@@ -4,29 +4,39 @@ import {
   DotsThreeIcon,
   InfoIcon,
   UserMinusIcon,
-  UsersThreeIcon,
   WarningCircleIcon,
 } from '@phosphor-icons/react';
 import * as ContextMenu from '@radix-ui/react-context-menu';
-import { qk, sendFriendRequest, type Friend, type FriendRequest } from '@vybora/api';
+import {
+  directChatActivity,
+  qk,
+  sendFriendRequest,
+  type Friend,
+  type FriendRequest,
+} from '@vybora/api';
 import {
   addFriendErrorNotice,
   addFriendResultNotice,
   formatRelativeTime,
+  formatRelativeTimeLong,
   normalizeUsername,
+  usernameFromAddParam,
   type AddFriendNotice,
 } from '@vybora/core';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { useLocation } from 'react-router';
+import { useLocation, useSearchParams } from 'react-router';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/Dialog';
 import { Tip } from '@/components/ui/Tooltip';
-import { useOnlinePeers } from '@/features/connect/hooks';
+import { useMe } from '@/features/auth/AuthProvider';
+import { useOnlinePeers, useSecureInbox } from '@/features/connect/hooks';
 import { Meta } from '@/features/connect/ui';
+import { FriendsEmpty } from '@/features/onboarding/EmptyStates';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
+import { HandleCard } from './HandleCard';
 import { nameOf, useFriendActions, useFriendRequests, useFriends, useMessageFriend } from './hooks';
 
 const NOTICE_ICON = {
@@ -39,6 +49,7 @@ const NOTICE_ICON = {
 function AddFriendForm({ inputRef }: { inputRef?: RefObject<HTMLInputElement | null> }) {
   const qc = useQueryClient();
   const location = useLocation();
+  const [params] = useSearchParams();
   const local = useRef<HTMLInputElement | null>(null);
   const [value, setValue] = useState('');
   const [notice, setNotice] = useState<AddFriendNotice | null>(null);
@@ -54,6 +65,21 @@ function AddFriendForm({ inputRef }: { inputRef?: RefObject<HTMLInputElement | n
     const t = setTimeout(() => local.current?.focus(), 0);
     return () => clearTimeout(t);
   }, [focusAsked, location.key]);
+
+  // A shared link (`/friends?add=maya`) fills the field and focuses it. It never
+  // sends: the request goes only when the person presses Send request.
+  const prefill = usernameFromAddParam(params.get('add'));
+  useEffect(() => {
+    if (!prefill) return;
+    setValue(prefill);
+    setNotice(null);
+    const t = setTimeout(() => {
+      const el = local.current;
+      el?.focus();
+      el?.setSelectionRange(el.value.length, el.value.length);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [prefill, location.key]);
 
   const send = useMutation({
     mutationFn: (u: string) => sendFriendRequest(supabase, u),
@@ -317,7 +343,7 @@ function Retry({ children, onRetry }: { children: ReactNode; onRetry: () => void
       {children}{' '}
       <button
         type="button"
-        className="font-semibold text-accent underline-offset-2 hover:underline"
+        className="touch-target inline-flex items-center justify-center font-semibold text-accent underline-offset-2 hover:underline"
         onClick={onRetry}
       >
         Try again
@@ -342,7 +368,14 @@ export function FriendsPane({ inputRef }: { inputRef?: RefObject<HTMLInputElemen
   const listRef = useRef<HTMLUListElement>(null);
 
   const list = useMemo(() => friends.data ?? [], [friends.data]);
-  const online = useOnlinePeers(useMemo(() => list.map((f) => f.userId), [list]));
+  // Presence is shared only between people who have a chat, so watch just the
+  // friends I have a direct chat with (from the inbox cache): no denied subscriptions.
+  const { userId } = useMe();
+  const inbox = useSecureInbox();
+  const chatPeers = useMemo(() => directChatActivity(inbox.data, userId), [inbox.data, userId]);
+  const online = useOnlinePeers(
+    useMemo(() => list.map((f) => f.userId).filter((id) => id in chatPeers), [list, chatPeers]),
+  );
   const incoming = requests.data?.incoming ?? [];
   const outgoing = requests.data?.outgoing ?? [];
   const now = new Date();
@@ -350,7 +383,10 @@ export function FriendsPane({ inputRef }: { inputRef?: RefObject<HTMLInputElemen
     r.createdAt ? (
       <>
         <span aria-hidden="true">·</span>
-        <Meta className="shrink-0">{formatRelativeTime(r.createdAt, now)}</Meta>
+        <Meta className="shrink-0">
+          <span aria-hidden="true">{formatRelativeTime(r.createdAt, now)}</span>
+          <span className="sr-only">{formatRelativeTimeLong(r.createdAt, now)}</span>
+        </Meta>
       </>
     ) : null;
 
@@ -366,7 +402,7 @@ export function FriendsPane({ inputRef }: { inputRef?: RefObject<HTMLInputElemen
           <Retry onRetry={() => void requests.refetch()}>Couldn’t load friend requests.</Retry>
         )}
         {incoming.length + outgoing.length > 0 && (
-          <section aria-labelledby={requestsId}>
+          <section>
             <SectionHeading id={requestsId}>
               Requests <span aria-hidden="true">·</span>{' '}
               <Meta className="ml-0.5">{incoming.length + outgoing.length}</Meta>
@@ -444,7 +480,7 @@ export function FriendsPane({ inputRef }: { inputRef?: RefObject<HTMLInputElemen
           </section>
         )}
 
-        <section aria-labelledby={friendsId} aria-busy={friends.isPending}>
+        <section aria-busy={friends.isPending}>
           <SectionHeading id={friendsId} headingRef={friendsHeading}>
             Friends
             {friends.isSuccess && (
@@ -458,17 +494,7 @@ export function FriendsPane({ inputRef }: { inputRef?: RefObject<HTMLInputElemen
           {friends.isError && (
             <Retry onRetry={() => void friends.refetch()}>Couldn’t load your friends.</Retry>
           )}
-          {friends.isSuccess && list.length === 0 && (
-            <div className="px-8 py-10 text-center">
-              <span className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-lg border border-line text-accent">
-                <UsersThreeIcon size={22} aria-hidden="true" />
-              </span>
-              <p className="font-medium">No friends yet</p>
-              <p className="mt-1 text-sm text-muted">
-                Add someone by their username above. When they accept, they’ll show up here.
-              </p>
-            </div>
-          )}
+          {friends.isSuccess && list.length === 0 && <FriendsEmpty handle={<HandleCard />} />}
           {list.length > 0 && (
             <ul aria-label="Friends" ref={listRef}>
               {list.map((f) => {
