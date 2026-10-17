@@ -77,6 +77,17 @@ try {
     if (shot.path) await page.locator('main h1').first().waitFor();
     else await page.getByRole('heading', { name: 'Design gallery' }).waitFor();
     await page.evaluate(() => document.fonts.ready);
+    if (shot.path) {
+      // Scroll once through the page so scroll-revealed sections are in the capture.
+      await page.evaluate(async () => {
+        for (let y = 0; y < document.documentElement.scrollHeight; y += 400) {
+          window.scrollTo(0, y);
+          await new Promise((r) => setTimeout(r, 80));
+        }
+        window.scrollTo(0, 0);
+      });
+      await page.waitForTimeout(1200);
+    }
     // Let late font swaps settle: shrink-wrapped bubbles re-measure a frame or two later.
     await page.waitForTimeout(500);
     const path = join(out, shot.file);
