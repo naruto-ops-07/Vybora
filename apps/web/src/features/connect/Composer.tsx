@@ -1,7 +1,10 @@
-import { LockSimpleIcon, PaperclipIcon, PaperPlaneRightIcon, XIcon } from '@phosphor-icons/react';
+import { LockSimpleIcon, PaperclipIcon, XIcon } from '@phosphor-icons/react';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Tip } from '@/components/ui/Tooltip';
+import { useA11y } from '@/features/a11y/A11yProvider';
+import { cn } from '@/lib/cn';
+import { SendGlyph, useSealedSend } from './SealedSend';
 
 export interface ReplyDraft {
   id: string;
@@ -20,23 +23,56 @@ interface Props {
   disabledReason?: string;
   replyTo: ReplyDraft | null;
   onCancelReply: () => void;
-  onSend: (text: string) => void;
+  /**
+   * Send the text. The sealed-send moment plays once this succeeds: right away
+   * for `void`/`true`, when a returned promise resolves to anything but `false`,
+   * and never for `false` or a rejection. Sending is never held up by it.
+   */
+  onSend: (text: string) => void | boolean | Promise<boolean | void>;
   onFiles: (files: File[]) => void;
   onTyping: (typing: boolean) => void;
   draftKey: string;
+  /** Gallery only: bump to play the seal without sending anything. */
+  sealDemoRun?: number;
 }
 
 const MAX = 4000;
 const drafts = new Map<string, string>(); // in memory only: drafts never touch storage
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { accent, disabled, disabledReason, replyTo, onCancelReply, onSend, onFiles, onTyping, draftKey },
+  {
+    accent,
+    disabled,
+    disabledReason,
+    replyTo,
+    onCancelReply,
+    onSend,
+    onFiles,
+    onTyping,
+    draftKey,
+    sealDemoRun,
+  },
   ref,
 ) {
   const [text, setText] = useState(() => drafts.get(draftKey) ?? '');
   const area = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   useImperativeHandle(ref, () => ({ focus: () => area.current?.focus() }), []);
+  const { reduceMotion } = useA11y();
+  const seal = useSealedSend(reduceMotion);
+  const { play } = seal;
+  // A late result for a chat I've since left (or an unmounted composer) plays nothing.
+  const liveKey = useRef<string | null>(draftKey);
+  useEffect(() => {
+    liveKey.current = draftKey;
+    return () => {
+      liveKey.current = null;
+    };
+  }, [draftKey]);
+
+  useEffect(() => {
+    if (sealDemoRun) play();
+  }, [sealDemoRun, play]);
 
   useEffect(() => {
     setText(drafts.get(draftKey) ?? '');
@@ -57,9 +93,17 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const send = () => {
     const body = text.trim();
     if (!body || disabled) return;
-    onSend(body.slice(0, MAX));
+    const result = onSend(body.slice(0, MAX));
     setText('');
     onTyping(false);
+    if (result === false) return;
+    if (result instanceof Promise) {
+      const key = draftKey;
+      result.then(
+        (ok) => ok !== false && liveKey.current === key && play(),
+        () => undefined,
+      );
+    } else play();
   };
 
   if (disabled) {
@@ -141,8 +185,20 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             className="max-h-[180px] w-full resize-none bg-transparent py-2 text-msg outline-none placeholder:text-subtle"
           />
         </div>
-        <Button size="icon" onClick={send} disabled={!text.trim()} aria-label="Send">
-          <PaperPlaneRightIcon size={18} weight="fill" />
+        <Button
+          size="icon"
+          onClick={send}
+          disabled={!text.trim()}
+          aria-label="Send"
+          data-seal={seal.playing ? 'playing' : 'idle'}
+          // While the seal plays the (now empty, disabled) button stays at full
+          // strength, then settles back to its dimmed rest state.
+          className={cn(
+            'transition-[color,background-color,opacity] duration-150',
+            seal.playing && 'disabled:opacity-100',
+          )}
+        >
+          <SendGlyph run={seal.run} playing={seal.playing} />
         </Button>
       </div>
       {text.length > MAX - 200 && (

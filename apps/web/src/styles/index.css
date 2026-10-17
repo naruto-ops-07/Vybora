@@ -395,6 +395,62 @@
   }
 }
 
+/*
+ * Sealed send (Composer): plane out, lock in with its shackle open, the shackle
+ * closes 3 px by 320 ms, a short hold, then the plane returns. 600 ms in all
+ * (1 % = 6 ms). Mirrors SEAL_MS in features/connect/SealedSend.tsx. JS never
+ * starts it under reduced motion; the reduced-motion rules are a second guard.
+ */
+.seal-plane {
+  animation: seal-plane 600ms linear both;
+}
+.seal-lock {
+  animation: seal-lock 600ms linear both;
+}
+.seal-shackle {
+  animation: seal-shackle 600ms linear both;
+}
+@keyframes seal-plane {
+  0% {
+    opacity: 1;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  13.33%,
+  83.33% {
+    opacity: 0;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes seal-lock {
+  0% {
+    opacity: 0;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  20%,
+  73.33% {
+    opacity: 1;
+    animation-timing-function: ease-in;
+  }
+  86.67%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes seal-shackle {
+  0%,
+  13.33% {
+    transform: translateY(-3px);
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  53.33%,
+  100% {
+    transform: translateY(0);
+  }
+}
+
 /* Reduced motion: the system setting unless overridden in Accessibility (data-reduce-motion). */
 @media (prefers-reduced-motion: reduce) {
   :root:not([data-reduce-motion='false']) *,

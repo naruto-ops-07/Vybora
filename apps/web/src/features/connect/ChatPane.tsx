@@ -326,9 +326,11 @@ export default function ChatPane() {
     setLimit((l) => l + MESSAGE_PAGE);
   };
 
-  const run = async (fn: () => Promise<unknown>) => {
+  /** Runs an engine call, explaining any failure. Resolves to whether it succeeded. */
+  const run = async (fn: () => Promise<unknown>): Promise<boolean> => {
     try {
       await fn();
+      return true;
     } catch (e) {
       const code = (e as { code?: string }).code;
       if (code === 'not_ready')
@@ -339,6 +341,7 @@ export default function ChatPane() {
       else if (code === 'network')
         toast.show('You appear to be offline. Use Retry on the message once you’re back.', 'error');
       else toast.show(friendlyError(e), 'error');
+      return false;
     }
   };
 
@@ -357,8 +360,10 @@ export default function ChatPane() {
       : undefined;
     setReplyTo(null);
     stick.current = true;
-    void run(() => engine!.send(id, { t: 'text', body, replyTo: r }));
+    const sent = run(() => engine!.send(id, { t: 'text', body, replyTo: r }));
     if (showOnline) void touchActivity(supabase).catch(() => undefined);
+    // Composer seals the send glyph once the server has stored the ciphertext.
+    return sent;
   };
 
   const sendFiles = async (files: File[]) => {
