@@ -1,5 +1,6 @@
 import { highContrastThemes } from '@vybora/config';
 import { describe, expect, it } from 'vitest';
+import { contrastRatio } from '../contrast';
 import { DEFAULT_A11Y_PREFS, parseA11yPrefs, resolveReduceMotion } from './a11y';
 
 describe('parseA11yPrefs', () => {
@@ -33,18 +34,7 @@ describe('resolveReduceMotion', () => {
   });
 });
 
-/** WCAG 2.x relative luminance contrast. */
-function contrast(a: string, b: string) {
-  const lum = (hex: string) => {
-    const [r, g, bl] = [1, 3, 5].map((i) => {
-      const c = parseInt(hex.slice(i, i + 2), 16) / 255;
-      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-    });
-    return 0.2126 * r! + 0.7152 * g! + 0.0722 * bl!;
-  };
-  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
-  return (hi! + 0.05) / (lo! + 0.05);
-}
+const contrast = contrastRatio;
 
 describe('high-contrast themes', () => {
   for (const name of ['light', 'dark'] as const) {

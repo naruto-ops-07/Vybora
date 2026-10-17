@@ -157,4 +157,46 @@ export const iconSizes = { sm: 16, md: 20, lg: 24 } as const;
 /** Motion is functional only: opacity/colour transitions, no lift or scale. */
 export const motion = { fast: 120, base: 180 } as const;
 
+export type PersonToneName =
+  'turquoise' | 'emerald' | 'lime' | 'aqua' | 'sky' | 'mint' | 'ocean' | 'glacier';
+
+/** One tone in one theme: avatar fill, initials on that fill, and name text on surfaces. */
+export interface PersonToneColors {
+  fill: string;
+  ink: string;
+  name: string;
+}
+
+const DARK_INK = palette.graphite950;
+const tone = (dark: string, lightFill: string, lightName: string, lightInk = lightName) => ({
+  dark: { fill: dark, ink: DARK_INK, name: dark },
+  light: { fill: lightFill, ink: lightInk, name: lightName },
+});
+
+/**
+ * Personal tones (people are the colour). Keys and order match `PERSON_TONES` in
+ * `@vybora/core`, which picks one per user id. Used only for avatar fallbacks,
+ * group sender names and mentions — never chrome, buttons or backgrounds.
+ * Contrast is checked in core (tones.test.ts). Departures from the 2026-10-17 spec table,
+ * made because a contrast test failed: lime light name #4D7C0F → #3F6212 (4.42:1 on
+ * #EDF2F2); light ink for turquoise, emerald, aqua and sky is one step darker than the
+ * name (the name colour was 4.28–4.47:1 on its fill).
+ */
+export const personTones: Record<
+  PersonToneName,
+  { dark: PersonToneColors; light: PersonToneColors }
+> = {
+  turquoise: tone('#2DD4BF', '#99F6E4', '#0F766E', '#115E59'),
+  emerald: tone('#34D399', '#A7F3D0', '#047857', '#065F46'),
+  lime: tone('#A3E635', '#D9F99D', '#3F6212'),
+  aqua: tone('#22D3EE', '#A5F3FC', '#0E7490', '#155E75'),
+  sky: tone('#38BDF8', '#BAE6FD', '#0369A1', '#075985'),
+  mint: tone('#6EE7B7', '#D1FAE5', '#065F46'),
+  ocean: tone('#60A5FA', '#BFDBFE', '#1D4ED8'),
+  glacier: tone('#A5B4FC', '#E0E7FF', '#4338CA'),
+};
+
+/** High contrast keeps tone fills; initials switch to the theme ink for ≥ 7:1. */
+export const personToneHighContrastInk = { light: palette.ink, dark: palette.graphite950 } as const;
+
 export * from './chat';
