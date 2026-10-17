@@ -90,6 +90,11 @@ export const ButtonLink = forwardRef<HTMLAnchorElement, ButtonLinkProps>(functio
   ref,
 ) {
   return (
-    <Link ref={ref} className={buttonClasses({ variant, size, fullWidth, className })} {...rest} />
+    <Link
+      ref={ref}
+      data-button=""
+      className={buttonClasses({ variant, size, fullWidth, className })}
+      {...rest}
+    />
   );
 });

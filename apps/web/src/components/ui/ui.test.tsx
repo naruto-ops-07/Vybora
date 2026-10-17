@@ -9,6 +9,7 @@ import {
 } from '@/components/illustrations';
 import { readEnv } from '@/lib/env';
 import { renderWithProviders } from '@/test/utils';
+import { ButtonLink } from './Button';
 import { ConfirmDialog } from './Dialog';
 import { Toggle } from './Field';
 import { EmptyState, ErrorState } from './States';
@@ -64,6 +65,11 @@ describe('state components', () => {
       if (el.getAttribute('stroke') === 'currentColor')
         expect(el.getAttribute('stroke-width')).toBe('1.5');
     }
+  });
+
+  it('ButtonLink marks itself so high contrast leaves it un-underlined', () => {
+    renderWithProviders(<ButtonLink to="/friends">Add a friend</ButtonLink>);
+    expect(screen.getByRole('link', { name: 'Add a friend' })).toHaveAttribute('data-button');
   });
 
   it('ErrorState shows a friendly message and retries', async () => {
