@@ -1,10 +1,4 @@
-import {
-  BellSlashIcon,
-  LockSimpleIcon,
-  MagnifyingGlassIcon,
-  NotePencilIcon,
-  PushPinIcon,
-} from '@phosphor-icons/react';
+import { MagnifyingGlassIcon, NotePencilIcon } from '@phosphor-icons/react';
 import {
   isMuted,
   peerOf,
@@ -12,7 +6,7 @@ import {
   updateConversationPreferences,
   type SecureConversation,
 } from '@vybora/api';
-import { chatRowPreview, formatRowTime, formatUnread, receiptOf } from '@vybora/core';
+import { chatRowPreview, formatRowTime, receiptOf } from '@vybora/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
@@ -24,7 +18,8 @@ import { useA11y } from '@/features/a11y/A11yProvider';
 import { useMe } from '@/features/auth/AuthProvider';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
-import { ChatRowActions, ChatRowMenu, RowPreviewText } from './ChatRowParts';
+import { ChatRowMenu } from './ChatRowParts';
+import { ChatRowView } from './ChatRowView';
 import { useConnect } from './ConnectProvider';
 import {
   conversationTitle,
@@ -35,7 +30,6 @@ import {
   useSecureInbox,
 } from './hooks';
 import { NewChatDialog } from './NewChatDialog';
-import { Meta } from './ui';
 
 type Filter = 'all' | 'unread' | 'groups' | 'pinned' | 'archived';
 const FILTERS: { id: Filter; label: string }[] = [
@@ -261,7 +255,6 @@ export function InboxPane({
             const peer = peerOf(c, userId);
             const title = conversationTitle(c, userId, nicknames.data);
             const last = previews.data?.[c.id];
-            const unread = c.unreadCount > 0;
             const preview = chatRowPreview(last, {
               myUserId: userId,
               isGroup: c.kind === 'group',
@@ -270,124 +263,46 @@ export function InboxPane({
               receipt: last ? receiptOf(last, userId, c.members) : undefined,
             });
             const muted = isMuted(c) || !c.notificationsEnabled;
-            const active = activeId === c.id;
             return (
-              <li
+              <ChatRowView
                 key={c.id}
-                className={cn(
-                  'group relative transition-colors duration-150',
-                  active ? 'bg-surface-strong' : 'hover:bg-surface-muted',
-                  // Always-visible actions sit beside the row so they never cover its time.
-                  a11y.alwaysShowActions && 'flex items-center',
-                )}
-              >
-                <ChatRowMenu
-                  conv={c}
-                  title={title}
-                  onPrefs={(p) => prefs(c, p)}
-                  onArchive={() => archive(c)}
-                >
-                  <Link
-                    to={`/messages/${c.id}`}
-                    data-chat-link
-                    aria-current={active ? 'page' : undefined}
-                    className={cn(
-                      'relative flex items-center gap-3 px-4 py-2.5',
-                      a11y.alwaysShowActions && 'min-w-0 flex-1 pr-2',
-                    )}
+                to={`/messages/${c.id}`}
+                title={title}
+                avatar={
+                  c.kind === 'group' ? (
+                    <GroupAvatar members={c.members.filter((m) => m.id !== userId)} size={48} />
+                  ) : (
+                    <Avatar
+                      path={peer?.avatar_path}
+                      name={peer?.username ?? '?'}
+                      userId={peer?.id ?? c.id}
+                      displayName={peer?.display_name}
+                      size={48}
+                    />
+                  )
+                }
+                online={!!peer && shownOnline.has(peer.id)}
+                time={formatRowTime(last?.createdAt ?? c.lastMessageAt, new Date())}
+                preview={engine ? preview : null}
+                unreadCount={c.unreadCount}
+                pinned={c.pinned}
+                archived={c.archived}
+                muted={muted}
+                active={activeId === c.id}
+                alwaysShowActions={a11y.alwaysShowActions}
+                onPin={() => prefs(c, { pinned: !c.pinned })}
+                onArchive={() => archive(c)}
+                wrapLink={(link) => (
+                  <ChatRowMenu
+                    conv={c}
+                    title={title}
+                    onPrefs={(p) => prefs(c, p)}
+                    onArchive={() => archive(c)}
                   >
-                    {active && (
-                      <span
-                        className="absolute inset-y-0 left-0 w-0.5 bg-accent"
-                        aria-hidden="true"
-                      />
-                    )}
-                    <span className="relative">
-                      {c.kind === 'group' ? (
-                        <GroupAvatar members={c.members.filter((m) => m.id !== userId)} size={48} />
-                      ) : (
-                        <Avatar
-                          path={peer?.avatar_path}
-                          name={peer?.username ?? '?'}
-                          userId={peer?.id ?? c.id}
-                          displayName={peer?.display_name}
-                          size={48}
-                        />
-                      )}
-                      {peer && shownOnline.has(peer.id) && (
-                        <span
-                          className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-surface bg-success"
-                          aria-label="Online"
-                        />
-                      )}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-1.5">
-                        <span
-                          className={cn(
-                            'truncate text-msg',
-                            unread ? 'font-semibold' : 'font-medium',
-                          )}
-                        >
-                          {title}
-                        </span>
-                        {c.pinned && (
-                          <PushPinIcon
-                            size={12}
-                            className="shrink-0 text-subtle"
-                            aria-label="Pinned"
-                          />
-                        )}
-                        {muted && (
-                          <BellSlashIcon
-                            size={12}
-                            className="shrink-0 text-subtle"
-                            aria-label="Muted"
-                          />
-                        )}
-                        <Meta className={cn('ml-auto shrink-0', unread && 'text-accent')}>
-                          {formatRowTime(last?.createdAt ?? c.lastMessageAt, new Date())}
-                        </Meta>
-                      </span>
-                      <span className="mt-0.5 flex items-center gap-2">
-                        <span
-                          className={cn(
-                            'text-msg-sm min-w-0 truncate',
-                            unread ? 'text-ink' : 'text-muted',
-                          )}
-                        >
-                          {engine ? (
-                            <RowPreviewText preview={preview} unread={unread} />
-                          ) : (
-                            <span className="inline-flex items-center gap-1">
-                              <LockSimpleIcon size={11} aria-hidden="true" /> Encrypted
-                            </span>
-                          )}
-                        </span>
-                        {unread && (
-                          <span
-                            className={cn(
-                              'ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-sm px-1 font-mono text-[11px] font-medium',
-                              muted ? 'bg-surface-strong text-ink' : 'bg-accent text-on-accent',
-                            )}
-                          >
-                            {formatUnread(c.unreadCount)}
-                            <span className="sr-only"> unread</span>
-                          </span>
-                        )}
-                      </span>
-                    </span>
-                  </Link>
-                </ChatRowMenu>
-                <ChatRowActions
-                  title={title}
-                  pinned={c.pinned}
-                  archived={c.archived}
-                  alwaysShow={a11y.alwaysShowActions}
-                  onPin={() => prefs(c, { pinned: !c.pinned })}
-                  onArchive={() => archive(c)}
-                />
-              </li>
+                    {link}
+                  </ChatRowMenu>
+                )}
+              />
             );
           })}
         </ul>

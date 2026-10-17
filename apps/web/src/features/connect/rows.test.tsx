@@ -4,9 +4,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
+import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/Tooltip';
 import { ChatRowActions, ChatRowMenu, RowPreviewText } from './ChatRowParts';
+import { ChatRowView } from './ChatRowView';
 import { useInboxTyping, useLastSeen } from './hooks';
 
 const { fetchLastSeen } = vi.hoisted(() => ({ fetchLastSeen: vi.fn() }));
@@ -140,6 +142,59 @@ describe('chat row actions', () => {
     expect(onPin).toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'More actions for Maya' }));
     expect(await screen.findByRole('menuitem', { name: 'Archive' })).toBeInTheDocument();
+  });
+});
+
+describe('chat row view', () => {
+  const base = {
+    to: '/messages/c1',
+    title: 'Maya',
+    avatar: <span role="img" aria-label="maya" />,
+    time: '14:05',
+    preview: { prefix: null, text: 'See you at 7', receipt: null, typing: false },
+    unreadCount: 0,
+    pinned: false,
+    archived: false,
+    muted: false,
+    active: false,
+    alwaysShowActions: false,
+    onPin: vi.fn(),
+    onArchive: vi.fn(),
+  };
+  const view = (props: Partial<Parameters<typeof ChatRowView>[0]> = {}) =>
+    render(
+      <MemoryRouter>
+        <TooltipProvider>
+          <ul>
+            <ChatRowView {...base} {...props} />
+          </ul>
+        </TooltipProvider>
+      </MemoryRouter>,
+    );
+
+  it('links to the chat with the title, time and preview', () => {
+    view({ active: true });
+    const link = screen.getByRole('link', { name: /Maya/ });
+    expect(link).toHaveAttribute('href', '/messages/c1');
+    expect(link).toHaveAttribute('aria-current', 'page');
+    expect(link).toHaveTextContent('See you at 7');
+    expect(link).toHaveTextContent('14:05');
+  });
+
+  it('shows unread, pinned and muted state, and Encrypted while locked', () => {
+    view({ unreadCount: 3, pinned: true, muted: true, preview: null });
+    expect(screen.getByText('3')).toHaveTextContent('3 unread');
+    expect(screen.getByLabelText('Pinned')).toBeInTheDocument();
+    expect(screen.getByLabelText('Muted')).toBeInTheDocument();
+    expect(screen.getByText('Encrypted')).toBeInTheDocument();
+  });
+
+  it('wraps the link and wires the row actions', async () => {
+    const onPin = vi.fn();
+    view({ onPin, wrapLink: (link) => <div data-testid="menu">{link}</div> });
+    expect(screen.getByTestId('menu')).toContainElement(screen.getByRole('link', { name: /Maya/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Pin Maya' }));
+    expect(onPin).toHaveBeenCalled();
   });
 });
 
