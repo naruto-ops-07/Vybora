@@ -12,7 +12,9 @@ import { Toggle } from '@/components/ui/Field';
 import { Segmented } from '@/components/ui/Segmented';
 import { useA11y } from '@/features/a11y/A11yProvider';
 import { ChatListSection } from './sections/ChatList';
+import { EmptyStatesSection, GetStartedSection, HandleCardSection } from './sections/FirstRun';
 import { GroupAvatarsSection } from './sections/GroupAvatars';
+import { IllustrationsSection } from './sections/Illustrations';
 import { ThreadSection } from './sections/Thread';
 import { TonesSection } from './sections/Tones';
 
@@ -25,7 +27,6 @@ interface GallerySection {
 
 /**
  * Add new sections here, in reading order.
- * D2: illustrations, the four empty states, Get started (0/3, 2/3, done), HandleCard.
  * D3: composer with "Play sealed send", friend and request rows, the friendship-joined card
  *     (with a replay button).
  */
@@ -50,6 +51,34 @@ const SECTIONS: GallerySection[] = [
     description:
       'ChatRowView, as in the inbox: unread, pinned, muted, typing, my last message, locked, selected.',
     Component: ChatListSection,
+  },
+  {
+    id: 'illustrations',
+    title: 'Illustrations',
+    description:
+      'Graphite line, tone and accent fills, our bubble tail and lock seal. They follow the theme and high contrast.',
+    Component: IllustrationsSection,
+  },
+  {
+    id: 'empty-states',
+    title: 'Empty states',
+    description:
+      'Illustration, heading, one sentence, then actions. The welcome and friends states carry your HandleCard.',
+    Component: EmptyStatesSection,
+  },
+  {
+    id: 'get-started',
+    title: 'Get started',
+    description:
+      'The first-run panel at the top of the chat list: 0 of 3, 2 of 3, and the one-time "You’re all set".',
+    Component: GetStartedSection,
+  },
+  {
+    id: 'handle-card',
+    title: 'HandleCard',
+    description:
+      'Your @username with Copy and Share. Full on welcome and friends, compact in Get started.',
+    Component: HandleCardSection,
   },
   {
     id: 'thread',
