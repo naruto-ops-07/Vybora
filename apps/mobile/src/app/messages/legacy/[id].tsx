@@ -148,7 +148,13 @@ export default function LegacyConversation() {
         options={{
           headerTitle: () => (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Avatar path={other?.avatar_path} name={other?.username ?? '?'} size={28} />
+              <Avatar
+                path={other?.avatar_path}
+                name={other?.username ?? '?'}
+                userId={other?.id ?? id}
+                displayName={other?.display_name}
+                size={28}
+              />
               <View>
                 <Text variant="label">{other?.username ?? ''}</Text>
                 <Text variant="mono" style={{ color: t.warning }}>

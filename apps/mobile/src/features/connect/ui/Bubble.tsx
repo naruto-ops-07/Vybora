@@ -6,6 +6,7 @@ import Svg, { Path } from 'react-native-svg';
 import { Icon } from '@/components/Icon';
 import { Text } from '@/components/Text';
 import { Avatar } from '@/components/ui';
+import { usePersonTone } from '@/lib/personTones';
 import { radii } from '@/lib/theme';
 import { FileAttachment, ImageAttachment, VideoAttachment, VoiceAttachment } from './Attachment';
 import { useCc, type ResolvedTheme } from './primitives';
@@ -73,7 +74,7 @@ export interface BubbleProps {
   showSender: boolean;
   runStart: boolean;
   runEnd: boolean;
-  avatar?: { path: string | null; name: string };
+  avatar?: { path: string | null; name: string; userId: string; displayName?: string | null };
   onLongPress: (m: LocalMessage) => void;
   onRetry: (m: LocalMessage) => void;
   onOpenImage: (uri: string) => void;
@@ -107,6 +108,7 @@ export const Bubble = memo(function Bubble({
   nameOf,
 }: BubbleProps) {
   const cc = useCc();
+  const senderTone = usePersonTone(m.senderId);
   const senderLabel = mine ? 'You' : nameOf(m.senderId);
   const time = useMemo(() => formatClock(m.createdAt), [m.createdAt]);
   const label = useMemo(
@@ -278,9 +280,9 @@ export const Bubble = memo(function Bubble({
       {showSender && !mine && senderName && (
         <Text
           style={{
-            color: theme.accent,
+            color: senderTone.text,
             fontSize: 12,
-            fontWeight: '600',
+            fontWeight: senderTone.bold ? '700' : '600',
             marginLeft: avatar ? 4 + AVATAR_COLUMN : 4,
             marginBottom: 2,
           }}
@@ -318,7 +320,14 @@ export const Bubble = memo(function Bubble({
         {avatar &&
           !mine &&
           (runEnd ? (
-            <Avatar path={avatar.path} name={avatar.name} size={28} />
+            <Avatar
+              path={avatar.path}
+              name={avatar.name}
+              userId={avatar.userId}
+              displayName={avatar.displayName}
+              size={28}
+              decorative
+            />
           ) : (
             <View style={{ width: 28 }} />
           ))}

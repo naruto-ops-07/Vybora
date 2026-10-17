@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { personTone } from '@vybora/core';
 
 jest.mock('@/lib/supabase', () => ({
   supabase: { storage: { from: () => ({ getPublicUrl: () => ({ data: { publicUrl: '' } }) }) } },
@@ -7,7 +8,7 @@ jest.mock('@/lib/supabase', () => ({
   signedDm: () => new Promise(() => undefined),
 }));
 
-import { Avatar, Button, Empty, ErrorView, TextField } from '@/components/ui';
+import { Avatar, Button, Empty, ErrorView, GroupAvatar, TextField } from '@/components/ui';
 
 describe('mobile UI primitives', () => {
   it('Button exposes an accessible role, label and busy state', async () => {
@@ -43,9 +44,35 @@ describe('mobile UI primitives', () => {
     expect(screen.getByText('No reels yet')).toBeTruthy();
   });
 
-  it('Avatar falls back to an initial when there is no photo', async () => {
-    await render(<Avatar path={null} name="maya" />);
-    expect(screen.getByText('M')).toBeTruthy();
+  it('Avatar falls back to initials on the person’s tone when there is no photo', async () => {
+    await render(<Avatar path={null} name="maya" userId="u-maya" displayName="Maya Lin" />);
+    expect(screen.getByText('ML')).toBeTruthy();
     expect(screen.getByLabelText('maya')).toBeTruthy();
+    expect(screen.getByTestId(`avatar-tone-${personTone('u-maya')}`)).toBeTruthy();
+  });
+
+  it('Avatar shows one initial when small, and the username when there is no name', async () => {
+    await render(<Avatar path={null} name="sam.k" userId="u-sam" size={22} />);
+    expect(screen.getByText('S')).toBeTruthy();
+  });
+
+  it('GroupAvatar overlaps the first two other members by id', async () => {
+    await render(
+      <GroupAvatar
+        label="Trip"
+        members={[
+          { id: 'c', username: 'cy' },
+          { id: 'a', username: 'al', display_name: 'Al Bo' },
+          { id: 'b', username: 'bea' },
+        ]}
+      />,
+    );
+    expect(screen.getByLabelText('Trip')).toBeTruthy();
+    // The member avatars are decorative inside the labelled group image.
+    const hidden = { includeHiddenElements: true };
+    expect(screen.getByText('AB', hidden)).toBeTruthy();
+    expect(screen.getByText('B', hidden)).toBeTruthy();
+    expect(screen.queryByText('C', hidden)).toBeNull();
+    expect(screen.queryByText('AB')).toBeNull();
   });
 });

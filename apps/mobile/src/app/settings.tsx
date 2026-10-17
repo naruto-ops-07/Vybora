@@ -151,7 +151,13 @@ export default function Settings() {
         >
           <View style={{ padding: 16, gap: 16 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-              <Avatar path={profile.avatar_path} name={profile.username} size={56} />
+              <Avatar
+                path={profile.avatar_path}
+                name={profile.username}
+                userId={userId}
+                displayName={profile.display_name}
+                size={56}
+              />
               <View style={{ flex: 1 }}>
                 <Text style={{ fontWeight: '600' }}>
                   {profile.display_name || profile.username}

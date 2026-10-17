@@ -31,7 +31,13 @@ export function RequestRow({
   return (
     <View style={{ paddingHorizontal: 16, paddingVertical: 10, gap: 10 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <Avatar path={request.avatarPath} name={request.username} size={48} />
+        <Avatar
+          path={request.avatarPath}
+          name={request.username}
+          userId={request.userId}
+          displayName={request.displayName}
+          size={48}
+        />
         <View style={{ flex: 1, gap: 2 }}>
           <Text scale style={{ color: cc.text, fontSize: 16, fontWeight: '500' }} numberOfLines={1}>
             {name}

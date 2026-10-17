@@ -1,6 +1,4 @@
-import { avatarUrl } from '@vybora/api';
 import { friendlyError } from '@vybora/core';
-import { Image } from 'expo-image';
 import { forwardRef, type ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -15,11 +13,11 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { radii, useTheme } from '@/lib/theme';
-import { supabase } from '@/lib/supabase';
 import { Icon, type IconName } from './Icon';
 import { Text as BaseText, TextInput } from './Text';
 
 export { Icon, type IconName };
+export { Avatar, GroupAvatar, type AvatarPerson } from './Avatar';
 
 type Variant = 'title' | 'heading' | 'body' | 'muted' | 'small' | 'label' | 'mono';
 
@@ -148,53 +146,6 @@ export const TextField = forwardRef<
     </View>
   );
 });
-
-// Flat tones; white initials meet 4.5:1 on each.
-const AVATAR_COLORS = ['#0F766E', '#1D4ED8', '#047857', '#6D28D9', '#B45309', '#3F4A4D', '#BE185D'];
-
-export function Avatar({
-  path,
-  name,
-  size = 40,
-}: {
-  path: string | null | undefined;
-  name: string;
-  size?: number;
-}) {
-  const uri = avatarUrl(supabase, path);
-  const color =
-    AVATAR_COLORS[
-      Math.abs([...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0)) % AVATAR_COLORS.length
-    ];
-  return (
-    <View accessibilityLabel={name}>
-      {uri ? (
-        <Image
-          source={{ uri }}
-          style={{ width: size, height: size, borderRadius: size / 2 }}
-          contentFit="cover"
-          transition={120}
-          accessibilityIgnoresInvertColors
-        />
-      ) : (
-        <View
-          style={{
-            width: size,
-            height: size,
-            borderRadius: size / 2,
-            backgroundColor: color,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <BaseText style={{ color: '#fff', fontWeight: '600', fontSize: size * 0.4 }}>
-            {(name[0] ?? '?').toUpperCase()}
-          </BaseText>
-        </View>
-      )}
-    </View>
-  );
-}
 
 export function Loading({ label = 'Loading' }: { label?: string }) {
   const t = useTheme();

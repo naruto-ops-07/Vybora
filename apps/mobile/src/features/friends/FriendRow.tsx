@@ -74,7 +74,13 @@ export function FriendRow({
         })}
       >
         <View>
-          <Avatar path={friend.avatarPath} name={friend.username} size={48} />
+          <Avatar
+            path={friend.avatarPath}
+            name={friend.username}
+            userId={friend.userId}
+            displayName={friend.displayName}
+            size={48}
+          />
           {online && (
             <View
               testID="presence-dot"

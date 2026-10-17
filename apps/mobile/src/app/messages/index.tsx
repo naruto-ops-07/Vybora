@@ -393,7 +393,13 @@ function Inbox() {
                   accessibilityLabel={`Legacy chat with ${l.other_username ?? 'unavailable account'}`}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48 }}
                 >
-                  <Avatar path={l.other_avatar_path} name={l.other_username ?? '?'} size={32} />
+                  <Avatar
+                    path={l.other_avatar_path}
+                    name={l.other_username ?? '?'}
+                    userId={l.other_id ?? l.conversation_id}
+                    displayName={l.other_display_name}
+                    size={32}
+                  />
                   <Text style={{ color: cc.textMuted, flex: 1 }} numberOfLines={1}>
                     {l.other_username ?? 'Unavailable'}
                   </Text>

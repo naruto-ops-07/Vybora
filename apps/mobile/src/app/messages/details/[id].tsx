@@ -336,7 +336,13 @@ function Details() {
             <Icon name="users" size={36} color={cc.accent} />
           </View>
         ) : (
-          <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={80} />
+          <Avatar
+            path={peer?.avatar_path}
+            name={peer?.username ?? '?'}
+            userId={peer?.id ?? ''}
+            displayName={peer?.display_name}
+            size={80}
+          />
         )}
         <Text style={{ color: cc.text, fontSize: 20, fontWeight: '600' }}>{title}</Text>
         {peer && (
@@ -613,7 +619,13 @@ function Details() {
                 backgroundColor: pressed ? cc.raised : 'transparent',
               })}
             >
-              <Avatar path={m.avatar_path} name={m.username} size={38} />
+              <Avatar
+                path={m.avatar_path}
+                name={m.username}
+                userId={m.id}
+                displayName={m.display_name}
+                size={38}
+              />
               <View style={{ flex: 1 }}>
                 <Text style={{ color: cc.text, fontWeight: '600' }}>
                   {m.id === userId
@@ -888,7 +900,13 @@ function Details() {
                 }
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }}
               >
-                <Avatar path={u.avatar_path} name={u.username} size={40} />
+                <Avatar
+                  path={u.avatar_path}
+                  name={u.username}
+                  userId={u.id}
+                  displayName={u.display_name}
+                  size={40}
+                />
                 <Text style={{ color: cc.text, flex: 1 }}>{u.username}</Text>
                 <Icon name="plus" size={18} color={cc.accent} />
               </Pressable>

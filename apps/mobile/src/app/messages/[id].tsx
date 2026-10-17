@@ -568,7 +568,13 @@ function Chat() {
                         <Icon name="users" size={16} color={cc.accent} />
                       </View>
                     ) : (
-                      <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={34} />
+                      <Avatar
+                        path={peer?.avatar_path}
+                        name={peer?.username ?? '?'}
+                        userId={peer?.id ?? ''}
+                        displayName={peer?.display_name}
+                        size={34}
+                      />
                     )}
                     <View>
                       <Text
@@ -707,7 +713,12 @@ function Chat() {
                     runEnd={item.runEnd}
                     avatar={
                       group && !item.mine
-                        ? { path: sender?.avatar_path ?? null, name: sender?.username ?? '?' }
+                        ? {
+                            path: sender?.avatar_path ?? null,
+                            name: sender?.username ?? '?',
+                            userId: m.senderId,
+                            displayName: sender?.display_name,
+                          }
                         : undefined
                     }
                     receipt={receiptOf(m, userId, conv?.members ?? [])}

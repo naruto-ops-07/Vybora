@@ -3,7 +3,7 @@ import { formatUnread, type RowPreview } from '@vybora/core';
 import { Pressable, View } from 'react-native';
 import { Icon } from '@/components/Icon';
 import { Text } from '@/components/Text';
-import { Avatar } from '@/components/ui';
+import { Avatar, GroupAvatar } from '@/components/ui';
 import { radii } from '@/lib/theme';
 import { Ticks } from './Bubble';
 import { useCc } from './primitives';
@@ -27,25 +27,6 @@ export function RowPreviewLine({ preview, unread }: { preview: RowPreview; unrea
       >
         {preview.prefix ? `${preview.prefix}: ${preview.text}` : preview.text}
       </Text>
-    </View>
-  );
-}
-
-function GroupAvatar({ size }: { size: number }) {
-  const cc = useCc();
-  return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        backgroundColor: cc.strong,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-      accessibilityLabel="Group"
-    >
-      <Icon name="users" size={Math.round(size * 0.46)} color={cc.accent} />
     </View>
   );
 }
@@ -110,9 +91,20 @@ export function ChatRow({
     >
       <View>
         {conv.kind === 'group' ? (
-          <GroupAvatar size={48} />
+          <GroupAvatar
+            members={conv.members.filter((m) => m.id !== myId)}
+            size={48}
+            ring={cc.panel}
+          />
         ) : (
-          <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={48} />
+          <Avatar
+            path={peer?.avatar_path}
+            name={peer?.username ?? '?'}
+            userId={peer?.id ?? conv.id}
+            displayName={peer?.display_name}
+            size={48}
+            decorative
+          />
         )}
         {online && (
           <View

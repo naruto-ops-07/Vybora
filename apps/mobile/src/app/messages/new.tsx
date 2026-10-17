@@ -95,7 +95,13 @@ export default function NewChat() {
                   borderColor: cc.accent,
                 }}
               >
-                <Avatar path={u.avatar_path} name={u.username} size={22} />
+                <Avatar
+                  path={u.avatar_path}
+                  name={u.username}
+                  userId={u.id}
+                  displayName={u.display_name}
+                  size={22}
+                />
                 <Text style={{ color: cc.text, fontWeight: '600' }}>{u.username}</Text>
                 <Icon name="x" size={13} color={cc.textMuted} />
               </Pressable>
@@ -182,7 +188,13 @@ export default function NewChat() {
                 backgroundColor: pressed ? cc.panel : 'transparent',
               })}
             >
-              <Avatar path={item.avatar_path} name={item.username} size={44} />
+              <Avatar
+                path={item.avatar_path}
+                name={item.username}
+                userId={item.id}
+                displayName={item.display_name}
+                size={44}
+              />
               <View style={{ flex: 1 }}>
                 <Text style={{ color: cc.text, fontWeight: '600' }}>{item.username}</Text>
                 {!!item.display_name && (
