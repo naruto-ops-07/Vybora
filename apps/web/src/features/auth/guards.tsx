@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router';
 import { PageSpinner } from '@/components/ui/Spinner';
+import { safeNext } from '@/routes/auth/next';
 import { useAuth } from './AuthProvider';
 
 /**
@@ -20,9 +21,12 @@ export function RequireAuth() {
   return <Outlet />;
 }
 
+/** Signed in already (or just now): on to `?next=` if there is one, else messages. */
 export function RedirectIfAuthed() {
   const { session } = useAuth();
+  const location = useLocation();
   if (session === undefined) return <PageSpinner />;
-  if (session) return <Navigate to="/messages" replace />;
+  if (session)
+    return <Navigate to={safeNext(new URLSearchParams(location.search).get('next'))} replace />;
   return <Outlet />;
 }

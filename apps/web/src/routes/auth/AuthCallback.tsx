@@ -4,6 +4,7 @@ import { ButtonLink } from '@/components/ui/Button';
 import { PageSpinner } from '@/components/ui/Spinner';
 import { supabase } from '@/lib/supabase';
 import { AuthLayout } from './AuthLayout';
+import { takeRememberedNext } from './next';
 
 /**
  * Handles email-verification (and OAuth, when configured) redirects. With the
@@ -37,7 +38,8 @@ export default function AuthCallback() {
       }
       const { data } = await supabase.auth.getSession();
       if (cancelled) return;
-      if (data.session) navigate('/messages', { replace: true });
+      // Back from a sign-up confirmation: go where they were headed before signing up.
+      if (data.session) navigate(takeRememberedNext(), { replace: true });
       else setError('This link is invalid or has expired.');
     })();
     return () => {

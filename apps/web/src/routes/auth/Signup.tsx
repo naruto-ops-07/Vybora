@@ -1,17 +1,21 @@
 import { isUsernameAvailable, resendConfirmation, signUp } from '@vybora/api';
 import { EnvelopeSimpleIcon } from '@phosphor-icons/react';
 import { useCallback, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { siteUrl } from '@/lib/env';
 import { supabase } from '@/lib/supabase';
 import { AuthLayout } from './AuthLayout';
+import { rememberNext, safeNext, withNext } from './next';
 import { SignupForm } from './SignupForm';
 
 export default function Signup() {
   const navigate = useNavigate();
   const toast = useToast();
+  // Where they were headed (e.g. a friend's add link): honoured once they're in.
+  const [params] = useSearchParams();
+  const next = params.get('next');
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
   const checkUsername = useCallback((u: string) => isUsernameAvailable(supabase, u), []);
 
@@ -57,7 +61,7 @@ export default function Signup() {
       footer={
         <>
           Already have an account?{' '}
-          <Link to="/login" className="font-semibold text-accent hover:underline">
+          <Link to={withNext('/login', next)} className="font-semibold text-accent hover:underline">
             Sign in
           </Link>
         </>
@@ -68,8 +72,12 @@ export default function Signup() {
         onSubmit={async (values) => {
           const result = await signUp(supabase, values, `${siteUrl()}/auth/callback`);
           if (result.status === 'already_registered') throw new Error('User already registered');
-          if (result.status === 'signed_in') navigate('/messages', { replace: true });
-          else setPendingEmail(values.email);
+          if (result.status === 'signed_in') navigate(safeNext(next), { replace: true });
+          else {
+            // The confirmation link comes back through /auth/callback on this device.
+            rememberNext(next);
+            setPendingEmail(values.email);
+          }
         }}
       />
     </AuthLayout>

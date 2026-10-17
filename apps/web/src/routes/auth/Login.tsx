@@ -3,16 +3,14 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 import { supabase } from '@/lib/supabase';
 import { AuthLayout } from './AuthLayout';
 import { LoginForm } from './LoginForm';
+import { safeNext, withNext } from './next';
 
-/** Only allow same-origin relative redirects after login. */
-export function safeNext(next: string | null): string {
-  if (!next || !next.startsWith('/') || next.startsWith('//')) return '/messages';
-  return next;
-}
+export { safeNext };
 
 export default function Login() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  const next = params.get('next');
   return (
     <AuthLayout
       title="Sign in"
@@ -20,7 +18,10 @@ export default function Login() {
       footer={
         <>
           New to VYBORA?{' '}
-          <Link to="/signup" className="font-semibold text-accent hover:underline">
+          <Link
+            to={withNext('/signup', next)}
+            className="font-semibold text-accent hover:underline"
+          >
             Create an account
           </Link>
         </>
@@ -29,7 +30,7 @@ export default function Login() {
       <LoginForm
         onSubmit={async (values) => {
           await signIn(supabase, values);
-          navigate(safeNext(params.get('next')), { replace: true });
+          navigate(safeNext(next), { replace: true });
         }}
       />
     </AuthLayout>
