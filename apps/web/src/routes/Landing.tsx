@@ -173,8 +173,8 @@ export default function Landing() {
                 <ButtonLink
                   to="/signup"
                   size="lg"
-                  // `!`: cn doesn't merge classes, so the variant's colours would win otherwise.
-                  className="bg-[#2DD4BF]! text-[#04201D]! hover:bg-[#5EEAD4]!"
+                  // Fixed colours on the fixed teal band (cn merges, so these replace the variant's).
+                  className="bg-[#2DD4BF] text-[#04201D] hover:bg-[#5EEAD4]"
                 >
                   Create your account
                 </ButtonLink>
@@ -182,7 +182,7 @@ export default function Landing() {
                   to="/login"
                   size="lg"
                   variant="outline"
-                  className="border-[#E6EEEE]/40! text-[#E6EEEE]! hover:bg-white/10!"
+                  className="border-[#E6EEEE]/40 text-[#E6EEEE] hover:bg-white/10"
                 >
                   Sign in
                 </ButtonLink>
