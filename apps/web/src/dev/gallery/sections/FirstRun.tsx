@@ -25,7 +25,7 @@ function Handle({ variant = 'full' }: { variant?: 'full' | 'compact' }) {
   return <HandleCardView person={ME} link={LINK} variant={variant} />;
 }
 
-function Frame({
+export function Frame({
   label,
   children,
   className,

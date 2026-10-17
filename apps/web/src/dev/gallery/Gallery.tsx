@@ -12,6 +12,7 @@ import { Toggle } from '@/components/ui/Field';
 import { Segmented } from '@/components/ui/Segmented';
 import { useA11y } from '@/features/a11y/A11yProvider';
 import { ChatListSection } from './sections/ChatList';
+import { FriendsSection, SealedSendSection } from './sections/Delight';
 import { EmptyStatesSection, GetStartedSection, HandleCardSection } from './sections/FirstRun';
 import { GroupAvatarsSection } from './sections/GroupAvatars';
 import { IllustrationsSection } from './sections/Illustrations';
@@ -25,11 +26,7 @@ interface GallerySection {
   Component: ComponentType;
 }
 
-/**
- * Add new sections here, in reading order.
- * D3: composer with "Play sealed send", friend and request rows, the friendship-joined card
- *     (with a replay button).
- */
+/** Add new sections here, in reading order. */
 const SECTIONS: GallerySection[] = [
   {
     id: 'tones',
@@ -86,6 +83,20 @@ const SECTIONS: GallerySection[] = [
     description:
       'A group chat: runs and tails, sender names in tones, a reply, reactions, receipts, an unread divider.',
     Component: ThreadSection,
+  },
+  {
+    id: 'sealed-send',
+    title: 'Sealed send',
+    description:
+      'After a send goes through, the plane becomes a lock that closes, then comes back. Off under reduced motion.',
+    Component: SealedSendSection,
+  },
+  {
+    id: 'friends',
+    title: 'Friends',
+    description:
+      'The friendship-joined card above request and friend rows. The two avatars slide together once; under reduced motion they start joined.',
+    Component: FriendsSection,
   },
 ];
 
