@@ -4,6 +4,7 @@ import {
   FingerprintIcon,
   LockSimpleIcon,
   TimerIcon,
+  UserPlusIcon,
   UsersThreeIcon,
   XIcon,
 } from '@phosphor-icons/react';
@@ -43,6 +44,11 @@ const FEATURES = [
     icon: <TimerIcon size={20} />,
     title: 'Disappearing messages',
     body: 'Set a timer per chat, from five minutes to a week. Messages are removed from devices and the server.',
+  },
+  {
+    icon: <UserPlusIcon size={20} />,
+    title: 'Friends by username',
+    body: 'Add people by their exact username. Choose whether only friends can start chats with you.',
   },
 ];
 
@@ -99,7 +105,7 @@ export default function Landing() {
           <Hero />
 
           <section className="border-y border-line bg-surface" aria-label="Features">
-            <div className="mx-auto grid max-w-6xl gap-px border-x border-line bg-line sm:grid-cols-2 lg:grid-cols-5">
+            <div className="mx-auto grid max-w-6xl gap-px border-x border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
               {FEATURES.map((f) => (
                 <div key={f.title} className="bg-surface px-5 py-8">
                   <span className="text-accent" aria-hidden="true">
