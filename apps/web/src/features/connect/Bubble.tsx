@@ -21,7 +21,7 @@ import {
   type Receipt,
 } from '@vybora/core';
 import type { LocalMessage } from '@vybora/e2ee';
-import { memo, useMemo, useRef, useState, type ReactNode } from 'react';
+import { memo, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { useA11y } from '@/features/a11y/A11yProvider';
 import { cn } from '@/lib/cn';
@@ -71,6 +71,11 @@ function Linkified({ text }: { text: string }) {
     </>
   );
 }
+
+/** Hover bar buttons are 32 px; the bar adds a 1 px border each side. */
+const BAR_BUTTON_PX = 32;
+/** Before an incoming bubble: the 28 px avatar (or its spacer) and the row's 8 px gap. */
+const AVATAR_COLUMN_PX = 28 + 8;
 
 const RECEIPT_LABEL: Record<Receipt, string> = {
   sending: 'sending',
@@ -271,6 +276,8 @@ export const Bubble = memo(function Bubble({
   }
 
   const reactions = Object.entries(m.reactions).filter(([, users]) => users.length);
+  // React, Reply and More, plus Copy (text) and Delete (mine) in the hover bar.
+  const barButtons = 3 + (m.kind === 'text' ? 1 : 0) + (mine ? 1 : 0);
 
   return (
     <MessageMenu
@@ -310,7 +317,7 @@ export const Bubble = memo(function Bubble({
             {senderName}
           </span>
         )}
-        {/* A size container: the hover action bar picks beside-or-above from the row's width. */}
+        {/* A size container: the hover action bar keeps inside the row's width (`cqw`). */}
         <div
           className={cn(
             '@container relative flex w-full items-end gap-2',
@@ -422,19 +429,33 @@ export const Bubble = memo(function Bubble({
                     ? 'opacity-100'
                     : cn(
                         // Hover bar: positioned, so it never takes width from the bubble.
-                        // Narrow rows: a small toolbar over the bubble's top corner.
-                        // Wide rows (room for it): beside the bubble, as a plain row of icons.
-                        'hover-actions absolute -top-7 z-10 rounded-md border border-line-strong bg-surface',
-                        '@min-[820px]:top-1/2 @min-[820px]:-translate-y-1/2 @min-[820px]:border-transparent @min-[820px]:bg-transparent',
+                        // Centred on the bubble (always taller than the bar), so it never
+                        // reaches the sender name or the messages above and below.
+                        // Beside the bubble, in the gutter, when the row has room (4 px out);
+                        // when it doesn't, it stops at the row's edge and overlaps only the
+                        // bubble's own gutter-side end. `100cqw` is the row; `--bar-off` is
+                        // the avatar column before an incoming bubble.
+                        'hover-actions absolute top-1/2 z-10 -translate-y-1/2 rounded-md border border-line-strong bg-surface',
                         mine
-                          ? 'right-0 @min-[820px]:right-full @min-[820px]:mr-1'
-                          : 'left-0 @min-[820px]:left-full @min-[820px]:ml-1',
-                        // Invisible means untouchable too: no stray clicks on the row above.
+                          ? 'right-[max(4px,min(calc(100%_+_4px),calc(100cqw_-_var(--bar-w))))]'
+                          : 'left-[max(4px,min(calc(100%_+_4px),calc(100cqw_-_var(--bar-off)_-_var(--bar-w))))]',
+                        // Wide rows always have room: a plain row of icons beside the bubble.
+                        '@min-[820px]:border-transparent @min-[820px]:bg-transparent',
+                        // Invisible means untouchable too: no stray clicks on the bubble.
                         'focus-within:pointer-events-auto focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100',
                         picker ? 'opacity-100' : 'pointer-events-none opacity-0',
                       ),
                 )}
+                style={
+                  prefs.alwaysShowActions
+                    ? undefined
+                    : ({
+                        '--bar-w': `${barButtons * BAR_BUTTON_PX + 2}px`,
+                        '--bar-off': avatar && !mine ? `${AVATAR_COLUMN_PX}px` : '0px',
+                      } as CSSProperties)
+                }
                 data-actions={prefs.alwaysShowActions ? 'inline' : 'hover'}
+                data-bar-buttons={prefs.alwaysShowActions ? undefined : barButtons}
               >
                 <ActionButton label="React" onClick={() => setPicker((p) => !p)} expanded={picker}>
                   <SmileyIcon size={16} />
@@ -464,8 +485,8 @@ export const Bubble = memo(function Bubble({
                 aria-label="Reactions"
                 className={cn(
                   'absolute z-20 flex gap-0.5 rounded-md border border-line-strong bg-surface p-1',
-                  // Clear of the narrow hover toolbar, which sits above the bubble.
-                  prefs.alwaysShowActions ? '-top-11' : '-top-[4.75rem] @min-[820px]:-top-11',
+                  // Opened on purpose, so it may sit above the bubble like any menu.
+                  '-top-11',
                   mine ? 'right-0' : 'left-0',
                 )}
                 onKeyDown={(e) => e.key === 'Escape' && setPicker(false)}

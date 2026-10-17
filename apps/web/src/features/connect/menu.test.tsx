@@ -126,17 +126,19 @@ describe('always-visible actions', () => {
   };
   afterEach(() => localStorage.clear());
 
-  function renderBubble({ alwaysShowActions = true } = {}) {
+  function renderBubble({ alwaysShowActions = true, mine = true, showSender = false } = {}) {
     localStorage.setItem('vybora.a11y', JSON.stringify({ alwaysShowActions }));
     const theme = { ...resolveChatTheme(null), accent: '#0F766E' };
     return render(
       <A11yProvider>
         <TooltipProvider>
           <Bubble
-            message={msg}
-            mine
+            message={mine ? msg : { ...msg, senderId: 'sam' }}
+            mine={mine}
             theme={theme}
-            showSender={false}
+            showSender={showSender}
+            senderName="Sam"
+            avatar={mine ? undefined : { path: null, name: 'Sam' }}
             runStart
             runEnd
             myUserId="me"
@@ -175,6 +177,47 @@ describe('always-visible actions', () => {
     // The bubble's max width is a share of the row, which is a size container.
     expect(bar.parentElement).toHaveClass('max-w-[min(80%,600px)]');
     expect(bar.parentElement?.parentElement).toHaveClass('@container', 'w-full');
+  });
+
+  it('keeps the hover bar off the sender name and the messages around it', () => {
+    renderBubble({ alwaysShowActions: false, mine: false, showSender: true });
+    const bar = screen.getByRole('button', { name: 'Reply' }).closest('[data-actions]')!;
+    expect(screen.getByText('Sam')).toBeInTheDocument();
+    // Centred on the bubble (always taller than the bar), never above or below it.
+    expect(bar).toHaveClass('top-1/2', '-translate-y-1/2');
+    expect(bar.className).not.toMatch(/(^|\s)(-top-|top-full|bottom-)/);
+    // Incoming: beside the bubble in the gutter, stopping at the row's edge (100cqw, less
+    // the avatar column) when there isn't room. React, Reply, Copy, More: 4 × 32 + 2.
+    expect(bar).toHaveClass(
+      'left-[max(4px,min(calc(100%_+_4px),calc(100cqw_-_var(--bar-off)_-_var(--bar-w))))]',
+    );
+    expect(bar).toHaveAttribute('data-bar-buttons', '4');
+    const style = (bar as HTMLElement).style;
+    expect(style.getPropertyValue('--bar-w')).toBe('130px');
+    expect(style.getPropertyValue('--bar-off')).toBe('36px');
+  });
+
+  it('mirrors the hover bar for my own messages', () => {
+    renderBubble({ alwaysShowActions: false });
+    const bar = screen.getByRole('button', { name: 'Reply' }).closest('[data-actions]')!;
+    expect(bar).toHaveClass(
+      'top-1/2',
+      'right-[max(4px,min(calc(100%_+_4px),calc(100cqw_-_var(--bar-w))))]',
+    );
+    expect(bar).toHaveAttribute('data-bar-buttons', '5');
+    const style = (bar as HTMLElement).style;
+    expect(style.getPropertyValue('--bar-w')).toBe('162px');
+    expect(style.getPropertyValue('--bar-off')).toBe('0px');
+  });
+
+  it('keeps the hover bar reachable by keyboard', async () => {
+    renderBubble({ alwaysShowActions: false });
+    const bar = screen.getByRole('button', { name: 'Reply' }).closest('[data-actions]')!;
+    // Focus inside reveals it (and makes it clickable).
+    expect(bar).toHaveClass('focus-within:opacity-100', 'focus-within:pointer-events-auto');
+    screen.getByRole('button', { name: 'React' }).focus();
+    await userEvent.tab();
+    expect(screen.getByRole('button', { name: 'Reply' })).toHaveFocus();
   });
 
   it('keeps the always-visible bar in flow beside the bubble', () => {
