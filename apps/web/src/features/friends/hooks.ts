@@ -64,8 +64,11 @@ const retryHint = 'Check your connection and try again.';
 /**
  * Accept, decline, cancel and remove, each applied to the cache at once and
  * undone item by item on failure (so two quick actions never undo each other).
+ * `onAccepted` replaces the "now friends" toast (the Friends pane shows a card).
  */
-export function useFriendActions() {
+export function useFriendActions({
+  onAccepted,
+}: { onAccepted?: (request: FriendRequest) => void } = {}) {
   const qc = useQueryClient();
   const toast = useToast();
   const settle = () => {
@@ -107,7 +110,9 @@ export function useFriendActions() {
       );
     },
     onSuccess: (_, { request, accept }) => {
-      if (accept) toast.show(`You and ${nameOf(request)} are now friends`, 'success');
+      if (!accept) return;
+      if (onAccepted) onAccepted(request);
+      else toast.show(`You and ${nameOf(request)} are now friends`, 'success');
     },
     onSettled: settle,
   });

@@ -1,6 +1,7 @@
 import type * as Api from '@vybora/api';
 import type { Friend, FriendRequest, SecureConversation } from '@vybora/api';
 import { qk } from '@vybora/api';
+import { A11Y_STORAGE_KEY } from '@vybora/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, renderHook, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -123,9 +124,16 @@ describe('add a friend', () => {
     api.sendFriendRequest.mockResolvedValue('accepted');
     renderPane();
     await waitFor(() => expect(api.fetchFriends).toHaveBeenCalledTimes(1));
-    await userEvent.type(screen.getByRole('textbox', { name: 'Friend’s username' }), 'sam{Enter}');
-    expect(await screen.findByRole('status')).toHaveTextContent('You and @sam are now friends');
+    api.fetchFriends.mockResolvedValue([friend('sam')]);
+    const input = screen.getByRole('textbox', { name: 'Friend’s username' });
+    await userEvent.type(input, 'Sam{Enter}');
     await waitFor(() => expect(api.fetchFriends).toHaveBeenCalledTimes(2));
+    // The joined card says it (once the refetch has them), so the field stays quiet.
+    expect(
+      await screen.findByRole('region', { name: 'You and @sam are now friends' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(input).toHaveFocus();
   });
 
   it('focuses the field when opened from the command menu', async () => {
@@ -373,6 +381,108 @@ describe('friends list', () => {
     fireEvent.contextMenu(await screen.findByText('Maya'));
     expect(await screen.findByRole('menuitem', { name: 'Message' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Remove friend' })).toBeInTheDocument();
+  });
+});
+
+describe('friendship joined', () => {
+  const typeUsername = (u: string) =>
+    userEvent.type(screen.getByRole('textbox', { name: 'Friend’s username' }), `${u}{Enter}`);
+
+  it('appears when I accept, keeps my focus where it was, and is announced politely', async () => {
+    api.fetchFriendRequests.mockResolvedValueOnce({
+      incoming: [request('sam', 'Sam'), request('lena', 'Lena')],
+      outgoing: [],
+    });
+    api.respondFriendRequest.mockResolvedValue(undefined);
+    renderPane();
+    api.fetchFriendRequests.mockResolvedValue({
+      incoming: [request('lena', 'Lena')],
+      outgoing: [],
+    });
+    api.fetchFriends.mockResolvedValue([friend('sam', 'Sam')]);
+    await userEvent.click(await screen.findByRole('button', { name: 'Accept request from Sam' }));
+    const region = await screen.findByRole('region', { name: 'You and Sam are now friends' });
+    expect(within(region).getByRole('button', { name: 'Say hi to Sam' })).toBeInTheDocument();
+    expect(document.querySelector('[data-joined-status]')).toHaveTextContent(
+      'You and Sam are now friends',
+    );
+    // Focus went to the next request, as before; the card doesn't take it.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Accept request from Lena' })).toHaveFocus(),
+    );
+  });
+
+  it('shows one card at a time: the latest friendship wins', async () => {
+    api.fetchFriendRequests.mockResolvedValueOnce({
+      incoming: [request('sam', 'Sam'), request('lena', 'Lena')],
+      outgoing: [],
+    });
+    api.respondFriendRequest.mockResolvedValue(undefined);
+    api.fetchFriends.mockResolvedValue([friend('lena', 'Lena'), friend('sam', 'Sam')]);
+    renderPane();
+    api.fetchFriendRequests.mockResolvedValue({
+      incoming: [request('lena', 'Lena')],
+      outgoing: [],
+    });
+    await userEvent.click(await screen.findByRole('button', { name: 'Accept request from Sam' }));
+    await screen.findByRole('region', { name: 'You and Sam are now friends' });
+    api.fetchFriendRequests.mockResolvedValue({ incoming: [], outgoing: [] });
+    await userEvent.click(await screen.findByRole('button', { name: 'Accept request from Lena' }));
+    await screen.findByRole('region', { name: 'You and Lena are now friends' });
+    expect(screen.getAllByRole('region', { name: /are now friends$/ })).toHaveLength(1);
+  });
+
+  it('Say hi opens the direct chat through the usual message flow', async () => {
+    api.sendFriendRequest.mockResolvedValue('accepted');
+    api.createSecureConversation.mockResolvedValue('c-new');
+    renderPane();
+    await waitFor(() => expect(api.fetchFriends).toHaveBeenCalledTimes(1));
+    api.fetchFriends.mockResolvedValue([friend('maya', 'Maya')]);
+    await typeUsername('maya');
+    await userEvent.click(await screen.findByRole('button', { name: 'Say hi to Maya' }));
+    expect(await screen.findByText('Chat page')).toBeInTheDocument();
+    expect(api.createSecureConversation).toHaveBeenCalledWith({}, 'direct', ['id-maya']);
+  });
+
+  it('dismisses with X and hands focus to the friends list', async () => {
+    api.sendFriendRequest.mockResolvedValue('accepted');
+    renderPane();
+    await waitFor(() => expect(api.fetchFriends).toHaveBeenCalledTimes(1));
+    api.fetchFriends.mockResolvedValue([friend('maya', 'Maya')]);
+    await typeUsername('maya');
+    const region = await screen.findByRole('region', { name: 'You and Maya are now friends' });
+    await userEvent.click(within(region).getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByRole('region', { name: /are now friends$/ })).toBeNull();
+    expect(screen.getByRole('heading', { level: 2, name: /^Friends/ })).toHaveFocus();
+  });
+
+  it('slides the avatars together, or starts them joined under reduced motion', async () => {
+    api.sendFriendRequest.mockResolvedValue('accepted');
+    const first = renderPane();
+    await waitFor(() => expect(api.fetchFriends).toHaveBeenCalledTimes(1));
+    api.fetchFriends.mockResolvedValue([friend('maya', 'Maya')]);
+    await typeUsername('maya');
+    await screen.findByRole('region', { name: 'You and Maya are now friends' });
+    const sliding = document.querySelector('[data-joined-avatars]')!;
+    expect(sliding).toHaveAttribute('data-joined-avatars', 'slide');
+    expect(sliding.querySelector('.join-mine')).not.toBeNull();
+    expect(sliding.querySelector('.join-theirs')).not.toBeNull();
+    first.unmount();
+
+    localStorage.setItem(A11Y_STORAGE_KEY, JSON.stringify({ reduceMotion: 'on' }));
+    try {
+      api.fetchFriends.mockResolvedValue([]);
+      renderPane();
+      await screen.findByText('Your circle starts here');
+      api.fetchFriends.mockResolvedValue([friend('maya', 'Maya')]);
+      await typeUsername('maya');
+      await screen.findByRole('region', { name: 'You and Maya are now friends' });
+      const still = document.querySelector('[data-joined-avatars]')!;
+      expect(still).toHaveAttribute('data-joined-avatars', 'still');
+      expect(still.querySelector('.join-mine, .join-theirs')).toBeNull();
+    } finally {
+      localStorage.clear();
+    }
   });
 });
 

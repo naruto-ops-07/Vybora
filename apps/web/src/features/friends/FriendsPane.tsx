@@ -30,12 +30,14 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/Dialog';
 import { Tip } from '@/components/ui/Tooltip';
+import { useA11y } from '@/features/a11y/A11yProvider';
 import { useMe } from '@/features/auth/AuthProvider';
 import { useOnlinePeers, useSecureInbox } from '@/features/connect/hooks';
 import { Meta } from '@/features/connect/ui';
 import { FriendsEmpty } from '@/features/onboarding/EmptyStates';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
+import { FriendJoinedCard, joinedText } from './FriendJoined';
 import { HandleCard } from './HandleCard';
 import { nameOf, useFriendActions, useFriendRequests, useFriends, useMessageFriend } from './hooks';
 
@@ -45,8 +47,18 @@ const NOTICE_ICON = {
   error: <WarningCircleIcon size={16} aria-hidden="true" />,
 };
 
-/** Exact-username friend request with a per-outcome inline message. */
-function AddFriendForm({ inputRef }: { inputRef?: RefObject<HTMLInputElement | null> }) {
+/**
+ * Exact-username friend request with a per-outcome inline message. When they
+ * had already asked me (`accepted`), `onAccepted` takes over: the joined card
+ * says it, so the field doesn't say it twice.
+ */
+function AddFriendForm({
+  inputRef,
+  onAccepted,
+}: {
+  inputRef?: RefObject<HTMLInputElement | null>;
+  onAccepted?: (username: string) => void;
+}) {
   const qc = useQueryClient();
   const location = useLocation();
   const [params] = useSearchParams();
@@ -84,7 +96,10 @@ function AddFriendForm({ inputRef }: { inputRef?: RefObject<HTMLInputElement | n
   const send = useMutation({
     mutationFn: (u: string) => sendFriendRequest(supabase, u),
     onSuccess: (result, u) => {
-      setNotice(addFriendResultNotice(result, u));
+      if (result === 'accepted' && onAccepted) {
+        setNotice(null);
+        onAccepted(u);
+      } else setNotice(addFriendResultNotice(result, u));
       setValue('');
       void qc.invalidateQueries({ queryKey: qk.connect.friendRequests });
       if (result === 'accepted') void qc.invalidateQueries({ queryKey: qk.connect.friends });
@@ -172,7 +187,7 @@ function AddFriendForm({ inputRef }: { inputRef?: RefObject<HTMLInputElement | n
   );
 }
 
-function PersonRow({
+export function PersonRow({
   person,
   online,
   detail,
@@ -359,8 +374,18 @@ function Retry({ children, onRetry }: { children: ReactNode; onRetry: () => void
 export function FriendsPane({ inputRef }: { inputRef?: RefObject<HTMLInputElement | null> }) {
   const friends = useFriends();
   const requests = useFriendRequests();
-  const { respond, cancel, remove } = useFriendActions();
+  // A new friendship: one card at a time, the latest wins. `run` restarts its slide.
+  const [joined, setJoined] = useState<{ run: number; userId?: string; username: string } | null>(
+    null,
+  );
+  const join = (who: { userId?: string; username: string }) =>
+    setJoined((j) => ({ run: (j?.run ?? 0) + 1, ...who }));
+  const { respond, cancel, remove } = useFriendActions({
+    onAccepted: (r) => join({ userId: r.userId, username: r.username }),
+  });
   const message = useMessageFriend();
+  const { reduceMotion } = useA11y();
+  const joinedRef = useRef<HTMLDivElement>(null);
   const [removing, setRemoving] = useState<Friend | null>(null);
   const requestsId = useId();
   const friendsId = useId();
@@ -370,12 +395,28 @@ export function FriendsPane({ inputRef }: { inputRef?: RefObject<HTMLInputElemen
   const list = useMemo(() => friends.data ?? [], [friends.data]);
   // Presence is shared only between people who have a chat, so watch just the
   // friends I have a direct chat with (from the inbox cache): no denied subscriptions.
-  const { userId } = useMe();
+  const { userId, profile } = useMe();
   const inbox = useSecureInbox();
   const chatPeers = useMemo(() => directChatActivity(inbox.data, userId), [inbox.data, userId]);
   const online = useOnlinePeers(
     useMemo(() => list.map((f) => f.userId).filter((id) => id in chatPeers), [list, chatPeers]),
   );
+  // The card shows once they're in my friends list (at once when I accept; after
+  // the refetch when `send` comes back `accepted`).
+  const joinedFriend = joined
+    ? list.find((f) =>
+        joined.userId ? f.userId === joined.userId : f.username === joined.username.toLowerCase(),
+      )
+    : undefined;
+  const joinedRun = joinedFriend ? joined!.run : 0;
+  // Bring it into view without taking focus from what I just pressed.
+  useEffect(() => {
+    if (joinedRun)
+      joinedRef.current?.scrollIntoView({
+        block: 'nearest',
+        behavior: reduceMotion ? 'auto' : 'smooth',
+      });
+  }, [joinedRun, reduceMotion]);
   const incoming = requests.data?.incoming ?? [];
   const outgoing = requests.data?.outgoing ?? [];
   const now = new Date();
@@ -395,9 +436,35 @@ export function FriendsPane({ inputRef }: { inputRef?: RefObject<HTMLInputElemen
       <header className="flex h-14 shrink-0 items-center border-b border-line px-4">
         <h1 className="type-wide text-lg font-semibold">Friends</h1>
       </header>
-      <AddFriendForm inputRef={inputRef} />
+      <AddFriendForm inputRef={inputRef} onAccepted={(username) => join({ username })} />
+      {/* Polite, and always present so the change is heard. */}
+      <p className="sr-only" aria-live="polite" data-joined-status="">
+        {joinedFriend ? joinedText(joinedFriend) : ''}
+      </p>
 
       <div className="scroll-thin min-h-0 flex-1 overflow-y-auto pb-4">
+        {joinedFriend && profile && (
+          <div ref={joinedRef} className="px-3 pt-3">
+            <FriendJoinedCard
+              me={{
+                userId: profile.id,
+                username: profile.username,
+                displayName: profile.display_name,
+                avatarPath: profile.avatar_path,
+              }}
+              friend={joinedFriend}
+              animate={!reduceMotion}
+              run={joinedRun}
+              sayingHi={message.pendingId === joinedFriend.userId}
+              onSayHi={() => message.open(joinedFriend)}
+              onDismiss={() => {
+                setJoined(null);
+                // The card held focus (its X); hand it to the list it sat above.
+                friendsHeading.current?.focus();
+              }}
+            />
+          </div>
+        )}
         {requests.isError && !requests.data && (
           <Retry onRetry={() => void requests.refetch()}>Couldn’t load friend requests.</Retry>
         )}

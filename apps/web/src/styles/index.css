@@ -451,6 +451,28 @@
   }
 }
 
+/*
+ * Friendship joined (Friends): the two avatars start 16 px apart and slide
+ * together into their overlap. 280 ms, exponential ease-out. Each travels half
+ * of (16 px gap + 12 px overlap). Not applied at all under reduced motion.
+ */
+.join-mine {
+  animation: join-mine 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.join-theirs {
+  animation: join-theirs 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes join-mine {
+  from {
+    transform: translateX(-14px);
+  }
+}
+@keyframes join-theirs {
+  from {
+    transform: translateX(14px);
+  }
+}
+
 /* Reduced motion: the system setting unless overridden in Accessibility (data-reduce-motion). */
 @media (prefers-reduced-motion: reduce) {
   :root:not([data-reduce-motion='false']) *,
