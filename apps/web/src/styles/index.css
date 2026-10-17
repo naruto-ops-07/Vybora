@@ -397,26 +397,28 @@
 
 /*
  * Sealed send (Composer): plane out, lock in with its shackle open, the shackle
- * closes 3 px by 320 ms, a short hold, then the plane returns. 600 ms in all
- * (1 % = 6 ms). Mirrors SEAL_MS in features/connect/SealedSend.tsx. JS never
- * starts it under reduced motion; the reduced-motion rules are a second guard.
+ * closes 3 px by 180 ms, a short hold, then the plane is back by 320 ms: the
+ * whole run is 320 ms (1 % = 3.2 ms). Mirrors SEAL_MS in
+ * features/connect/SealedSend.tsx (sealedSend.test.tsx checks the two agree).
+ * JS never starts it under reduced motion; the reduced-motion rules are a
+ * second guard.
  */
 .seal-plane {
-  animation: seal-plane 600ms linear both;
+  animation: seal-plane 320ms linear both;
 }
 .seal-lock {
-  animation: seal-lock 600ms linear both;
+  animation: seal-lock 320ms linear both;
 }
 .seal-shackle {
-  animation: seal-shackle 600ms linear both;
+  animation: seal-shackle 320ms linear both;
 }
 @keyframes seal-plane {
   0% {
     opacity: 1;
     animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
   }
-  13.33%,
-  83.33% {
+  18.75%,
+  81.25% {
     opacity: 0;
     animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
   }
@@ -429,23 +431,23 @@
     opacity: 0;
     animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
   }
-  20%,
-  73.33% {
+  25%,
+  75% {
     opacity: 1;
     animation-timing-function: ease-in;
   }
-  86.67%,
+  90.625%,
   100% {
     opacity: 0;
   }
 }
 @keyframes seal-shackle {
   0%,
-  13.33% {
+  12.5% {
     transform: translateY(-3px);
     animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
   }
-  53.33%,
+  56.25%,
   100% {
     transform: translateY(0);
   }

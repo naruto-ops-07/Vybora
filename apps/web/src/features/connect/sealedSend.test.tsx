@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { A11Y_STORAGE_KEY } from '@vybora/core';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
@@ -102,17 +104,17 @@ describe('sealed send', () => {
     typeAndEnter('one');
     const first = lock();
     expect(first).not.toBeNull();
-    act(() => vi.advanceTimersByTime(400));
+    act(() => vi.advanceTimersByTime(200));
     // The next message can be typed (and sent) mid-seal.
     fireEvent.change(box(), { target: { value: 'two' } });
     expect(box()).toHaveValue('two');
     expect(sendButton()).toBeEnabled();
     fireEvent.keyDown(box(), { key: 'Enter' });
-    // A fresh lock (its animation starts from the top), and a fresh 600 ms.
+    // A fresh lock (its animation starts from the top), and a fresh 320 ms.
     expect(lock()).not.toBe(first);
-    act(() => vi.advanceTimersByTime(400));
+    act(() => vi.advanceTimersByTime(200));
     expect(seal()).toBe('playing');
-    act(() => vi.advanceTimersByTime(SEAL_MS.total - 400));
+    act(() => vi.advanceTimersByTime(SEAL_MS.total - 200));
     expect(seal()).toBe('idle');
   });
 
@@ -144,12 +146,44 @@ describe('sealed send', () => {
   });
 });
 
+describe('seal keyframes', () => {
+  const css = readFileSync(resolve(process.cwd(), 'src/styles/index.css'), 'utf8').replace(
+    /\r\n/g,
+    '\n',
+  );
+  const pct = (ms: number) => `${+((ms / SEAL_MS.total) * 100).toFixed(4)}%`;
+  const block = (name: string) => css.slice(css.indexOf(`@keyframes ${name}`)).split('\n}\n')[0]!;
+
+  it('last as long as SEAL_MS says', () => {
+    for (const name of ['seal-plane', 'seal-lock', 'seal-shackle'])
+      expect(css).toContain(`animation: ${name} ${SEAL_MS.total}ms linear both;`);
+  });
+
+  it('stop where SEAL_MS says', () => {
+    const t = SEAL_MS;
+    const plane = block('seal-plane');
+    for (const ms of [t.planeOut, t.planeFrom]) expect(plane).toContain(pct(ms));
+    const lock = block('seal-lock');
+    for (const ms of [t.lockIn, t.close + t.hold, t.close + t.hold + t.lockOut])
+      expect(lock).toContain(pct(ms));
+    const shackle = block('seal-shackle');
+    for (const ms of [t.shackleFrom, t.close]) expect(shackle).toContain(pct(ms));
+  });
+});
+
 describe('sealFrame', () => {
+  it('runs 320 ms in all: close by 180, a short hold, the plane back by 320', () => {
+    expect(SEAL_MS.total).toBe(320);
+    expect(SEAL_MS.close).toBe(180);
+    expect(SEAL_MS.close + SEAL_MS.hold + SEAL_MS.lockOut).toBeLessThanOrEqual(SEAL_MS.total);
+    expect(sealFrame(SEAL_MS.close + SEAL_MS.hold - 1).lock).toBeCloseTo(1);
+  });
+
   it('starts on the plane with the shackle open 3 px', () => {
     expect(sealFrame(0)).toEqual({ plane: 1, lock: 0, shackleY: -3 });
   });
 
-  it('is a closed lock alone at 320 ms', () => {
+  it('is a closed lock alone once the shackle has closed', () => {
     const f = sealFrame(SEAL_MS.close);
     expect(f.plane).toBe(0);
     expect(f.lock).toBeCloseTo(1);
@@ -157,9 +191,9 @@ describe('sealFrame', () => {
   });
 
   it('shows the lock open first, then closes it fast and settles (exponential ease-out)', () => {
-    expect(sealFrame(60).lock).toBeGreaterThan(0.8);
-    expect(sealFrame(60).shackleY).toBe(-3);
-    expect(sealFrame(160).shackleY).toBeGreaterThan(-1);
+    expect(sealFrame(30).lock).toBeGreaterThan(0.8);
+    expect(sealFrame(30).shackleY).toBe(-3);
+    expect(sealFrame(100).shackleY).toBeGreaterThan(-1);
   });
 
   it('never shows plane and lock at full strength together on the way back', () => {

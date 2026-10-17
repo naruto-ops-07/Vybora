@@ -7,26 +7,26 @@ import { cn } from '@/lib/cn';
  * whose shackle closes, then the plane comes back. One timeline, mirrored by
  * the `seal-*` keyframes in styles/index.css (keep the two in step):
  *
- *   0–80 ms     plane fades out
- *   0–120 ms    lock body fades in, its shackle still open 3 px
- *   80–320 ms   shackle drops and closes (exponential ease-out, like the fade)
- *   320–440 ms  the closed lock holds
- *   440–520 ms  lock fades out; 500–600 ms plane fades back in (exit faster than entry)
+ *   0–60 ms     plane fades out
+ *   0–80 ms     lock body fades in, its shackle still open 3 px
+ *   40–180 ms   shackle drops and closes (exponential ease-out, like the fades)
+ *   180–240 ms  the closed lock holds
+ *   240–320 ms  lock fades out by 290 ms; plane fades back in from 260 ms
  *
- * The close is the 320 ms moment; the hold and return make it readable.
- * Opacity and transform only, inside the button's fixed 18 px glyph box, so
- * nothing moves around it. Purely visual: the button keeps its name, nothing is
- * announced, and reduced motion turns it off completely.
+ * 320 ms in all, return included. Opacity and transform only, inside the
+ * button's fixed 18 px glyph box, so nothing moves around it. Purely visual:
+ * the button keeps its name, nothing is announced, and reduced motion turns it
+ * off completely.
  */
 export const SEAL_MS = {
-  planeOut: 80,
-  lockIn: 120,
-  shackleFrom: 80,
-  close: 320,
-  hold: 120,
-  lockOut: 80,
-  planeFrom: 500,
-  total: 600,
+  planeOut: 60,
+  lockIn: 80,
+  shackleFrom: 40,
+  close: 180,
+  hold: 60,
+  lockOut: 50,
+  planeFrom: 260,
+  total: 320,
 } as const;
 /** How far the open shackle sits above its closed position. */
 export const SHACKLE_LIFT_PX = 3;
@@ -57,7 +57,7 @@ const progress = (ms: number, from: number, length: number) =>
 /** The keyframes sampled at `ms`: for the gallery's still frames (and tests). */
 export function sealFrame(ms: number): { plane: number; lock: number; shackleY: number } {
   const t = SEAL_MS;
-  const turn = t.close + t.hold; // 440 ms: the closed lock gives way
+  const turn = t.close + t.hold; // 240 ms: the closed lock gives way
   return {
     plane:
       ms < t.planeFrom
