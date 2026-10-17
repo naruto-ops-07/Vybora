@@ -11,6 +11,9 @@
  *   mobile.png         390×844, dark
  *   desktop-light.png  1440×900, light
  *   desktop-hc.png     1440×900, dark + high contrast
+ *   mobile-light.png   390×844, light
+ *   mobile-hc.png      390×844, dark + high contrast
+ *   landing.png        1440×900, the signed-out landing page (`/`)
  *
  * Requests to anything other than the dev server and Google Fonts are blocked, so a
  * stray call can never reach a hosted backend.
@@ -35,6 +38,20 @@ const SHOTS = [
     viewport: { width: 1440, height: 900 },
     query: 'theme=dark&contrast=high',
   },
+  {
+    file: 'mobile-light.png',
+    viewport: { width: 390, height: 844 },
+    query: 'theme=light',
+    mobile: true,
+  },
+  {
+    file: 'mobile-hc.png',
+    viewport: { width: 390, height: 844 },
+    query: 'theme=dark&contrast=high',
+    mobile: true,
+  },
+  // Signed out (a fresh context has no session), so `/` renders the landing page.
+  { file: 'landing.png', viewport: { width: 1440, height: 900 }, path: '/' },
 ];
 
 const browser = await chromium.launch();
@@ -55,9 +72,10 @@ try {
       return route.abort();
     });
     const page = await context.newPage();
-    const url = new URL(`/__gallery?${shot.query}`, base);
+    const url = new URL(shot.path ?? `/__gallery?${shot.query}`, base);
     await page.goto(url.href, { waitUntil: 'networkidle' });
-    await page.getByRole('heading', { name: 'Design gallery' }).waitFor();
+    if (shot.path) await page.locator('main h1').first().waitFor();
+    else await page.getByRole('heading', { name: 'Design gallery' }).waitFor();
     await page.evaluate(() => document.fonts.ready);
     // Let late font swaps settle: shrink-wrapped bubbles re-measure a frame or two later.
     await page.waitForTimeout(500);
