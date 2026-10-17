@@ -75,7 +75,7 @@ export default function Signup() {
           if (result.status === 'signed_in') navigate(safeNext(next), { replace: true });
           else {
             // The confirmation link comes back through /auth/callback on this device.
-            rememberNext(next);
+            rememberNext(next, values.email);
             setPendingEmail(values.email);
           }
         }}

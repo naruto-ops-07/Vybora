@@ -93,11 +93,28 @@ describe('next, from login to signup and back', () => {
     expect(await screen.findByText('Check your inbox')).toBeInTheDocument();
     view.unmount();
 
-    auth.getSession.mockResolvedValue({ data: { session: { user: { id: 'u1' } } } });
+    auth.getSession.mockResolvedValue({
+      data: { session: { user: { id: 'u1', email: 'New@Example.com' } } },
+    });
     renderAt('/auth/callback');
     expect(await screen.findByTestId('where')).toHaveTextContent(NEXT);
     // Used once: a later confirmation goes to the default.
-    expect(takeRememberedNext()).toBe('/messages');
+    expect(takeRememberedNext('new@example.com')).toBe('/messages');
+  });
+
+  it('another account’s callback goes to messages and leaves the destination for its owner', async () => {
+    api.signUp.mockResolvedValue({ status: 'confirm_email' });
+    const view = renderAt(`/signup?next=${NEXT_PARAM}`);
+    await fillSignup();
+    expect(await screen.findByText('Check your inbox')).toBeInTheDocument();
+    view.unmount();
+
+    auth.getSession.mockResolvedValue({
+      data: { session: { user: { id: 'u2', email: 'someone.else@example.com' } } },
+    });
+    renderAt('/auth/callback');
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/messages'));
+    expect(takeRememberedNext('new@example.com')).toBe(NEXT);
   });
 
   it('without a destination, both paths go to messages', async () => {
@@ -115,6 +132,11 @@ describe('next helpers', () => {
     expect(safeNext('/\\evil.example')).toBe('/messages');
     expect(safeNext('https://evil.example')).toBe('/messages');
     expect(safeNext(undefined)).toBe('/messages');
+    // Browsers strip tabs/newlines and read `\` as `/`, so these become `//evil`.
+    expect(safeNext('/\t/evil.example')).toBe('/messages');
+    expect(safeNext('/\n/evil.example')).toBe('/messages');
+    expect(safeNext('/x\\..\\evil')).toBe('/messages');
+    expect(safeNext('/\u0000x')).toBe('/messages');
   });
 
   it('adds next only when it means something', () => {
@@ -124,8 +146,9 @@ describe('next helpers', () => {
   });
 
   it('forgets a remembered destination after a day', () => {
-    rememberNext('/friends');
+    rememberNext('/friends', 'me@example.com');
     const later = Date.now() + 25 * 60 * 60 * 1000;
-    expect(takeRememberedNext(later)).toBe('/messages');
+    expect(takeRememberedNext('me@example.com', later)).toBe('/messages');
+    expect(localStorage.getItem('vybora.auth.next')).toBeNull();
   });
 });

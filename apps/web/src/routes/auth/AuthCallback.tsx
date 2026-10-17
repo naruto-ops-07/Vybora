@@ -38,8 +38,9 @@ export default function AuthCallback() {
       }
       const { data } = await supabase.auth.getSession();
       if (cancelled) return;
-      // Back from a sign-up confirmation: go where they were headed before signing up.
-      if (data.session) navigate(takeRememberedNext(), { replace: true });
+      // Back from this account's sign-up confirmation: go where they were headed
+      // before signing up. Any other callback goes to the default.
+      if (data.session) navigate(takeRememberedNext(data.session.user.email), { replace: true });
       else setError('This link is invalid or has expired.');
     })();
     return () => {
