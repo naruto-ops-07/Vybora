@@ -29,6 +29,7 @@ import { useLocation, useSearchParams } from 'react-router';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/Dialog';
+import { useToast } from '@/components/ui/Toast';
 import { Tip } from '@/components/ui/Tooltip';
 import { useA11y } from '@/features/a11y/A11yProvider';
 import { useMe } from '@/features/auth/AuthProvider';
@@ -41,6 +42,21 @@ import { FriendJoinedCard, joinedText } from './FriendJoined';
 import { HandleCard } from './HandleCard';
 import { nameOf, useFriendActions, useFriendRequests, useFriends, useMessageFriend } from './hooks';
 
+/** The friendship the joined card is for (or waiting to show). */
+interface Joined {
+  /** Bumped for every new friendship: restarts the slide. */
+  run: number;
+  userId?: string;
+  username: string;
+  displayName: string | null;
+  /** I accepted their request, or my `send` found theirs waiting. */
+  via: 'accept' | 'send';
+  /** When the friends query had last settled, as it happened. */
+  settles: number;
+  /** The card has been up. */
+  shown: boolean;
+}
+
 const NOTICE_ICON = {
   success: <CheckCircleIcon size={16} weight="fill" aria-hidden="true" />,
   info: <InfoIcon size={16} aria-hidden="true" />,
@@ -49,15 +65,19 @@ const NOTICE_ICON = {
 
 /**
  * Exact-username friend request with a per-outcome inline message. When they
- * had already asked me (`accepted`), `onAccepted` takes over: the joined card
- * says it, so the field doesn't say it twice.
+ * had already asked me (`accepted`), the message says so at once and
+ * `onAccepted` asks for the joined card; once that card is up it replaces the
+ * message (`acceptedReplaced` changes), and if it never comes the message stays.
  */
 function AddFriendForm({
   inputRef,
   onAccepted,
+  acceptedReplaced,
 }: {
   inputRef?: RefObject<HTMLInputElement | null>;
   onAccepted?: (username: string) => void;
+  /** Bumped when the joined card takes over from the `accepted` message. */
+  acceptedReplaced?: number;
 }) {
   const qc = useQueryClient();
   const location = useLocation();
@@ -65,6 +85,11 @@ function AddFriendForm({
   const local = useRef<HTMLInputElement | null>(null);
   const [value, setValue] = useState('');
   const [notice, setNotice] = useState<AddFriendNotice | null>(null);
+  // The `accepted` message, so only it (not a later one) gives way to the card.
+  const acceptedNotice = useRef<AddFriendNotice | null>(null);
+  useEffect(() => {
+    if (acceptedReplaced) setNotice((n) => (n && n === acceptedNotice.current ? null : n));
+  }, [acceptedReplaced]);
   const headingId = useId();
   const noticeId = useId();
   const username = normalizeUsername(value);
@@ -96,10 +121,12 @@ function AddFriendForm({
   const send = useMutation({
     mutationFn: (u: string) => sendFriendRequest(supabase, u),
     onSuccess: (result, u) => {
-      if (result === 'accepted' && onAccepted) {
-        setNotice(null);
-        onAccepted(u);
-      } else setNotice(addFriendResultNotice(result, u));
+      const next = addFriendResultNotice(result, u);
+      setNotice(next);
+      if (result === 'accepted') {
+        acceptedNotice.current = next;
+        onAccepted?.(u);
+      }
       setValue('');
       void qc.invalidateQueries({ queryKey: qk.connect.friendRequests });
       if (result === 'accepted') void qc.invalidateQueries({ queryKey: qk.connect.friends });
@@ -374,14 +401,24 @@ function Retry({ children, onRetry }: { children: ReactNode; onRetry: () => void
 export function FriendsPane({ inputRef }: { inputRef?: RefObject<HTMLInputElement | null> }) {
   const friends = useFriends();
   const requests = useFriendRequests();
+  const toast = useToast();
   // A new friendship: one card at a time, the latest wins. `run` restarts its slide.
-  const [joined, setJoined] = useState<{ run: number; userId?: string; username: string } | null>(
-    null,
-  );
-  const join = (who: { userId?: string; username: string }) =>
-    setJoined((j) => ({ run: (j?.run ?? 0) + 1, ...who }));
+  const [joined, setJoined] = useState<Joined | null>(null);
+  // When the friends query last settled (data or error), to tell a fetch that
+  // finished after the friendship from one that finished before it.
+  const settles = Math.max(friends.dataUpdatedAt, friends.errorUpdatedAt);
+  const settlesRef = useRef(settles);
+  settlesRef.current = settles;
+  const join = (who: Pick<Joined, 'userId' | 'username' | 'displayName' | 'via'>) =>
+    setJoined((j) => ({
+      run: (j?.run ?? 0) + 1,
+      ...who,
+      settles: settlesRef.current,
+      shown: false,
+    }));
   const { respond, cancel, remove } = useFriendActions({
-    onAccepted: (r) => join({ userId: r.userId, username: r.username }),
+    onAccepted: (r) =>
+      join({ userId: r.userId, username: r.username, displayName: r.displayName, via: 'accept' }),
   });
   const message = useMessageFriend();
   const { reduceMotion } = useA11y();
@@ -409,6 +446,25 @@ export function FriendsPane({ inputRef }: { inputRef?: RefObject<HTMLInputElemen
       )
     : undefined;
   const joinedRun = joinedFriend ? joined!.run : 0;
+  const friendsSettled = !friends.isFetching && settles > (joined?.settles ?? Infinity);
+  useEffect(() => {
+    if (!joined) return;
+    if (joinedFriend) {
+      if (!joined.shown) setJoined({ ...joined, shown: true });
+      return;
+    }
+    // Shown and since gone (removed), or never found once the friends list came
+    // back (or failed): drop it, so a later refetch can't pop up a stale card.
+    if (!joined.shown && !friendsSettled) return;
+    setJoined(null);
+    // No card, so say it another way: the add form's message already does for
+    // `send`; an accepted request gets the toast it had before the card.
+    if (!joined.shown && joined.via === 'accept')
+      toast.show(
+        `You and ${joined.displayName || `@${joined.username}`} are now friends`,
+        'success',
+      );
+  }, [joined, joinedFriend, friendsSettled, toast]);
   // Bring it into view without taking focus from what I just pressed.
   useEffect(() => {
     if (joinedRun)
@@ -436,10 +492,15 @@ export function FriendsPane({ inputRef }: { inputRef?: RefObject<HTMLInputElemen
       <header className="flex h-14 shrink-0 items-center border-b border-line px-4">
         <h1 className="type-wide text-lg font-semibold">Friends</h1>
       </header>
-      <AddFriendForm inputRef={inputRef} onAccepted={(username) => join({ username })} />
-      {/* Polite, and always present so the change is heard. */}
+      <AddFriendForm
+        inputRef={inputRef}
+        onAccepted={(username) => join({ username, displayName: null, via: 'send' })}
+        acceptedReplaced={joined?.via === 'send' ? joinedRun : 0}
+      />
+      {/* Polite, and always present so the change is heard. Only for an accept:
+          after `send`, the add form's message has already said it. */}
       <p className="sr-only" aria-live="polite" data-joined-status="">
-        {joinedFriend ? joinedText(joinedFriend) : ''}
+        {joinedFriend && joined?.via === 'accept' ? joinedText(joinedFriend) : ''}
       </p>
 
       <div className="scroll-thin min-h-0 flex-1 overflow-y-auto pb-4">

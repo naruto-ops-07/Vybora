@@ -388,6 +388,66 @@ describe('friendship joined', () => {
   const typeUsername = (u: string) =>
     userEvent.type(screen.getByRole('textbox', { name: 'Friend’s username' }), `${u}{Enter}`);
 
+  const joinedStatus = () => document.querySelector('[data-joined-status]')!;
+
+  it('after an accepted send, says it inline at once, then the card replaces it (heard once)', async () => {
+    api.sendFriendRequest.mockResolvedValue('accepted');
+    renderPane();
+    await waitFor(() => expect(api.fetchFriends).toHaveBeenCalledTimes(1));
+    let resolveFriends!: (f: Friend[]) => void;
+    api.fetchFriends.mockReturnValue(new Promise<Friend[]>((r) => (resolveFriends = r)));
+    await typeUsername('sam');
+    // No blank gap while the friends list refetches: the form says it straight away.
+    expect(await screen.findByRole('status')).toHaveTextContent('You and @sam are now friends');
+    expect(screen.queryByRole('region', { name: /are now friends$/ })).toBeNull();
+    expect(joinedStatus()).toBeEmptyDOMElement();
+    await act(async () => resolveFriends([friend('sam', 'Sam')]));
+    expect(
+      await screen.findByRole('region', { name: 'You and Sam are now friends' }),
+    ).toBeInTheDocument();
+    // The card takes over from the message, and nothing is announced a second time.
+    await waitFor(() => expect(screen.getByRole('status')).toBeEmptyDOMElement());
+    expect(joinedStatus()).toBeEmptyDOMElement();
+  });
+
+  it('after an accepted send, keeps the message when the friends list fails, and never pops a stale card', async () => {
+    api.sendFriendRequest.mockResolvedValue('accepted');
+    const qc = client();
+    renderPane(qc);
+    await waitFor(() => expect(api.fetchFriends).toHaveBeenCalledTimes(1));
+    api.fetchFriends.mockRejectedValue(new Error('network'));
+    await typeUsername('sam');
+    await waitFor(() => expect(api.fetchFriends).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(qc.getQueryState(qk.connect.friends)?.status).toBe('error'));
+    // The confirmation stands (and was announced, by the form's status), with no card.
+    expect(screen.getByRole('status')).toHaveTextContent('You and @sam are now friends');
+    expect(screen.queryByRole('region', { name: /are now friends$/ })).toBeNull();
+    expect(joinedStatus()).toBeEmptyDOMElement();
+    // A later successful refetch (focus, retry) lists them, but no old card appears.
+    api.fetchFriends.mockResolvedValue([friend('sam', 'Sam')]);
+    await act(() => qc.invalidateQueries({ queryKey: qk.connect.friends }));
+    expect(await screen.findByText('@sam')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /are now friends$/ })).toBeNull();
+    expect(joinedStatus()).toBeEmptyDOMElement();
+    expect(screen.getByRole('status')).toHaveTextContent('You and @sam are now friends');
+  });
+
+  it('falls back to a toast when an accepted request never shows up in the list', async () => {
+    api.fetchFriendRequests.mockResolvedValueOnce({
+      incoming: [request('sam', 'Sam')],
+      outgoing: [],
+    });
+    api.respondFriendRequest.mockResolvedValue(undefined);
+    // The friends list never loads, so there's no list to add them to.
+    api.fetchFriends.mockRejectedValue(new Error('network'));
+    renderPane();
+    api.fetchFriendRequests.mockResolvedValue({ incoming: [], outgoing: [] });
+    await userEvent.click(await screen.findByRole('button', { name: 'Accept request from Sam' }));
+    expect(await screen.findByText('You and Sam are now friends')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /are now friends$/ })).toBeNull();
+    expect(joinedStatus()).toBeEmptyDOMElement();
+  });
+
   it('appears when I accept, keeps my focus where it was, and is announced politely', async () => {
     api.fetchFriendRequests.mockResolvedValueOnce({
       incoming: [request('sam', 'Sam'), request('lena', 'Lena')],
