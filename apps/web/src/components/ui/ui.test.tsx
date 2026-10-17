@@ -1,6 +1,12 @@
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import {
+  NoChatsIllustration,
+  NoFriendsIllustration,
+  NothingFoundIllustration,
+  WelcomeIllustration,
+} from '@/components/illustrations';
 import { readEnv } from '@/lib/env';
 import { renderWithProviders } from '@/test/utils';
 import { ConfirmDialog } from './Dialog';
@@ -14,6 +20,50 @@ describe('state components', () => {
     );
     expect(screen.getByRole('heading', { name: 'Nothing yet' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Go' })).toBeInTheDocument();
+  });
+
+  it('EmptyState: decorative art, a heading at the right level, two actions, extras below', () => {
+    const { container } = renderWithProviders(
+      <EmptyState
+        illustration={<NoChatsIllustration />}
+        title="No chats yet"
+        body="Add a friend by their username, then say hi."
+        headingLevel={2}
+        action={<button type="button">Add a friend</button>}
+        secondaryAction={<button type="button">New message</button>}
+      >
+        <p>Your handle</p>
+      </EmptyState>,
+    );
+    const heading = screen.getByRole('heading', { level: 2, name: 'No chats yet' });
+    expect(heading).toHaveClass('type-wide');
+    const art = container.querySelector('svg[data-illustration="no-chats"]')!;
+    expect(art).toHaveAttribute('aria-hidden', 'true');
+    expect(art).toHaveAttribute('focusable', 'false');
+    expect(screen.queryByRole('img')).toBeNull();
+    const [primary, secondary] = screen.getAllByRole('button');
+    expect(primary).toHaveTextContent('Add a friend');
+    expect(secondary).toHaveTextContent('New message');
+    expect(screen.getByText('Your handle')).toBeInTheDocument();
+  });
+
+  it('illustrations draw in theme colours only: no gradients, filters or fixed hexes', () => {
+    const { container } = renderWithProviders(
+      <>
+        <WelcomeIllustration />
+        <NoChatsIllustration />
+        <NoFriendsIllustration />
+        <NothingFoundIllustration />
+      </>,
+    );
+    const svgs = container.querySelectorAll('svg[data-illustration]');
+    expect(svgs).toHaveLength(4);
+    const markup = container.innerHTML;
+    expect(markup).not.toMatch(/Gradient|filter|feDropShadow|#[0-9a-f]{3,6}\b/i);
+    for (const el of container.querySelectorAll('[stroke-width]')) {
+      if (el.getAttribute('stroke') === 'currentColor')
+        expect(el.getAttribute('stroke-width')).toBe('1.5');
+    }
   });
 
   it('ErrorState shows a friendly message and retries', async () => {
