@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isMuted, muteUntil, peerOf } from './connect';
+import { directChatActivity, isMuted, muteUntil, peerOf } from './connect';
 
 const now = Date.parse('2026-10-09T12:00:00Z');
 
@@ -38,5 +38,51 @@ describe('peerOf', () => {
       'them',
     );
     expect(peerOf({ kind: 'group', members: [member('me'), member('them')] }, 'me')).toBeNull();
+  });
+});
+
+describe('directChatActivity', () => {
+  const member = (id: string) => ({
+    id,
+    username: id,
+    display_name: '',
+    avatar_path: null,
+    role: 'member' as const,
+    delivered_seq: 0,
+    read_seq: 0,
+  });
+  const conv = (kind: 'direct' | 'group', ids: string[], lastMessageAt: string) => ({
+    kind,
+    members: ids.map(member),
+    lastMessageAt,
+  });
+
+  it('maps each direct-chat peer to that chat’s latest activity; groups are ignored', () => {
+    expect(
+      directChatActivity(
+        [
+          conv('direct', ['me', 'ines'], '2026-10-17T09:00:00Z'),
+          conv('group', ['me', 'theo', 'kofi'], '2026-10-17T11:00:00Z'),
+          conv('direct', ['kofi', 'me'], '2026-10-16T08:00:00Z'),
+        ],
+        'me',
+      ),
+    ).toEqual({ ines: '2026-10-17T09:00:00Z', kofi: '2026-10-16T08:00:00Z' });
+  });
+
+  it('keeps the newest when two direct chats share a peer', () => {
+    expect(
+      directChatActivity(
+        [
+          conv('direct', ['me', 'ines'], '2026-10-15T09:00:00Z'),
+          conv('direct', ['me', 'ines'], '2026-10-17T09:00:00Z'),
+        ],
+        'me',
+      ),
+    ).toEqual({ ines: '2026-10-17T09:00:00Z' });
+  });
+
+  it('is empty without chats', () => {
+    expect(directChatActivity(undefined, 'me')).toEqual({});
   });
 });

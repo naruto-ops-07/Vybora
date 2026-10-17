@@ -8,3 +8,4 @@ export * from './stories';
 export * from './chat';
 export * from './friends';
 export * from './tones';
+export * from './onboarding';

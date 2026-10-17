@@ -401,6 +401,22 @@ export function peerOf(
   return conv.kind === 'direct' ? (conv.members.find((m) => m.id !== myId) ?? null) : null;
 }
 
+/**
+ * Latest activity of each direct-chat peer (peer id → ISO time), for ordering
+ * friends and for watching presence only of people I share a chat with.
+ */
+export function directChatActivity(
+  convs: readonly Pick<SecureConversation, 'kind' | 'members' | 'lastMessageAt'>[] | undefined,
+  myId: string,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const c of convs ?? []) {
+    const peer = peerOf(c, myId);
+    if (peer && (out[peer.id] ?? '') < c.lastMessageAt) out[peer.id] = c.lastMessageAt;
+  }
+  return out;
+}
+
 export function isMuted(conv: Pick<SecureConversation, 'mutedUntil'>, now = Date.now()): boolean {
   if (!conv.mutedUntil) return false;
   if (conv.mutedUntil === 'infinity') return true; // Postgres "muted until I turn it back on"
