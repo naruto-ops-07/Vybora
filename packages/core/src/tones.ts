@@ -30,21 +30,27 @@ export function personTone(userId: string): ToneName {
 // First letter or digit of a word, with any combining marks that follow it.
 const FIRST_CHAR = /[\p{L}\p{N}]\p{M}*/u;
 
-function initialsOf(words: string[]): string {
+function initialsOf(words: string[], max: 1 | 2): string {
   const firsts = words.map((w) => w.match(FIRST_CHAR)?.[0]).filter((c): c is string => !!c);
   if (!firsts.length) return '';
-  const picked = firsts.length > 1 ? [firsts[0]!, firsts[firsts.length - 1]!] : [firsts[0]!];
+  const picked =
+    firsts.length > 1 && max > 1 ? [firsts[0]!, firsts[firsts.length - 1]!] : [firsts[0]!];
   return picked.map((c) => c.toLocaleUpperCase()).join('');
 }
 
 /**
  * One or two initials for an avatar: first and last word of the display name,
  * else of the username (split on `.`, `_` and `-`); `?` if neither has a letter.
+ * `max: 1` keeps only the first (for small avatars).
  */
-export function initialsFor(displayName: string | null | undefined, username: string): string {
+export function initialsFor(
+  displayName: string | null | undefined,
+  username: string,
+  max: 1 | 2 = 2,
+): string {
   return (
-    initialsOf((displayName ?? '').trim().split(/\s+/)) ||
-    initialsOf(username.split(/[\s._-]+/)) ||
+    initialsOf((displayName ?? '').trim().split(/\s+/), max) ||
+    initialsOf(username.split(/[\s._-]+/), max) ||
     '?'
   );
 }

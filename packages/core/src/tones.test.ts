@@ -79,6 +79,11 @@ describe('initialsFor', () => {
     expect(initialsFor('𝒜lex', 'alex')).toBe('𝒜');
   });
 
+  it('keeps only the first initial when asked', () => {
+    expect(initialsFor('Maya Chen', 'maya', 1)).toBe('M');
+    expect(initialsFor('Émile Zola', 'ez', 1)).toBe('É');
+  });
+
   it('returns ? when nothing usable is left', () => {
     expect(initialsFor('', '')).toBe('?');
     expect(initialsFor('🌊', '___')).toBe('?');
