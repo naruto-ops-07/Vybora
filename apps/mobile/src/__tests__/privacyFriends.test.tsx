@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import type { ConnectPrivacy } from '@vybora/api';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { qk, type ConnectPrivacy } from '@vybora/api';
 import { Alert } from 'react-native';
 import PrivacyScreen from '@/app/messages/privacy';
 
@@ -121,5 +121,20 @@ describe('Who can start chats with me', () => {
     expect(radio('Friends only')).not.toBeChecked();
     await fireEvent.press(screen.getByRole('button', { name: 'Allow everyone' }));
     expect(mockUpdate).toHaveBeenCalledWith({}, 'me', { message_privacy: 'everyone' });
+  });
+
+  it('a refetch already in flight cannot undo a switch you just made', async () => {
+    const qc = await renderScreen({});
+    await waitFor(() => expect(radio('Everyone')).toBeChecked());
+    let stale!: (v: ConnectPrivacy) => void;
+    mockPrivacy.mockReturnValue(new Promise<ConnectPrivacy>((r) => (stale = r)));
+    void qc.invalidateQueries({ queryKey: qk.connect.privacy });
+    await waitFor(() => expect(mockPrivacy).toHaveBeenCalledTimes(2));
+    mockUpdate.mockReturnValue(new Promise(() => undefined));
+    await fireEvent.press(radio('Friends only'));
+    await waitFor(() => expect(radio('Friends only')).toBeChecked());
+    await act(async () => stale(base));
+    await waitFor(() => expect(qc.getQueryState(qk.connect.privacy)?.fetchStatus).toBe('idle'));
+    expect(radio('Friends only')).toBeChecked();
   });
 });

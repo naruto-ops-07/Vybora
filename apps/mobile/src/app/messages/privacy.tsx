@@ -57,22 +57,25 @@ function Privacy() {
   useEffect(() => setPhone(contact.data?.phone_e164 ?? ''), [contact.data?.phone_e164]);
 
   // Applied at once so switches and radios answer immediately; undone on failure.
+  // Any refetch in flight is cancelled first so its older answer can't undo the change.
   const set = (patch: Partial<ConnectPrivacy>) => {
-    const before = qc.getQueryData<ConnectPrivacy>(qk.connect.privacy);
-    if (before) qc.setQueryData<ConnectPrivacy>(qk.connect.privacy, { ...before, ...patch });
-    void updateConnectPrivacy(supabase, userId, patch).then(
-      () => qc.invalidateQueries({ queryKey: qk.connect.privacy }),
-      (e) => {
-        const now = qc.getQueryData<ConnectPrivacy>(qk.connect.privacy);
-        if (before && now) {
-          const undo = Object.fromEntries(
-            Object.keys(patch).map((k) => [k, before[k as keyof ConnectPrivacy]]),
-          );
-          qc.setQueryData<ConnectPrivacy>(qk.connect.privacy, { ...now, ...undo });
-        }
-        Alert.alert('Not saved', friendlyError(e));
-      },
-    );
+    void qc.cancelQueries({ queryKey: qk.connect.privacy }).then(() => {
+      const before = qc.getQueryData<ConnectPrivacy>(qk.connect.privacy);
+      if (before) qc.setQueryData<ConnectPrivacy>(qk.connect.privacy, { ...before, ...patch });
+      return updateConnectPrivacy(supabase, userId, patch).then(
+        () => qc.invalidateQueries({ queryKey: qk.connect.privacy }),
+        (e) => {
+          const now = qc.getQueryData<ConnectPrivacy>(qk.connect.privacy);
+          if (before && now) {
+            const undo = Object.fromEntries(
+              Object.keys(patch).map((k) => [k, before[k as keyof ConnectPrivacy]]),
+            );
+            qc.setQueryData<ConnectPrivacy>(qk.connect.privacy, { ...now, ...undo });
+          }
+          Alert.alert('Not saved', friendlyError(e));
+        },
+      );
+    });
   };
   const p = privacy.data;
   const toggle = (

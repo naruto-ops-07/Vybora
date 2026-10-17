@@ -1,8 +1,9 @@
 import type * as Api from '@vybora/api';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/utils';
+import { qk } from '@vybora/api';
 import PrivacyPage from './PrivacyPage';
 
 const api = vi.hoisted(() => ({
@@ -86,6 +87,37 @@ describe('who can start chats with me', () => {
     await userEvent.click(within(g).getByRole('radio', { name: 'Friends only' }));
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect(within(g).getByRole('radio', { name: 'Everyone' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+  });
+
+  it('a refetch already in flight cannot undo a switch you just made', async () => {
+    api.fetchConnectPrivacy.mockResolvedValue(settings('everyone'));
+    const { qc } = renderWithProviders(<PrivacyPage />);
+    const g = await group();
+    await waitFor(() =>
+      expect(within(g).getByRole('radio', { name: 'Everyone' })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      ),
+    );
+    // A background refetch starts and will come back with the old value.
+    let stale!: (v: unknown) => void;
+    api.fetchConnectPrivacy.mockReturnValue(new Promise((r) => (stale = r)));
+    void qc.invalidateQueries({ queryKey: qk.connect.privacy });
+    await waitFor(() => expect(api.fetchConnectPrivacy).toHaveBeenCalledTimes(2));
+    api.updateConnectPrivacy.mockReturnValue(new Promise(() => undefined));
+    await userEvent.click(within(g).getByRole('radio', { name: 'Friends only' }));
+    await waitFor(() =>
+      expect(within(g).getByRole('radio', { name: 'Friends only' })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      ),
+    );
+    await act(async () => stale(settings('everyone')));
+    await waitFor(() => expect(qc.getQueryState(qk.connect.privacy)?.fetchStatus).toBe('idle'));
+    expect(within(g).getByRole('radio', { name: 'Friends only' })).toHaveAttribute(
       'aria-checked',
       'true',
     );
