@@ -85,6 +85,16 @@ export const routes: RouteObject[] = [
           },
         ],
       },
+      // Dev-only design gallery. Vite replaces import.meta.env.DEV with `false` in
+      // production builds, so this branch and the gallery chunk are dropped entirely.
+      ...(import.meta.env.DEV
+        ? [
+            {
+              path: '__gallery',
+              lazy: async () => ({ Component: (await import('@/dev/gallery/Gallery')).default }),
+            },
+          ]
+        : []),
       { path: '*', element: <NotFound /> },
     ],
   },

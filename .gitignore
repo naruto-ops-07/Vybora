@@ -41,3 +41,6 @@ supabase/.temp/
 
 # agent workflow scratch
 .superpowers/
+
+# design review screenshots (apps/web/scripts/gallery-shots.mjs)
+apps/web/.impeccable/review/
