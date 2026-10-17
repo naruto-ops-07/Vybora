@@ -57,6 +57,7 @@ import { PushPinIcon } from 'phosphor-react-native/src/icons/PushPin';
 import { ShieldCheckIcon } from 'phosphor-react-native/src/icons/ShieldCheck';
 import { ShieldSlashIcon } from 'phosphor-react-native/src/icons/ShieldSlash';
 import { SignOutIcon } from 'phosphor-react-native/src/icons/SignOut';
+import { ShareNetworkIcon } from 'phosphor-react-native/src/icons/ShareNetwork';
 import { SlidersHorizontalIcon } from 'phosphor-react-native/src/icons/SlidersHorizontal';
 import { SmileyIcon } from 'phosphor-react-native/src/icons/Smiley';
 import { StopIcon } from 'phosphor-react-native/src/icons/Stop';
@@ -127,6 +128,7 @@ const ICONS = {
   search: MagnifyingGlassIcon,
   send: PaperPlaneRightIcon,
   settings: GearSixIcon,
+  share: ShareNetworkIcon,
   shield: ShieldCheckIcon,
   'shield-off': ShieldSlashIcon,
   slash: ProhibitIcon,

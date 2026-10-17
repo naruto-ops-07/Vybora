@@ -1,16 +1,17 @@
 import { peerOf, qk, sendFriendRequest, type Friend, type FriendRequest } from '@vybora/api';
-import { formatRelativeTime } from '@vybora/core';
+import { formatRelativeTime, usernameFromAddParam } from '@vybora/core';
 import { useQueryClient } from '@tanstack/react-query';
-import { Stack, useIsFocused } from 'expo-router';
+import { Stack, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { AccessibilityInfo, FlatList, RefreshControl, View } from 'react-native';
 import { Text } from '@/components/Text';
 import { Button } from '@/components/ui';
 import { useMe } from '@/features/auth/AuthProvider';
 import { useOnlinePeers, useSecureInbox } from '@/features/connect/hooks';
-import { ConnectEmpty, useCc } from '@/features/connect/ui/primitives';
+import { useCc } from '@/features/connect/ui/primitives';
 import { AddFriendForm } from '@/features/friends/AddFriendForm';
 import { FriendRow } from '@/features/friends/FriendRow';
+import { HandleCard } from '@/features/friends/HandleCard';
 import {
   nameOf,
   useFriendActions,
@@ -19,6 +20,7 @@ import {
   useMessageFriend,
 } from '@/features/friends/hooks';
 import { RequestRow } from '@/features/friends/RequestRow';
+import { FriendsEmpty } from '@/features/onboarding/EmptyStates';
 import { radii } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
 
@@ -96,6 +98,8 @@ export default function FriendsScreen() {
   const qc = useQueryClient();
   const { userId } = useMe();
   const focused = useIsFocused();
+  const { add } = useLocalSearchParams<{ add?: string }>();
+  const prefill = usernameFromAddParam(typeof add === 'string' ? add : null);
   const friends = useFriends();
   const requests = useFriendRequests(focused);
   const inbox = useSecureInbox();
@@ -138,7 +142,7 @@ export default function FriendsScreen() {
 
   const header = (
     <View>
-      <AddFriendForm onSubmit={send} />
+      <AddFriendForm onSubmit={send} prefill={prefill} />
       {requests.isError && !requests.data && (
         <Retry message="Couldn’t load friend requests." onRetry={() => void requests.refetch()} />
       )}
@@ -224,15 +228,7 @@ export default function FriendsScreen() {
             }}
           />
         )}
-        ListEmptyComponent={
-          friends.isSuccess ? (
-            <ConnectEmpty
-              icon="users"
-              title="No friends yet"
-              body="Add someone by their username above. When they accept, they’ll show up here."
-            />
-          ) : null
-        }
+        ListEmptyComponent={friends.isSuccess ? <FriendsEmpty handle={<HandleCard />} /> : null}
       />
     </View>
   );

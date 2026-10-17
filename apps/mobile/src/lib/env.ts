@@ -20,3 +20,9 @@ export const env = parsed.success
     };
 
 export const siteUrl = (env.siteUrl ?? 'https://vybora.app').replace(/\/$/, '');
+
+/**
+ * The configured public web address only (no fallback), for links people pass
+ * on: when it isn't set, share the @handle on its own rather than a guess.
+ */
+export const publicSiteUrl = env.siteUrl ? env.siteUrl.replace(/\/$/, '') : null;

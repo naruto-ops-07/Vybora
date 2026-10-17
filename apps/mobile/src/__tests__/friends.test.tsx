@@ -53,7 +53,13 @@ jest.mock('@/lib/supabase', () => ({
   supabase: {},
   supabaseConfig: { url: 'http://x', anonKey: 'k' },
 }));
-jest.mock('@/features/auth/AuthProvider', () => ({ useMe: () => ({ userId: 'me' }) }));
+const mockProfile = { id: 'me', username: 'me.here', display_name: 'Me Here', avatar_path: null };
+jest.mock('@/features/auth/AuthProvider', () => ({
+  useMe: () => ({ userId: 'me', profile: mockProfile }),
+  useAuth: () => ({ userId: 'me', profile: mockProfile }),
+}));
+let mockParams: Record<string, string> = {};
+jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(() => Promise.resolve(true)) }));
 jest.mock('expo-router', () => {
   const Stack = () => null;
   Stack.Screen = () => null;
@@ -61,6 +67,7 @@ jest.mock('expo-router', () => {
     router: { push: (...a: unknown[]) => mockPush(...a) },
     Stack,
     useIsFocused: () => true,
+    useLocalSearchParams: () => mockParams,
   };
 });
 jest.mock('expo-haptics', () => ({
@@ -103,6 +110,7 @@ const wrapper = (client: QueryClient) =>
 let alert: jest.SpyInstance;
 beforeEach(() => {
   jest.clearAllMocks();
+  mockParams = {};
   alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
 afterEach(async () => {
@@ -560,7 +568,10 @@ describe('Friends screen', () => {
     mockFetchFriends.mockResolvedValue([]);
     mockFetchInbox.mockResolvedValue([]);
     await renderScreen();
-    await waitFor(() => expect(screen.getByText('No friends yet')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Your circle starts here')).toBeTruthy());
+    // My own @handle, ready to pass on.
+    expect(screen.getByText('@me.here')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Copy @me.here' })).toBeTruthy();
     expect(screen.queryByLabelText(/^Requests/)).toBeNull();
   });
 
@@ -624,5 +635,74 @@ describe('New chat friends quick-pick', () => {
     await waitFor(() => expect(mockFetchFriends).toHaveBeenCalled());
     expect(screen.getByText(/Search for someone to message/)).toBeTruthy();
     expect(screen.queryByText('Friends')).toBeNull();
+  });
+});
+
+describe('add-me links and the quick-pick cap', () => {
+  const people = (n: number): Friend[] =>
+    Array.from({ length: n }, (_, i) => ({
+      ...maya,
+      userId: `u-${i}`,
+      username: `pal${String(i).padStart(2, '0')}`,
+      displayName: null,
+    }));
+
+  it('prefills the add field from ?add= without sending anything', async () => {
+    mockParams = { add: '@Maya' };
+    mockFetchRequests.mockResolvedValue({ incoming: [], outgoing: [] });
+    mockFetchFriends.mockResolvedValue([]);
+    mockFetchInbox.mockResolvedValue([]);
+    await render(
+      <QueryClientProvider client={newClient()}>
+        <FriendsScreen />
+      </QueryClientProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText('Friend’s username').props.value).toBe('maya'),
+    );
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('ignores an ?add= that can’t be a username', async () => {
+    mockParams = { add: 'not a name!' };
+    mockFetchRequests.mockResolvedValue({ incoming: [], outgoing: [] });
+    mockFetchFriends.mockResolvedValue([]);
+    mockFetchInbox.mockResolvedValue([]);
+    await render(
+      <QueryClientProvider client={newClient()}>
+        <FriendsScreen />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('Your circle starts here')).toBeTruthy());
+    expect(screen.getByLabelText('Friend’s username').props.value).toBe('');
+  });
+
+  it('shows eight friends first, then all of them on request', async () => {
+    mockFetchFriends.mockResolvedValue(people(10));
+    mockFetchInbox.mockResolvedValue([]);
+    await render(
+      <QueryClientProvider client={newClient()}>
+        <NewChat />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('pal00')).toBeTruthy());
+    expect(screen.queryByText('pal08')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Show all friends (10)' }));
+    expect(screen.getByText('pal09')).toBeTruthy();
+  });
+
+  it('a search that finds no one offers to add them by username', async () => {
+    mockFetchFriends.mockResolvedValue([]);
+    mockFetchInbox.mockResolvedValue([]);
+    mockSearch.mockResolvedValue([]);
+    await render(
+      <QueryClientProvider client={newClient()}>
+        <NewChat />
+      </QueryClientProvider>,
+    );
+    await fireEvent.changeText(screen.getByLabelText('Search people'), 'Ghost.Name');
+    await waitFor(() => expect(screen.getByText('No one by that name')).toBeTruthy());
+    await fireEvent.press(screen.getByRole('button', { name: 'Add a friend' }));
+    expect(mockPush).toHaveBeenCalledWith('/messages/friends?add=ghost.name');
   });
 });

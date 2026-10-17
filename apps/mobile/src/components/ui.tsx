@@ -78,6 +78,8 @@ export function Button({
       accessibilityState={{ disabled: disabled || loading, busy: loading }}
       disabled={disabled || loading}
       onPress={onPress}
+      // Compact buttons draw at 36 px; the touch area still reaches 44.
+      hitSlop={compact ? 4 : undefined}
       style={({ pressed }) => [
         {
           minHeight: compact ? 36 : 48,

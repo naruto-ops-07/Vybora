@@ -1,6 +1,17 @@
 import { Icon } from '@/components/Icon';
-import { createSecureConversation, fetchFriends, qk, searchProfiles } from '@vybora/api';
-import { friendlyError } from '@vybora/core';
+import {
+  createSecureConversation,
+  directChatActivity,
+  fetchFriends,
+  qk,
+  searchProfiles,
+} from '@vybora/api';
+import {
+  friendlyError,
+  orderQuickPick,
+  QUICK_PICK_LIMIT,
+  usernameFromAddParam,
+} from '@vybora/core';
 import type { UserSummary } from '@vybora/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, Stack } from 'expo-router';
@@ -8,7 +19,10 @@ import { useDeferredValue, useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, View } from 'react-native';
 import { Text, TextInput } from '@/components/Text';
 import { radii } from '@/lib/theme';
-import { Avatar } from '@/components/ui';
+import { Avatar, Button } from '@/components/ui';
+import { useMe } from '@/features/auth/AuthProvider';
+import { useSecureInbox } from '@/features/connect/hooks';
+import { addFriend, NoResultsEmpty } from '@/features/onboarding/EmptyStates';
 import { useCc, PrimaryButton } from '@/features/connect/ui/primitives';
 import { supabase } from '@/lib/supabase';
 
@@ -18,24 +32,29 @@ export default function NewChat() {
   const [term, setTerm] = useState('');
   const [title, setTitle] = useState('');
   const [picked, setPicked] = useState<UserSummary[]>([]);
+  const [showAll, setShowAll] = useState(false);
+  const { userId } = useMe();
+  const inbox = useSecureInbox();
   const q = useDeferredValue(term.trim());
   const results = useQuery({
     queryKey: qk.search(q),
     queryFn: () => searchProfiles(supabase, q),
     enabled: q.length > 0,
   });
-  // Friends first: a one-tap quick-pick while the search box is empty.
+  // Friends first: a one-tap quick-pick while the search box is empty, most
+  // recent chats first, the first eight until "Show all friends".
   const friends = useQuery({ queryKey: qk.connect.friends, queryFn: () => fetchFriends(supabase) });
   const friendOptions = useMemo<UserSummary[]>(
     () =>
-      (friends.data ?? []).map((f) => ({
+      orderQuickPick(friends.data ?? [], directChatActivity(inbox.data, userId)).map((f) => ({
         id: f.userId,
         username: f.username,
         display_name: f.displayName ?? '',
         avatar_path: f.avatarPath,
       })),
-    [friends.data],
+    [friends.data, inbox.data, userId],
   );
+  const shownFriends = showAll ? friendOptions : friendOptions.slice(0, QUICK_PICK_LIMIT);
   const showFriends = !q && friendOptions.length > 0;
   const isGroup = picked.length > 1;
 
@@ -153,7 +172,7 @@ export default function NewChat() {
         </View>
       </View>
       <FlatList
-        data={showFriends ? friendOptions : (results.data ?? [])}
+        data={showFriends ? shownFriends : (results.data ?? [])}
         keyExtractor={(u) => u.id}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
@@ -213,17 +232,39 @@ export default function NewChat() {
                   justifyContent: 'center',
                 }}
               >
-                {on && <Icon name="check" size={14} color="#fff" />}
+                {on && <Icon name="check" size={14} color={cc.onAccent} />}
               </View>
             </Pressable>
           );
         }}
+        ListFooterComponent={
+          showFriends && !showAll && friendOptions.length > QUICK_PICK_LIMIT ? (
+            <View style={{ paddingHorizontal: 8, paddingTop: 4 }}>
+              <Button
+                title={`Show all friends (${friendOptions.length})`}
+                variant="ghost"
+                onPress={() => setShowAll(true)}
+              />
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
-          <Text style={{ color: cc.textSubtle, textAlign: 'center', padding: 30 }}>
-            {q
-              ? 'No people found.'
-              : 'Search for someone to message. Pick two or more to create a group.'}
-          </Text>
+          q && results.isSuccess ? (
+            <NoResultsEmpty
+              action={
+                <Button
+                  title="Add a friend"
+                  icon="user-plus"
+                  variant="outline"
+                  onPress={() => addFriend(usernameFromAddParam(q))}
+                />
+              }
+            />
+          ) : q ? null : (
+            <Text style={{ color: cc.textSubtle, textAlign: 'center', padding: 30 }}>
+              Search for someone to message. Pick two or more to create a group.
+            </Text>
+          )
         }
       />
       {picked.length > 0 && (

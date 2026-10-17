@@ -7,7 +7,7 @@ import {
   updateConversationPreferences,
   type SecureConversation,
 } from '@vybora/api';
-import { chatRowPreview, formatRowTime, receiptOf } from '@vybora/core';
+import { chatRowPreview, formatRowTime, receiptOf, usernameFromAddParam } from '@vybora/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useIsFocused } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -39,16 +39,51 @@ import {
   useSecureInbox,
 } from '@/features/connect/hooks';
 import { ChatRow } from '@/features/connect/ui/ChatRowParts';
-import { ConnectEmpty, PrimaryButton, useCc } from '@/features/connect/ui/primitives';
+import { ConnectEmpty, useCc } from '@/features/connect/ui/primitives';
 import { UndoBar } from '@/features/connect/ui/UndoBar';
 import { FriendsButton } from '@/features/friends/FriendsButton';
 import { useFriendRequests } from '@/features/friends/hooks';
+import { AddFriendButton, NoChatsEmpty, NoResultsEmpty } from '@/features/onboarding/EmptyStates';
+import { GetStarted } from '@/features/onboarding/GetStarted';
 import { useHaptics } from '@/lib/haptics';
 import { radii } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
 
 type Filter = 'all' | 'unread' | 'groups' | 'pinned' | 'archived';
 const FILTERS: Filter[] = ['all', 'unread', 'groups', 'pinned', 'archived'];
+
+/** "No chats yet", "No one by that name", or a plain line for an empty filter. */
+function InboxEmpty({
+  term,
+  filter,
+  hasChats,
+}: {
+  term: string;
+  filter: Filter;
+  hasChats: boolean;
+}) {
+  const cc = useCc();
+  if (term)
+    return (
+      <NoResultsEmpty
+        action={<AddFriendButton username={usernameFromAddParam(term)} variant="outline" />}
+      />
+    );
+  if (filter === 'all' && !hasChats) return <NoChatsEmpty />;
+  return (
+    <Text
+      style={{
+        color: cc.textMuted,
+        fontSize: 14,
+        textAlign: 'center',
+        paddingHorizontal: 32,
+        paddingVertical: 48,
+      }}
+    >
+      {filter === 'all' ? 'No chats here' : `No ${filter} chats`}
+    </Text>
+  );
+}
 
 function Inbox() {
   const cc = useCc();
@@ -199,66 +234,72 @@ function Inbox() {
           />
         }
         ListHeaderComponent={
-          <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 8,
-                backgroundColor: cc.night,
-                borderRadius: radii.md,
-                paddingHorizontal: 12,
-                borderWidth: 1,
-                borderColor: cc.lineStrong,
-              }}
-            >
-              <Icon name="search" size={16} color={cc.textSubtle} />
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search chats"
-                placeholderTextColor={cc.textSubtle}
-                accessibilityLabel="Search chats"
-                autoCapitalize="none"
-                style={{ flex: 1, height: 44, color: cc.text, fontSize: 16 }}
-              />
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={{
-                marginTop: 8,
-                borderBottomWidth: StyleSheet.hairlineWidth,
-                borderBottomColor: cc.line,
-              }}
-              contentContainerStyle={{ gap: 18 }}
-              accessibilityRole="tablist"
-            >
-              {FILTERS.map((f) => (
-                <Pressable
-                  key={f}
-                  onPress={() => setFilter(f)}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: filter === f }}
-                  style={{
-                    minHeight: 44,
-                    justifyContent: 'center',
-                    borderBottomWidth: 2,
-                    borderBottomColor: filter === f ? cc.accent : 'transparent',
-                  }}
-                >
-                  <Text
+          <View>
+            <GetStarted
+              previews={previews.data}
+              previewsReady={inbox.isSuccess && (convs.length === 0 || previews.isSuccess)}
+            />
+            <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  backgroundColor: cc.night,
+                  borderRadius: radii.md,
+                  paddingHorizontal: 12,
+                  borderWidth: 1,
+                  borderColor: cc.lineStrong,
+                }}
+              >
+                <Icon name="search" size={16} color={cc.textSubtle} />
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search chats"
+                  placeholderTextColor={cc.textSubtle}
+                  accessibilityLabel="Search chats"
+                  autoCapitalize="none"
+                  style={{ flex: 1, height: 44, color: cc.text, fontSize: 16 }}
+                />
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{
+                  marginTop: 8,
+                  borderBottomWidth: StyleSheet.hairlineWidth,
+                  borderBottomColor: cc.line,
+                }}
+                contentContainerStyle={{ gap: 18 }}
+                accessibilityRole="tablist"
+              >
+                {FILTERS.map((f) => (
+                  <Pressable
+                    key={f}
+                    onPress={() => setFilter(f)}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: filter === f }}
                     style={{
-                      color: filter === f ? cc.text : cc.textMuted,
-                      fontSize: 14,
-                      fontWeight: '500',
+                      minHeight: 44,
+                      justifyContent: 'center',
+                      borderBottomWidth: 2,
+                      borderBottomColor: filter === f ? cc.accent : 'transparent',
                     }}
                   >
-                    {f[0]!.toUpperCase() + f.slice(1)}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
+                    <Text
+                      style={{
+                        color: filter === f ? cc.text : cc.textMuted,
+                        fontSize: 14,
+                        fontWeight: '500',
+                      }}
+                    >
+                      {f[0]!.toUpperCase() + f.slice(1)}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
           </View>
         }
         renderItem={({ item: c }) => {
@@ -354,24 +395,7 @@ function Inbox() {
               body="Check your connection and pull down to try again."
             />
           ) : (
-            <ConnectEmpty
-              icon="lock"
-              title={filter === 'all' && !query ? 'No conversations yet' : 'Nothing here'}
-              body={
-                filter === 'all' && !query
-                  ? 'Every chat is end-to-end encrypted. Only you and the people you talk to can read it.'
-                  : undefined
-              }
-              action={
-                filter === 'all' && !query ? (
-                  <PrimaryButton
-                    title="New chat"
-                    icon="edit"
-                    onPress={() => router.push('/messages/new')}
-                  />
-                ) : undefined
-              }
-            />
+            <InboxEmpty term={query.trim()} filter={filter} hasChats={convs.length > 0} />
           )
         }
         ListFooterComponent={

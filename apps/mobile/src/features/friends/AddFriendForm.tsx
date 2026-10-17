@@ -6,7 +6,7 @@ import {
   type AddFriendNotice,
 } from '@vybora/core';
 import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Platform, View } from 'react-native';
+import { AccessibilityInfo, Platform, View, type TextInput as RNTextInput } from 'react-native';
 import { Icon, type IconName } from '@/components/Icon';
 import { Text, TextInput } from '@/components/Text';
 import { Button } from '@/components/ui';
@@ -26,8 +26,11 @@ const NOTICE_ICON: Record<AddFriendNotice['tone'], IconName> = {
  */
 export function AddFriendForm({
   onSubmit,
+  prefill,
 }: {
   onSubmit: (username: string) => Promise<FriendRequestResult>;
+  /** From an add-me link (`?add=`): fills the field and focuses it. Never sends. */
+  prefill?: string | null;
 }) {
   const cc = useCc();
   const haptic = useHaptics();
@@ -35,7 +38,15 @@ export function AddFriendForm({
   const [notice, setNotice] = useState<AddFriendNotice | null>(null);
   const [pending, setPending] = useState(false);
   const inFlight = useRef(false);
+  const input = useRef<RNTextInput>(null);
   const username = normalizeUsername(value);
+
+  useEffect(() => {
+    if (!prefill) return;
+    setValue(prefill);
+    setNotice(null);
+    input.current?.focus();
+  }, [prefill]);
 
   // iOS has no live regions; say the outcome out loud.
   useEffect(() => {
@@ -87,6 +98,7 @@ export function AddFriendForm({
           @
         </Text>
         <TextInput
+          ref={input}
           value={value}
           onChangeText={(v) => {
             setValue(v);
