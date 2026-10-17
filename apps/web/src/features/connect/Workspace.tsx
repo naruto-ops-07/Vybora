@@ -1,15 +1,19 @@
 import {
   ChatsCircleIcon,
-  FingerprintIcon,
   GearSixIcon,
-  KeyIcon,
-  LockSimpleIcon,
   MonitorIcon,
   UsersThreeIcon,
   WarningIcon,
 } from '@phosphor-icons/react';
-import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react-router';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  NavLink,
+  Outlet,
+  useLocation,
+  useMatch,
+  useNavigate,
+  useOutletContext,
+} from 'react-router';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { LogoMark } from '@/components/ui/Logo';
@@ -17,6 +21,8 @@ import { Spinner } from '@/components/ui/Spinner';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { FriendRequestBadge } from '@/features/friends/FriendRequestBadge';
 import { FriendsPane } from '@/features/friends/FriendsPane';
+import { HandleCard } from '@/features/friends/HandleCard';
+import { WelcomeEmpty } from '@/features/onboarding/EmptyStates';
 import { useFriendRequests } from '@/features/friends/hooks';
 import { ConversationList as LegacyList } from '@/features/messages/InboxPage';
 import { SettingsNav } from '@/features/settings/SettingsNav';
@@ -24,7 +30,6 @@ import { cn } from '@/lib/cn';
 import { ConnectProvider, useConnect } from './ConnectProvider';
 import { CommandPalette } from './CommandPalette';
 import { InboxPane } from './InboxPane';
-import { Meta } from './ui';
 
 /** Waits for this browser's encryption engine; explains every non-ready state. */
 function Gate({ children, quietOnDesktop }: { children: ReactNode; quietOnDesktop?: boolean }) {
@@ -103,57 +108,18 @@ function Centered({
   );
 }
 
+export interface WorkspaceOutletContext {
+  /** Open the New message dialog in the chat list. */
+  compose: () => void;
+}
+
 /** Conversation pane when no chat is selected (desktop and tablet). */
 export function MessagesWelcome() {
+  const ctx = useOutletContext<WorkspaceOutletContext | undefined>();
   return (
-    <div className="hidden h-full flex-1 items-center justify-center p-10 md:flex">
-      <div className="w-full max-w-md">
-        <LockSimpleIcon size={28} className="text-accent" aria-hidden="true" />
-        <h2 className="type-display mt-4 text-4xl">Private by design</h2>
-        <p className="mt-2 text-[15px] leading-relaxed text-muted">
-          Messages and attachments are end-to-end encrypted on your devices. VYBORA’s servers store
-          only ciphertext.
-        </p>
-        <dl className="mt-8 divide-y divide-line border-y border-line">
-          {[
-            { icon: <LockSimpleIcon size={18} />, t: 'MLS encryption', d: 'Per device, RFC 9420' },
-            { icon: <KeyIcon size={18} />, t: 'Your keys', d: 'Never leave this browser' },
-            {
-              icon: <FingerprintIcon size={18} />,
-              t: 'Verifiable',
-              d: 'Compare safety numbers',
-            },
-          ].map((f) => (
-            <div key={f.t} className="flex items-center gap-3 py-3">
-              <span className="text-accent" aria-hidden="true">
-                {f.icon}
-              </span>
-              <dt className="flex-1 text-sm font-medium">{f.t}</dt>
-              <dd>
-                <Meta>{f.d}</Meta>
-              </dd>
-            </div>
-          ))}
-        </dl>
-        <h3 className="mt-8 text-[13px] font-semibold text-muted">Keyboard shortcuts</h3>
-        <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
-          {[
-            ['Ctrl K', 'Command menu'],
-            ['Alt N', 'New chat'],
-            ['/', 'Search chats'],
-            ['Alt ↑ ↓', 'Previous or next chat'],
-            ['Alt I', 'Chat details'],
-          ].map(([k, d]) => (
-            <div key={k} className="contents">
-              <dt>
-                <kbd className="rounded-sm border border-line-strong px-1.5 font-mono text-[11px]">
-                  {k}
-                </kbd>
-              </dt>
-              <dd className="text-muted">{d}</dd>
-            </div>
-          ))}
-        </dl>
+    <div className="scroll-thin hidden h-full flex-1 flex-col items-center overflow-y-auto p-10 md:flex">
+      <div className="my-auto flex w-full justify-center">
+        <WelcomeEmpty onCompose={ctx?.compose} handle={<HandleCard />} />
       </div>
     </div>
   );
@@ -225,6 +191,11 @@ export default function Workspace() {
     !legacy && !inFriends && (!inSettings || location.pathname.startsWith('/settings/privacy'));
   const incomingRequests = useFriendRequests().data?.incoming.length ?? 0;
   const friendsBadge = <FriendRequestBadge count={incomingRequests} />;
+  const [composeSignal, setComposeSignal] = useState(0);
+  const outletContext = useMemo<WorkspaceOutletContext>(
+    () => ({ compose: () => setComposeSignal((n) => n + 1) }),
+    [],
+  );
   const content = (
     <Suspense
       fallback={
@@ -233,10 +204,9 @@ export default function Workspace() {
         </div>
       }
     >
-      <Outlet />
+      <Outlet context={outletContext} />
     </Suspense>
   );
-  const [composeSignal, setComposeSignal] = useState(0);
   const resetCompose = useCallback(() => setComposeSignal(0), []);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const navigate = useNavigate();

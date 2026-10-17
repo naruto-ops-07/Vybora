@@ -6,7 +6,7 @@ import {
   updateConversationPreferences,
   type SecureConversation,
 } from '@vybora/api';
-import { chatRowPreview, formatRowTime, receiptOf } from '@vybora/core';
+import { chatRowPreview, formatRowTime, receiptOf, usernameFromAddParam } from '@vybora/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
@@ -16,6 +16,8 @@ import { Tip } from '@/components/ui/Tooltip';
 import { useToast } from '@/components/ui/Toast';
 import { useA11y } from '@/features/a11y/A11yProvider';
 import { useMe } from '@/features/auth/AuthProvider';
+import { AddFriendLink, NoChatsEmpty, NoResultsEmpty } from '@/features/onboarding/EmptyStates';
+import { GetStarted } from '@/features/onboarding/GetStarted';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import { ChatRowMenu } from './ChatRowParts';
@@ -39,6 +41,33 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'pinned', label: 'Pinned' },
   { id: 'archived', label: 'Archived' },
 ];
+
+/** "No chats yet", "No one by that name", or a plain line for an empty filter. */
+function InboxEmpty({
+  term,
+  filter,
+  hasChats,
+  onCompose,
+}: {
+  term: string;
+  filter: Filter;
+  hasChats: boolean;
+  onCompose: () => void;
+}) {
+  if (term)
+    return (
+      <NoResultsEmpty
+        headingLevel={2}
+        action={<AddFriendLink username={usernameFromAddParam(term)} variant="outline" size="sm" />}
+      />
+    );
+  if (filter === 'all' && !hasChats) return <NoChatsEmpty onCompose={onCompose} />;
+  return (
+    <p className="px-8 py-12 text-center text-sm text-muted">
+      {filter === 'all' ? 'No chats here' : `No ${filter} chats`}
+    </p>
+  );
+}
 
 /** Short, fixed-width timestamp for list rows. */
 export function listTime(iso: string) {
@@ -229,26 +258,21 @@ export function InboxPane({
             </button>
           </div>
         )}
+        {inbox.isSuccess && filter === 'all' && !term && (
+          <GetStarted
+            previews={previews.data}
+            previewsReady={convs.length === 0 || previews.isSuccess}
+            onSayHi={() => setComposing(true)}
+            onDismissed={() => searchRef.current?.focus()}
+          />
+        )}
         {inbox.isSuccess && visible.length === 0 && (
-          <div className="px-8 py-12 text-center">
-            <p className="font-medium">
-              {term
-                ? 'No matching chats'
-                : filter === 'all'
-                  ? 'No conversations yet'
-                  : `No ${filter} chats`}
-            </p>
-            {filter === 'all' && !term && (
-              <>
-                <p className="mt-1 text-sm text-muted">
-                  Start an end-to-end encrypted conversation.
-                </p>
-                <Button className="mt-4" onClick={() => setComposing(true)}>
-                  New message
-                </Button>
-              </>
-            )}
-          </div>
+          <InboxEmpty
+            term={term.trim()}
+            filter={filter}
+            hasChats={convs.some((c) => !c.archived)}
+            onCompose={() => setComposing(true)}
+          />
         )}
         <ul className="py-1">
           {visible.map((c) => {
