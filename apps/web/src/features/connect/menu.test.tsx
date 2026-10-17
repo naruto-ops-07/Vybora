@@ -126,8 +126,8 @@ describe('always-visible actions', () => {
   };
   afterEach(() => localStorage.clear());
 
-  function renderBubble() {
-    localStorage.setItem('vybora.a11y', JSON.stringify({ alwaysShowActions: true }));
+  function renderBubble({ alwaysShowActions = true } = {}) {
+    localStorage.setItem('vybora.a11y', JSON.stringify({ alwaysShowActions }));
     const theme = { ...resolveChatTheme(null), accent: '#0F766E' };
     return render(
       <A11yProvider>
@@ -163,6 +163,25 @@ describe('always-visible actions', () => {
     }
     expect(screen.queryByRole('button', { name: 'Copy text' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Delete for everyone' })).toBeNull();
+  });
+
+  it('keeps the hover bar out of the bubble’s width budget', () => {
+    // In flow, an invisible bar beside the bubble squeezed short messages on narrow
+    // mouse windows ("Count me in" wrapped). Positioned, it takes no width.
+    renderBubble({ alwaysShowActions: false });
+    const bar = screen.getByRole('button', { name: 'Reply' }).closest('[data-actions]')!;
+    expect(bar).toHaveAttribute('data-actions', 'hover');
+    expect(bar).toHaveClass('absolute', 'opacity-0', 'pointer-events-none');
+    // The bubble's max width is a share of the row, which is a size container.
+    expect(bar.parentElement).toHaveClass('max-w-[min(80%,600px)]');
+    expect(bar.parentElement?.parentElement).toHaveClass('@container', 'w-full');
+  });
+
+  it('keeps the always-visible bar in flow beside the bubble', () => {
+    renderBubble();
+    const bar = screen.getByRole('button', { name: 'Reply' }).closest('[data-actions]')!;
+    expect(bar).toHaveAttribute('data-actions', 'inline');
+    expect(bar).not.toHaveClass('absolute');
   });
 
   it('opens the menu from More actions', async () => {

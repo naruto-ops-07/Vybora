@@ -310,8 +310,12 @@ export const Bubble = memo(function Bubble({
             {senderName}
           </span>
         )}
+        {/* A size container: the hover action bar picks beside-or-above from the row's width. */}
         <div
-          className={cn('relative flex w-full items-end gap-2', mine && 'flex-row-reverse')}
+          className={cn(
+            '@container relative flex w-full items-end gap-2',
+            mine && 'flex-row-reverse',
+          )}
           style={{
             transform: swipe.offset ? `translateX(${swipe.offset}px)` : undefined,
             transition: swipe.offset || reduceMotion ? 'none' : 'transform 180ms ease-out',
@@ -417,10 +421,20 @@ export const Bubble = memo(function Bubble({
                   prefs.alwaysShowActions
                     ? 'opacity-100'
                     : cn(
-                        'hover-actions focus-within:opacity-100 group-hover:opacity-100',
-                        picker ? 'opacity-100' : 'opacity-0',
+                        // Hover bar: positioned, so it never takes width from the bubble.
+                        // Narrow rows: a small toolbar over the bubble's top corner.
+                        // Wide rows (room for it): beside the bubble, as a plain row of icons.
+                        'hover-actions absolute -top-7 z-10 rounded-md border border-line-strong bg-surface',
+                        '@min-[820px]:top-1/2 @min-[820px]:-translate-y-1/2 @min-[820px]:border-transparent @min-[820px]:bg-transparent',
+                        mine
+                          ? 'right-0 @min-[820px]:right-full @min-[820px]:mr-1'
+                          : 'left-0 @min-[820px]:left-full @min-[820px]:ml-1',
+                        // Invisible means untouchable too: no stray clicks on the row above.
+                        'focus-within:pointer-events-auto focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100',
+                        picker ? 'opacity-100' : 'pointer-events-none opacity-0',
                       ),
                 )}
+                data-actions={prefs.alwaysShowActions ? 'inline' : 'hover'}
               >
                 <ActionButton label="React" onClick={() => setPicker((p) => !p)} expanded={picker}>
                   <SmileyIcon size={16} />
@@ -449,7 +463,9 @@ export const Bubble = memo(function Bubble({
                 role="menu"
                 aria-label="Reactions"
                 className={cn(
-                  'absolute -top-11 z-10 flex gap-0.5 rounded-md border border-line-strong bg-surface p-1',
+                  'absolute z-20 flex gap-0.5 rounded-md border border-line-strong bg-surface p-1',
+                  // Clear of the narrow hover toolbar, which sits above the bubble.
+                  prefs.alwaysShowActions ? '-top-11' : '-top-[4.75rem] @min-[820px]:-top-11',
                   mine ? 'right-0' : 'left-0',
                 )}
                 onKeyDown={(e) => e.key === 'Escape' && setPicker(false)}
