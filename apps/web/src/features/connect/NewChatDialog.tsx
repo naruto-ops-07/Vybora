@@ -32,7 +32,13 @@ function PersonOption({
         onClick={onToggle}
         className="flex w-full items-center gap-3 px-1 py-2.5 text-left hover:bg-surface-muted"
       >
-        <Avatar path={user.avatar_path} name={user.username} size={36} />
+        <Avatar
+          path={user.avatar_path}
+          name={user.username}
+          userId={user.id}
+          displayName={user.display_name}
+          size={36}
+        />
         <span className="min-w-0 flex-1 leading-tight">
           <span className="block text-sm font-medium">{user.username}</span>
           {user.display_name && (
@@ -152,7 +158,7 @@ export function NewChatDialog({ open, onClose }: { open: boolean; onClose: () =>
                 className="inline-flex items-center gap-1.5 rounded-md border border-line-strong py-1 pl-1 pr-2 text-sm hover:bg-surface-muted"
                 aria-label={`Remove ${u.username}`}
               >
-                <Avatar path={u.avatar_path} name={u.username} size={20} />
+                <Avatar path={u.avatar_path} name={u.username} userId={u.id} size={20} />
                 {u.username}
                 <XIcon size={12} aria-hidden="true" />
               </button>

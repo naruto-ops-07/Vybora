@@ -29,7 +29,7 @@ import { MAX_ATTACHMENT_BYTES, type AttachmentRef, type LocalMessage } from '@vy
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router';
-import { Avatar } from '@/components/ui/Avatar';
+import { Avatar, GroupAvatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Tip } from '@/components/ui/Tooltip';
 import { ConfirmDialog } from '@/components/ui/Dialog';
@@ -58,7 +58,7 @@ import { useCopyText } from './copy';
 import { useToday } from './useToday';
 import { BulkDeleteDialog, SelectBar } from './SelectBar';
 import { threadKeyDown } from './threadKeys';
-import { chatBackground, effectiveTheme, GroupAvatar, TypingDots, useChatTheme } from './ui';
+import { chatBackground, effectiveTheme, TypingDots, useChatTheme } from './ui';
 import { VerifyDialog } from './VerifyDialog';
 
 export const ttlLabel = (s: number) =>
@@ -473,9 +473,15 @@ export default function ChatPane() {
               aria-label={`${title}, chat details`}
             >
               {conv?.kind === 'group' ? (
-                <GroupAvatar size={34} />
+                <GroupAvatar members={conv.members.filter((x) => x.id !== userId)} size={34} />
               ) : (
-                <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={34} />
+                <Avatar
+                  path={peer?.avatar_path}
+                  name={peer?.username ?? '?'}
+                  userId={peer?.id ?? id}
+                  displayName={peer?.display_name}
+                  size={34}
+                />
               )}
               <span className="min-w-0">
                 <span className="block truncate text-[15px] font-semibold">{title || ' '}</span>
@@ -615,7 +621,11 @@ export default function ChatPane() {
                       runEnd={it.runEnd}
                       avatar={
                         group && !it.mine
-                          ? { path: sender?.avatar_path ?? null, name: sender?.username ?? '?' }
+                          ? {
+                              path: sender?.avatar_path ?? null,
+                              name: sender?.username ?? '?',
+                              displayName: sender?.display_name,
+                            }
                           : undefined
                       }
                       tabbable={m.id === newestId}

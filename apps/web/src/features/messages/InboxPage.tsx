@@ -81,6 +81,8 @@ export function ConversationList({ activeId }: { activeId?: string }) {
                   <Avatar
                     path={c.other_avatar_path}
                     name={c.other_username ?? 'Deleted account'}
+                    userId={c.other_id ?? c.conversation_id}
+                    displayName={c.other_display_name}
                     size={44}
                   />
                   <div className="min-w-0 flex-1">

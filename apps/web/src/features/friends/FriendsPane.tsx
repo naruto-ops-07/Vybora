@@ -153,7 +153,7 @@ function PersonRow({
   actions,
   avatarSize = 40,
 }: {
-  person: Pick<Friend, 'username' | 'displayName' | 'avatarPath'>;
+  person: Pick<Friend, 'userId' | 'username' | 'displayName' | 'avatarPath'>;
   online?: boolean;
   detail?: ReactNode;
   actions: ReactNode;
@@ -162,7 +162,13 @@ function PersonRow({
   return (
     <div className="flex items-center gap-3 px-4 py-2.5">
       <span className="relative shrink-0">
-        <Avatar path={person.avatarPath} name={person.username} size={avatarSize} />
+        <Avatar
+          path={person.avatarPath}
+          name={person.username}
+          userId={person.userId}
+          displayName={person.displayName}
+          size={avatarSize}
+        />
         {online && (
           <span
             role="img"

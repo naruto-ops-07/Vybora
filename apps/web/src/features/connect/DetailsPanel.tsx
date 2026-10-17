@@ -57,7 +57,7 @@ import { friendlyError, tokenizeText } from '@vybora/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferredValue, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Avatar } from '@/components/ui/Avatar';
+import { Avatar, GroupAvatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog, Dialog } from '@/components/ui/Dialog';
 import { Input, Toggle } from '@/components/ui/Field';
@@ -69,7 +69,7 @@ import { supabase } from '@/lib/supabase';
 import { ImageAttachment } from './Attachment';
 import { useConnect } from './ConnectProvider';
 import { conversationTitle, MESSAGE_PAGE, useNicknames } from './hooks';
-import { GroupAvatar, Meta, Row, Section, Select, useIsDark } from './ui';
+import { Meta, Row, Section, Select, useIsDark } from './ui';
 
 const DISAPPEARING: { label: string; seconds: number | null }[] = [
   { label: 'Off', seconds: null },
@@ -291,9 +291,15 @@ export function DetailsPanel({
       <div className="space-y-6 p-4 pb-12">
         <div className="flex flex-col items-center pt-2 text-center">
           {conv.kind === 'group' ? (
-            <GroupAvatar size={72} />
+            <GroupAvatar members={conv.members.filter((x) => x.id !== userId)} size={72} />
           ) : (
-            <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={72} />
+            <Avatar
+              path={peer?.avatar_path}
+              name={peer?.username ?? '?'}
+              userId={peer?.id ?? conv.id}
+              displayName={peer?.display_name}
+              size={72}
+            />
           )}
           {titleDraft === null ? (
             <p className="mt-3 flex items-center gap-1 text-lg font-semibold">
@@ -665,7 +671,13 @@ export function DetailsPanel({
             )}
             {conv.members.map((m) => (
               <div key={m.id} className="group flex items-center gap-3 px-4 py-2.5">
-                <Avatar path={m.avatar_path} name={m.username} size={32} />
+                <Avatar
+                  path={m.avatar_path}
+                  name={m.username}
+                  userId={m.id}
+                  displayName={m.display_name}
+                  size={32}
+                />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{memberName(m)}</p>
                   <Meta>@{m.username}</Meta>
@@ -891,7 +903,13 @@ export function DetailsPanel({
                   }
                   className="flex w-full items-center gap-3 px-1 py-2.5 text-left hover:bg-surface-muted"
                 >
-                  <Avatar path={u.avatar_path} name={u.username} size={32} />
+                  <Avatar
+                    path={u.avatar_path}
+                    name={u.username}
+                    userId={u.id}
+                    displayName={u.display_name}
+                    size={32}
+                  />
                   <span className="flex-1 text-sm font-medium">{u.username}</span>
                   <UserPlusIcon size={16} className="text-accent" aria-hidden="true" />
                 </button>

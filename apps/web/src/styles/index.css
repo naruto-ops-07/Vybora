@@ -99,6 +99,100 @@
   text-underline-offset: 2px;
 }
 
+/*
+ * Personal tones (mirror personTones in packages/config). Identity only: avatar
+ * fallbacks, group sender names, mentions. Never chrome, buttons or backgrounds.
+ */
+:root {
+  --vy-tone-turquoise-fill: #99f6e4;
+  --vy-tone-turquoise-ink: #115e59;
+  --vy-tone-turquoise-name: #0f766e;
+  --vy-tone-emerald-fill: #a7f3d0;
+  --vy-tone-emerald-ink: #065f46;
+  --vy-tone-emerald-name: #047857;
+  --vy-tone-lime-fill: #d9f99d;
+  --vy-tone-lime-ink: #3f6212;
+  --vy-tone-lime-name: #3f6212;
+  --vy-tone-aqua-fill: #a5f3fc;
+  --vy-tone-aqua-ink: #155e75;
+  --vy-tone-aqua-name: #0e7490;
+  --vy-tone-sky-fill: #bae6fd;
+  --vy-tone-sky-ink: #075985;
+  --vy-tone-sky-name: #0369a1;
+  --vy-tone-mint-fill: #d1fae5;
+  --vy-tone-mint-ink: #065f46;
+  --vy-tone-mint-name: #065f46;
+  --vy-tone-ocean-fill: #bfdbfe;
+  --vy-tone-ocean-ink: #1d4ed8;
+  --vy-tone-ocean-name: #1d4ed8;
+  --vy-tone-glacier-fill: #e0e7ff;
+  --vy-tone-glacier-ink: #4338ca;
+  --vy-tone-glacier-name: #4338ca;
+}
+[data-theme='dark'] {
+  --vy-tone-turquoise-fill: #2dd4bf;
+  --vy-tone-turquoise-ink: #0a0e0f;
+  --vy-tone-turquoise-name: #2dd4bf;
+  --vy-tone-emerald-fill: #34d399;
+  --vy-tone-emerald-ink: #0a0e0f;
+  --vy-tone-emerald-name: #34d399;
+  --vy-tone-lime-fill: #a3e635;
+  --vy-tone-lime-ink: #0a0e0f;
+  --vy-tone-lime-name: #a3e635;
+  --vy-tone-aqua-fill: #22d3ee;
+  --vy-tone-aqua-ink: #0a0e0f;
+  --vy-tone-aqua-name: #22d3ee;
+  --vy-tone-sky-fill: #38bdf8;
+  --vy-tone-sky-ink: #0a0e0f;
+  --vy-tone-sky-name: #38bdf8;
+  --vy-tone-mint-fill: #6ee7b7;
+  --vy-tone-mint-ink: #0a0e0f;
+  --vy-tone-mint-name: #6ee7b7;
+  --vy-tone-ocean-fill: #60a5fa;
+  --vy-tone-ocean-ink: #0a0e0f;
+  --vy-tone-ocean-name: #60a5fa;
+  --vy-tone-glacier-fill: #a5b4fc;
+  --vy-tone-glacier-ink: #0a0e0f;
+  --vy-tone-glacier-name: #a5b4fc;
+}
+/* High contrast: fills stay; initials take the theme ink (≥ 7:1), names the text colour. */
+:root[data-contrast='high'] {
+  --vy-tone-turquoise-ink: #0b1416;
+  --vy-tone-turquoise-name: var(--vy-text);
+  --vy-tone-emerald-ink: #0b1416;
+  --vy-tone-emerald-name: var(--vy-text);
+  --vy-tone-lime-ink: #0b1416;
+  --vy-tone-lime-name: var(--vy-text);
+  --vy-tone-aqua-ink: #0b1416;
+  --vy-tone-aqua-name: var(--vy-text);
+  --vy-tone-sky-ink: #0b1416;
+  --vy-tone-sky-name: var(--vy-text);
+  --vy-tone-mint-ink: #0b1416;
+  --vy-tone-mint-name: var(--vy-text);
+  --vy-tone-ocean-ink: #0b1416;
+  --vy-tone-ocean-name: var(--vy-text);
+  --vy-tone-glacier-ink: #0b1416;
+  --vy-tone-glacier-name: var(--vy-text);
+}
+:root[data-theme='dark'][data-contrast='high'] {
+  --vy-tone-turquoise-ink: #0a0e0f;
+  --vy-tone-turquoise-name: var(--vy-text);
+  --vy-tone-emerald-ink: #0a0e0f;
+  --vy-tone-emerald-name: var(--vy-text);
+  --vy-tone-lime-ink: #0a0e0f;
+  --vy-tone-lime-name: var(--vy-text);
+  --vy-tone-aqua-ink: #0a0e0f;
+  --vy-tone-aqua-name: var(--vy-text);
+  --vy-tone-sky-ink: #0a0e0f;
+  --vy-tone-sky-name: var(--vy-text);
+  --vy-tone-mint-ink: #0a0e0f;
+  --vy-tone-mint-name: var(--vy-text);
+  --vy-tone-ocean-ink: #0a0e0f;
+  --vy-tone-ocean-name: var(--vy-text);
+  --vy-tone-glacier-ink: #0a0e0f;
+  --vy-tone-glacier-name: var(--vy-text);
+}
+
 /* Accessibility → Text size (message text, chat rows, composer). */
 :root {
   --vy-msg-size: 15px;

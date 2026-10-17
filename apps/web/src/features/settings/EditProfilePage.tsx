@@ -67,7 +67,13 @@ export default function EditProfilePage() {
         you, so they can start a chat. Profile photos are not end-to-end encrypted.
       </p>
       <div className="flex flex-wrap items-center gap-4 rounded-lg border border-line bg-surface p-4">
-        <Avatar path={profile.avatar_path} name={profile.username} size={56} />
+        <Avatar
+          path={profile.avatar_path}
+          name={profile.username}
+          userId={userId}
+          displayName={profile.display_name}
+          size={56}
+        />
         <div className="min-w-0 flex-1">
           <p className="font-semibold">{profile.display_name || profile.username}</p>
           <p className="truncate font-mono text-[11px] text-subtle">@{profile.username}</p>

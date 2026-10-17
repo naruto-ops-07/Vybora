@@ -1,5 +1,5 @@
 import { resolveChatTheme } from '@vybora/config';
-import type { ThreadItem } from '@vybora/core';
+import { personTone, type ThreadItem } from '@vybora/core';
 import type { LocalMessage } from '@vybora/e2ee';
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -52,6 +52,24 @@ function Harness(props: Partial<Parameters<typeof Bubble>[0]>) {
 }
 
 describe('conversation layout', () => {
+  it('colours group sender names in the sender’s tone', () => {
+    render(<Harness showSender senderName="Maya" />);
+    const name = screen.getByText('Maya', { selector: '[data-sender-tone]' });
+    const tone = personTone('maya');
+    expect(name).toHaveAttribute('data-sender-tone', tone);
+    expect(name.style.color).toBe(`var(--vy-tone-${tone}-name)`);
+    expect(name).toHaveClass('font-semibold');
+  });
+
+  it('uses the theme text colour, bold, for sender names in high contrast', () => {
+    const theme = { ...resolveChatTheme(null), accent: '#115E59', highContrast: true };
+    render(<Harness showSender senderName="Maya" theme={theme} />);
+    const name = screen.getByText('Maya', { selector: 'span' });
+    expect(name).not.toHaveAttribute('data-sender-tone');
+    expect(name.style.color).toBe('');
+    expect(name).toHaveClass('font-bold', 'text-ink');
+  });
+
   it('reads each message as one item and draws a tail on the run end', () => {
     const { container } = render(<Harness />);
     const item = screen.getByRole('article');

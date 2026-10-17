@@ -25,6 +25,7 @@ import { memo, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { useA11y } from '@/features/a11y/A11yProvider';
 import { cn } from '@/lib/cn';
+import { toneVars } from '@/lib/tones';
 import { FileAttachment, ImageAttachment, VideoAttachment, VoiceAttachment } from './Attachment';
 import { MessageMenu } from './MessageMenu';
 import { QUICK_REACTIONS } from './reactions';
@@ -148,7 +149,7 @@ export interface BubbleProps {
   runStart: boolean;
   runEnd: boolean;
   /** Group chats, incoming only: shown beside the last bubble of a run. */
-  avatar?: { path: string | null; name: string };
+  avatar?: { path: string | null; name: string; displayName?: string | null };
   /** The newest message is the thread's single Tab stop. */
   tabbable?: boolean;
   onSelect: (m: LocalMessage) => void;
@@ -217,6 +218,7 @@ export const Bubble = memo(function Bubble({
     else if (a === 'delete') onDelete(m);
   };
   const senderLabel = mine ? 'You' : nameOf(m.senderId);
+  const senderTone = toneVars(m.senderId);
   const time = useMemo(() => formatClock(m.createdAt), [m.createdAt]);
   const label = useMemo(
     () =>
@@ -295,9 +297,15 @@ export const Bubble = memo(function Bubble({
         onClick={selecting ? () => onToggleSelect?.(m) : undefined}
       >
         {showSender && !mine && senderName && (
+          // People are the colour: the sender's tone (high contrast: text colour, bold).
           <span
-            className={cn('mb-0.5 text-xs font-semibold', avatar ? 'ml-9' : 'ml-1')}
-            style={{ color: theme.accent }}
+            className={cn(
+              'mb-0.5 text-xs',
+              theme.highContrast ? 'font-bold text-ink' : 'font-semibold',
+              avatar ? 'ml-9' : 'ml-1',
+            )}
+            style={theme.highContrast ? undefined : { color: senderTone.text }}
+            data-sender-tone={theme.highContrast ? undefined : senderTone.name}
           >
             {senderName}
           </span>
@@ -341,7 +349,13 @@ export const Bubble = memo(function Bubble({
           {avatar &&
             !mine &&
             (runEnd ? (
-              <Avatar path={avatar.path} name={avatar.name} size={28} />
+              <Avatar
+                path={avatar.path}
+                name={avatar.name}
+                userId={m.senderId}
+                displayName={avatar.displayName}
+                size={28}
+              />
             ) : (
               <span className="w-7 shrink-0" aria-hidden="true" />
             ))}

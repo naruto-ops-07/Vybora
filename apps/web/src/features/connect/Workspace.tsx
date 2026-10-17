@@ -292,7 +292,13 @@ export default function Workspace() {
           </div>
           {profile && (
             <NavLink to="/settings/profile" aria-label="Your profile" className="rounded-full">
-              <Avatar path={profile.avatar_path} name={profile.username} size={32} />
+              <Avatar
+                path={profile.avatar_path}
+                name={profile.username}
+                userId={profile.id}
+                displayName={profile.display_name}
+                size={32}
+              />
             </NavLink>
           )}
         </nav>

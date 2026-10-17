@@ -151,7 +151,13 @@ export default function ConversationPage() {
           </Link>
           {other ? (
             <div className="flex min-w-0 items-center gap-3">
-              <Avatar path={other.avatar_path} name={other.username} size={34} />
+              <Avatar
+                path={other.avatar_path}
+                name={other.username}
+                userId={other.id}
+                displayName={other.display_name}
+                size={34}
+              />
               <div className="min-w-0 leading-tight">
                 <p className="truncate text-[15px] font-semibold">{other.username}</p>
                 <p className="font-mono text-[11px] text-warning">

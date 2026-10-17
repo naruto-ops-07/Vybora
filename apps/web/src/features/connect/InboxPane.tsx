@@ -16,7 +16,7 @@ import { chatRowPreview, formatRowTime, formatUnread, receiptOf } from '@vybora/
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { Avatar } from '@/components/ui/Avatar';
+import { Avatar, GroupAvatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Tip } from '@/components/ui/Tooltip';
 import { useToast } from '@/components/ui/Toast';
@@ -35,7 +35,7 @@ import {
   useSecureInbox,
 } from './hooks';
 import { NewChatDialog } from './NewChatDialog';
-import { GroupAvatar, Meta } from './ui';
+import { Meta } from './ui';
 
 type Filter = 'all' | 'unread' | 'groups' | 'pinned' | 'archived';
 const FILTERS: { id: Filter; label: string }[] = [
@@ -304,9 +304,15 @@ export function InboxPane({
                     )}
                     <span className="relative">
                       {c.kind === 'group' ? (
-                        <GroupAvatar size={48} />
+                        <GroupAvatar members={c.members.filter((m) => m.id !== userId)} size={48} />
                       ) : (
-                        <Avatar path={peer?.avatar_path} name={peer?.username ?? '?'} size={48} />
+                        <Avatar
+                          path={peer?.avatar_path}
+                          name={peer?.username ?? '?'}
+                          userId={peer?.id ?? c.id}
+                          displayName={peer?.display_name}
+                          size={48}
+                        />
                       )}
                       {peer && shownOnline.has(peer.id) && (
                         <span

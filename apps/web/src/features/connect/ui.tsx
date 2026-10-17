@@ -1,4 +1,3 @@
-import { UsersThreeIcon } from '@phosphor-icons/react';
 import type { ChatTheme } from '@vybora/api';
 import {
   chatAccent,
@@ -63,19 +62,6 @@ export function chatBackground(theme: ChatTheme, def: ResolvedChatTheme): CSSPro
         backgroundPosition: 'center',
       }
     : {};
-}
-
-export function GroupAvatar({ size = 44 }: { size?: number }) {
-  return (
-    <span
-      className="inline-flex shrink-0 items-center justify-center rounded-full bg-surface-strong text-accent"
-      style={{ width: size, height: size }}
-      role="img"
-      aria-label="Group"
-    >
-      <UsersThreeIcon size={Math.round(size * 0.48)} aria-hidden="true" />
-    </span>
-  );
 }
 
 export function TypingDots({ color }: { color: string }) {
