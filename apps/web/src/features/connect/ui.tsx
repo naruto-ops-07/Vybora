@@ -27,6 +27,8 @@ export function useIsDark() {
   useEffect(() => {
     const obs = new MutationObserver(() => setDark(read()));
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    // The theme may have changed between render and subscribing (e.g. a parent layout effect).
+    setDark(read());
     return () => obs.disconnect();
   }, []);
   return dark;

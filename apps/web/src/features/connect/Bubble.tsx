@@ -311,7 +311,7 @@ export const Bubble = memo(function Bubble({
           </span>
         )}
         <div
-          className={cn('relative flex max-w-full items-end gap-2', mine && 'flex-row-reverse')}
+          className={cn('relative flex w-full items-end gap-2', mine && 'flex-row-reverse')}
           style={{
             transform: swipe.offset ? `translateX(${swipe.offset}px)` : undefined,
             transition: swipe.offset || reduceMotion ? 'none' : 'transform 180ms ease-out',

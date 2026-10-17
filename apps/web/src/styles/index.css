@@ -94,7 +94,8 @@
   --vy-success: #6ee7b7;
   --vy-warning: #fcd34d;
 }
-:root[data-contrast='high'] a {
+/* Chat rows are whole-row links; underlining every line of a row hurts more than it helps. */
+:root[data-contrast='high'] a:not([data-chat-link]) {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
