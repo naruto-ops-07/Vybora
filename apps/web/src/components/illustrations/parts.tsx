@@ -4,15 +4,25 @@
  * caps and joins; flat fills from the personal tones and the accent, via CSS
  * variables so every drawing follows light, dark and high contrast; corner
  * radii 8–12; no gradients, no shadows.
+ *
+ * Every stroke is 1.5 px on screen at any drawing size (non-scaling), whatever
+ * its colour; "text" bars are flat fills, not strokes.
  */
 import type { ReactNode, SVGProps } from 'react';
 import { cn } from '@/lib/cn';
 
-export const LINE = {
-  stroke: 'currentColor',
+/** The one stroke: 1.5 px, round, unscaled by the viewBox or a transform. */
+export const STROKE = {
   strokeWidth: 1.5,
   strokeLinecap: 'round',
   strokeLinejoin: 'round',
+  vectorEffect: 'non-scaling-stroke',
+} as const satisfies SVGProps<SVGPathElement>;
+
+/** Graphite line work. */
+export const LINE = {
+  stroke: 'currentColor',
+  ...STROKE,
 } as const satisfies SVGProps<SVGPathElement>;
 
 export const FILL = {
@@ -67,7 +77,10 @@ export function bubblePath(
   ].join(' ');
 }
 
-/** Rounded "text" strokes inside a bubble: placeholders, never real words. */
+/** Height of a "text" bar (the old 3.5 stroke, now a fill). */
+const BAR = 3.5;
+
+/** Rounded "text" bars inside a bubble (flat fills): placeholders, never real words. */
 export function TextLines({
   x,
   y,
@@ -82,9 +95,16 @@ export function TextLines({
   gap?: number;
 }) {
   return (
-    <g stroke={color} strokeWidth={3.5} strokeLinecap="round">
+    <g fill={color}>
       {widths.map((w, i) => (
-        <path key={i} d={`M${x} ${y + i * gap}H${x + w}`} />
+        <rect
+          key={i}
+          x={x - BAR / 2}
+          y={y + i * gap - BAR / 2}
+          width={w + BAR}
+          height={BAR}
+          rx={BAR / 2}
+        />
       ))}
     </g>
   );
@@ -101,8 +121,7 @@ export function LockSeal({ cx, cy, r = 13 }: { cx: number; cy: number; r?: numbe
           d="M-3.6 -1.2V-3.8A3.6 3.6 0 0 1 3.6 -3.8V-1.2"
           fill="none"
           stroke={FILL.onAccent}
-          strokeWidth={1.75}
-          strokeLinecap="round"
+          {...STROKE}
         />
         <rect x={-5.5} y={-1.6} width={11} height={8.4} rx={2} fill={FILL.onAccent} />
         <circle cx={0} cy={2.4} r={1.15} fill={FILL.accent} />

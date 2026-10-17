@@ -8,6 +8,7 @@ import {
   Frame,
   LINE,
   LockSeal,
+  STROKE,
   TextLines,
   type IllustrationProps,
 } from './parts';
@@ -70,8 +71,7 @@ export function NoFriendsIllustration({ width = 176, className }: IllustrationPr
       <path
         d={`M${cx - 6} ${cy + 5} Q${cx} ${cy + 10} ${cx + 6} ${cy + 5}`}
         stroke={FILL.toneInk(tone)}
-        strokeWidth={1.75}
-        strokeLinecap="round"
+        {...STROKE}
       />
     </g>
   );
@@ -85,12 +85,7 @@ export function NoFriendsIllustration({ width = 176, className }: IllustrationPr
       {/* The empty seat, with room for someone. */}
       <circle cx={162} cy={92} r={21} fill={FILL.surface} {...LINE} strokeDasharray="4 4" />
       <circle cx={162} cy={92} r={10} fill={FILL.accent} {...LINE} />
-      <path
-        d="M162 87.5V96.5M157.5 92H166.5"
-        stroke={FILL.onAccent}
-        strokeWidth={1.75}
-        strokeLinecap="round"
-      />
+      <path d="M162 87.5V96.5M157.5 92H166.5" stroke={FILL.onAccent} {...STROKE} />
     </Frame>
   );
 }

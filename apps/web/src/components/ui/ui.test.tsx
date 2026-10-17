@@ -61,9 +61,12 @@ describe('state components', () => {
     expect(svgs).toHaveLength(4);
     const markup = container.innerHTML;
     expect(markup).not.toMatch(/Gradient|filter|feDropShadow|#[0-9a-f]{3,6}\b/i);
-    for (const el of container.querySelectorAll('[stroke-width]')) {
-      if (el.getAttribute('stroke') === 'currentColor')
-        expect(el.getAttribute('stroke-width')).toBe('1.5');
+    // Every stroke, line work or on a fill, is 1.5 px on screen at any size.
+    const strokes = container.querySelectorAll('[stroke]');
+    expect(strokes.length).toBeGreaterThan(0);
+    for (const el of strokes) {
+      expect(el.getAttribute('stroke-width')).toBe('1.5');
+      expect(el.getAttribute('vector-effect')).toBe('non-scaling-stroke');
     }
   });
 
