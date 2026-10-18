@@ -15,6 +15,7 @@ Success: a person coming from WhatsApp finds every everyday thing they rely on, 
 3. **New look with a theme picker:** Velvet (default), Aurora and Bloom, each in light and dark, on every surface of web and mobile.
 4. **Messaging features wave A:** WhatsApp parity.
 5. **Messaging features wave B:** the remaining parity items and the extras.
+6. **Phone verification and contact sync:** built and tested now, switched off until the owner connects an SMS service.
 
 Build in this order; each part gets its own plan and review.
 
@@ -25,13 +26,14 @@ Voice and video calls, Status / Stories, communities and channels, chat backup a
 ### Non-goals
 
 - No change to the encryption protocol (MLS) or to what the server can see beyond what is listed here.
-- No contact or phone-number discovery.
+- No adding friends by typing a phone number: manual adding is by username only (owner). Phone numbers are used only for opt-in contact sync between verified numbers (part 6).
 - No admin, moderation or plaintext-access tools.
 
 ### Anti-goals (a failure even if it works)
 
 - Any new feature puts message content, link URLs, locations, poll questions or search terms on the server or in push payloads.
 - Any new feature tells a stranger whether an email address has an account.
+- Contact sync matches anyone who didn't verify their own number and allow being found, or keeps the uploaded contacts.
 - The new look loses readability: contrast below WCAG AA, no high contrast, or no reduced motion.
 - The look is applied to some screens and not others.
 
@@ -178,6 +180,10 @@ When the Chats tab has no chats, the empty state depends on whether the person h
 
 The friends query decides which state shows. While it loads, the state stays neutral (no flash of "No friends yet"). If it fails, the "Friends, no chats" copy is shown without the avatars **(call)**. The Get started panel stays above it.
 
+### Friends screen: requests (owner request)
+
+Requests become two tabs, **Received** and **Sent**, each with a count (Received count also on the badge). Received rows keep Accept and Decline; Sent rows keep "Pending" and Cancel. Same on web and mobile.
+
 ### Coverage (every surface)
 
 - **Web:** landing, sign in / up / reset / code, the 404 page, workspace (rail, chat list, chat, details, friends, new message, command palette), settings (all pages including Appearance and App lock), and the dev gallery.
@@ -258,3 +264,53 @@ Database work: new tables and RPCs go in **additive migrations**, with RLS and t
 - New database tests for every RPC and RLS change.
 - Gallery screenshots for every look × mode × high contrast; the impeccable finish review; DESIGN.md replaced.
 - Not possible here and stated as such: real-device runs, hosted email delivery, and the hosted Supabase template change.
+
+---
+
+## 6. Phone verification and contact sync (switched off until SMS is connected)
+
+**The owner's intent:** friends are added by hand by username only. Separately, a person who has verified their phone number can find friends from their phone contacts, among people who also verified their number. **The owner left the cost question to the designer.** The call: build it fully now and keep it behind a switch, so nothing costs money and nobody sees a flow that can't send texts until the owner connects an SMS provider (Twilio, Vonage or MessageBird) to the hosted Supabase project.
+
+### The switch
+
+`VITE_PHONE_VERIFICATION` and `EXPO_PUBLIC_PHONE_VERIFICATION`, set to `on` to show the feature; it is off by default. While it's off, no phone verification or contact sync UI appears anywhere. DEPLOYMENT.md gets the steps for connecting an SMS provider in Supabase (Auth → Providers → Phone) and turning the switch on.
+
+### Verify your number (web and mobile)
+
+- Settings → Phone number: country picker plus number, normalised to E.164 with `libphonenumber-js` (new dependency, exact version).
+- `supabase.auth.updateUser({ phone })` sends an SMS code. The person enters 6 digits; `verifyOtp({ phone, token, type: 'phone_change' })` confirms it. Resend after 60 s.
+- On success the verified number lives in `auth.users.phone` (with `phone_confirmed_at`). The existing self-entered `profiles` phone field stays separate and is never used for matching **(call)**.
+- Settings shows "Verified" and offers **Change number** and **Remove number**. Removing it also removes the person from matching.
+- **"Let people who have my number find me":** turned on when the number is verified, and can be turned off (`user_settings.discoverable_by_phone`, additive column).
+
+### Find friends from contacts (mobile only: browsers can't read contacts)
+
+- Shown only to people with a verified number. Entry points:
+  - the Friends screen ("Find friends from contacts");
+  - the fresh-account empty state, as a third action when the switch is on.
+- It asks for contacts permission with `expo-contacts` (new dependency, exact version; usage strings in `app.json`). Denying it leaves everything else working.
+- **On the device:**
+  1. Normalise each contact number to E.164, using the person's own country as the default region.
+  2. Drop invalid numbers and their own number.
+  3. Hash each as `SHA-256("vybora:phone:v1:" + E164)`.
+  4. Send only the hashes, at most 2000 per sync **(call)**. Names never leave the device.
+- **On the server:** a `security definer` RPC `match_contacts(p_hashes text[])` (`search_path = ''`, acts as `auth.uid()`):
+  - **Requires:** the caller's own number is verified.
+  - **Matches:** against `private.phone_directory(user_id, phone_hash)`. A trigger on `auth.users` keeps that table up to date, holding rows only for verified numbers whose owner allows discovery.
+  - **Excludes:** self, blocked pairs either way, and inactive accounts.
+  - **Returns:** `user_id, username, display_name, avatar_path` and a relationship (`none / friends / request_sent / request_received`). It never returns phone numbers.
+  - **Keeps nothing:** the uploaded hashes are not stored.
+  - **Limits:** at most 10 syncs a day per user **(call)**; RLS on with all grants revoked on the directory table.
+- **Results:** a "Friends from your contacts" list. Each row shows the person's avatar, name and @username, plus **Add friend** (a normal friend request), "Requested", "Respond" or "Friends". The device can show the contact's own name from the address book beside it, which stays local.
+- **Honest copy:** "Your contacts' numbers are scrambled before they're sent and aren't kept. Phone numbers are guessable, so this isn't secret from VYBORA. Only people who verified their number and allow it can be found."
+- **Docs to update:**
+  - CONNECT.md: replace "Address books are never uploaded and there is no contact discovery by phone number" with the description above.
+  - SECURITY.md: add a section on contact sync.
+  - PRODUCT.md: phone verification is optional; usernames are still how you add people by hand.
+
+### Tests
+
+- Database tests:
+  - the trigger maintains the directory (verify, unverify, opt-out, delete);
+  - `match_contacts` (requires a verified caller, excludes blocked and inactive people, never returns numbers, caps at 2000, rate limit, anon denied).
+- API and component tests: number normalisation and hashing (shared in `packages/core`, same output on web and mobile), the verify flow, the contacts permission-denied path, and that nothing shows while the switch is off.
