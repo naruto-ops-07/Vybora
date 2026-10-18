@@ -17,7 +17,7 @@ Success: a person coming from WhatsApp finds every everyday thing they rely on, 
 5. **Messaging features wave B:** the remaining parity items and the extras.
 6. **Phone verification and contact sync:** built and tested now, switched off until the owner connects an SMS service.
 
-Build in this order; each part gets its own plan and review.
+Build order (owner, 2026-10-18): **1 email codes → 3 new look → 2 app lock → 4 → 5 → 6**. Each part gets its own plan and review.
 
 **How it gets built (owner):** the main session stays on Claude Opus 5.5 to plan, review and integrate. All UI design and UI implementation work (every screen and component in every part) is done by Claude Fable 5.1 subagents (`model: fable`), and Opus reviews each result.
 
