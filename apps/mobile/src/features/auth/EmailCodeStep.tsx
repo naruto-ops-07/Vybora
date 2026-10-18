@@ -1,12 +1,18 @@
 import { verifyEmailCode } from '@vybora/api';
 import {
+  codeResentMessage,
+  countdownClock,
   digitsFromCode,
-  emailCodeError,
+  EMAIL_CODE_INCOMPLETE,
   EMAIL_CODE_LENGTH,
-  EMAIL_CODE_RESEND_SECONDS,
+  emailCodeError,
+  lastCodeSent,
+  markCodeSent,
+  resendWaitLeft,
+  type CodePurpose,
 } from '@vybora/core';
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, TextInput, View } from 'react-native';
+import { AccessibilityInfo, Animated, TextInput, useWindowDimensions, View } from 'react-native';
 import { Text as BaseText } from '@/components/Text';
 import { Button, Text } from '@/components/ui';
 import { useA11y } from '@/lib/a11y';
@@ -15,18 +21,28 @@ import { useHaptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { font, radii, useTheme } from '@/lib/theme';
 import { AuthTextButton, FormError } from './AuthScreen';
-import { lastCodeSent, markCodeSent, secondsUntil, type CodePurpose } from './codeCooldown';
 
 /** The boxes sit in two groups of three, the way people read a code aloud. */
 const GROUP_AT = EMAIL_CODE_LENGTH / 2;
-const BOX_HEIGHT = 56;
+const BOX_MIN_HEIGHT = 56;
 const BOX_MAX_WIDTH = 52;
 /** A small, quick shake for a wrong code (skipped with reduced motion). */
 const SHAKE = [7, -7, 5, -5, 2, 0];
+const DIGIT_SIZE = 24;
+/**
+ * Digits follow the system text size up to twice their size: larger, a digit
+ * would no longer fit a box's width on a small phone.
+ */
+const DIGIT_MAX_SCALE = 2;
 
-/** 59 → "0:59". */
-function clock(seconds: number): string {
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+/**
+ * How tall every box starts: room for a digit at the system text size, so the
+ * row doesn't jump when the first digit arrives. It is a minimum, never a
+ * fixed height, so a box grows rather than clipping its digit.
+ */
+function boxMinHeight(fontScale: number): number {
+  const digit = DIGIT_SIZE * Math.min(Math.max(fontScale, 1), DIGIT_MAX_SCALE);
+  return Math.max(BOX_MIN_HEIGHT, Math.ceil(digit * 1.4) + 12);
 }
 
 /** 59 → "59 seconds", for screen readers ("0:59" reads badly). */
@@ -69,6 +85,8 @@ type StepError = { message: string; kind: 'code' | 'send' };
  */
 export function EmailCodeStep({ email, purpose, onResend, onChangeEmail }: EmailCodeStepProps) {
   const t = useTheme();
+  const { fontScale } = useWindowDimensions();
+  const boxHeight = boxMinHeight(fontScale);
   const haptic = useHaptics();
   const { reduceMotion } = useA11y();
   const [code, setCode] = useState('');
@@ -84,11 +102,11 @@ export function EmailCodeStep({ email, purpose, onResend, onChangeEmail }: Email
   const input = useRef<TextInput>(null);
   const [shake] = useState(() => new Animated.Value(0));
 
-  // The wait follows the address (see codeCooldown): coming back to the same
-  // email picks up where the last send left off.
+  // The wait follows the address (see markCodeSent in core): coming back to the
+  // same email picks up where the last send left off.
   const [sentAt, setSentAt] = useState(() => lastCodeSent(purpose, email) ?? Date.now());
   const [now, setNow] = useState(() => Date.now());
-  const wait = secondsUntil(sentAt + EMAIL_CODE_RESEND_SECONDS * 1000, now);
+  const wait = resendWaitLeft(sentAt, now);
   const cooling = wait > 0;
   useEffect(() => {
     if (!cooling) return;
@@ -116,9 +134,8 @@ export function EmailCodeStep({ email, purpose, onResend, onChangeEmail }: Email
   async function verify(value: string) {
     if (inFlight.current) return;
     if (value.length < EMAIL_CODE_LENGTH) {
-      const message = `Enter all ${EMAIL_CODE_LENGTH} digits.`;
-      setError({ message, kind: 'code' });
-      announce(message);
+      setError({ message: EMAIL_CODE_INCOMPLETE, kind: 'code' });
+      announce(EMAIL_CODE_INCOMPLETE);
       input.current?.focus();
       return;
     }
@@ -178,10 +195,7 @@ export function EmailCodeStep({ email, purpose, onResend, onChangeEmail }: Email
     setNow(at);
     setResending(false);
     setCode('');
-    const message =
-      purpose === 'signin'
-        ? 'If there’s an account for that email, we’ve sent a new code.'
-        : 'We sent a new code.';
+    const message = codeResentMessage(purpose);
     setNotice(message);
     announce(message);
     input.current?.focus();
@@ -200,7 +214,8 @@ export function EmailCodeStep({ email, purpose, onResend, onChangeEmail }: Email
           importantForAccessibility="no-hide-descendants"
           style={{
             flexDirection: 'row',
-            alignItems: 'center',
+            // Every box as tall as the tallest, empty or filled.
+            alignItems: 'stretch',
             justifyContent: 'center',
             gap: 8,
             pointerEvents: 'none',
@@ -223,6 +238,7 @@ export function EmailCodeStep({ email, purpose, onResend, onChangeEmail }: Email
                 {i === GROUP_AT && (
                   <View
                     style={{
+                      alignSelf: 'center',
                       width: 10,
                       height: 2,
                       borderRadius: 1,
@@ -235,7 +251,7 @@ export function EmailCodeStep({ email, purpose, onResend, onChangeEmail }: Email
                   style={{
                     flex: 1,
                     maxWidth: BOX_MAX_WIDTH,
-                    height: BOX_HEIGHT,
+                    minHeight: boxHeight,
                     borderRadius: radii.md,
                     // Border-box sizing: the thicker ring never moves the digit.
                     borderWidth: isActive ? 2 : 1,
@@ -247,9 +263,10 @@ export function EmailCodeStep({ email, purpose, onResend, onChangeEmail }: Email
                 >
                   {digit ? (
                     <BaseText
+                      maxFontSizeMultiplier={DIGIT_MAX_SCALE}
                       style={{
                         fontFamily: font.monoMedium,
-                        fontSize: 24,
+                        fontSize: DIGIT_SIZE,
                         color: verifying && !verified ? t.textMuted : t.text,
                       }}
                     >
@@ -312,7 +329,7 @@ export function EmailCodeStep({ email, purpose, onResend, onChangeEmail }: Email
           {cooling ? (
             <>
               Resend code in{' '}
-              <BaseText style={{ fontFamily: font.monoMedium }}>{clock(wait)}</BaseText>
+              <BaseText style={{ fontFamily: font.monoMedium }}>{countdownClock(wait)}</BaseText>
             </>
           ) : (
             'Resend code'

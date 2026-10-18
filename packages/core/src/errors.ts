@@ -23,7 +23,8 @@ const KNOWN: Record<string, string> = {
   cannot_moderate_self: 'You can’t moderate your own account.',
   cannot_revoke_own_admin: 'You can’t remove your own admin role.',
   'Invalid login credentials': 'Incorrect email or password.',
-  'Email not confirmed': 'Please confirm your email address first — check your inbox.',
+  // The inbox holds a code that password sign-in can't take: signing in by code confirms it.
+  'Email not confirmed': 'Your email isn’t confirmed yet. Sign in with a code to confirm it.',
   'User already registered': 'An account with this email already exists.',
 };
 
@@ -68,7 +69,8 @@ export function friendlyError(
   if (!error) return fallback;
   const e = error as ErrorLike;
   const message = typeof e.message === 'string' ? e.message : String(error);
-  if (e.code && AUTH_CODES[e.code]) return AUTH_CODES[e.code]!;
+  // Own keys only: a code like `constructor` must not reach Object.prototype.
+  if (typeof e.code === 'string' && Object.hasOwn(AUTH_CODES, e.code)) return AUTH_CODES[e.code]!;
   for (const [needle, copy] of Object.entries({ ...AUTH_MESSAGES, ...KNOWN })) {
     if (message.includes(needle)) return copy;
   }

@@ -1,12 +1,11 @@
 import { isUsernameAvailable, resendConfirmation, signUp } from '@vybora/api';
-import { EMAIL_CODE_LENGTH, friendlyError } from '@vybora/core';
+import { codeCooldownLeft, EMAIL_CODE_LENGTH, friendlyError, markCodeSent } from '@vybora/core';
 import { emailSchema, signUpSchema } from '@vybora/validation';
-import * as Linking from 'expo-linking';
 import { Link, router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Button, Text, TextField } from '@/components/ui';
 import { AuthScreen, AuthTextButton, FormError, Strong } from '@/features/auth/AuthScreen';
-import { codeCooldownLeft, markCodeSent } from '@/features/auth/codeCooldown';
+import { authCallbackUrl } from '@/features/auth/callbackUrl';
 import { EmailCodeStep } from '@/features/auth/EmailCodeStep';
 import { handOffToLogin } from '@/features/auth/loginHandoff';
 import { logDevError } from '@/lib/devLog';
@@ -15,10 +14,6 @@ import { font, useTheme } from '@/lib/theme';
 
 type Stage =
   { step: 'form' } | { step: 'code'; email: string } | { step: 'registered'; email: string };
-
-// The link in the same email opens the app via the vybora:// scheme
-// (must be allow-listed in Supabase Auth).
-const callbackUrl = () => Linking.createURL('/auth/callback');
 
 export default function Signup() {
   const t = useTheme();
@@ -90,7 +85,7 @@ export default function Signup() {
     setBusy(true);
     try {
       const { email } = parsed.data;
-      const result = await signUp(supabase, form, callbackUrl());
+      const result = await signUp(supabase, form, authCallbackUrl());
       if (result.status === 'already_registered') setStage({ step: 'registered', email });
       else if (result.status === 'confirm_email') {
         markCodeSent('signup', email);
@@ -127,7 +122,7 @@ export default function Signup() {
           key={email}
           email={email}
           purpose="signup"
-          onResend={() => resendConfirmation(supabase, email, callbackUrl())}
+          onResend={() => resendConfirmation(supabase, email, authCallbackUrl())}
           onChangeEmail={() => backToForm({ keepUsername: false })}
         />
       </AuthScreen>

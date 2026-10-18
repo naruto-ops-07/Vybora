@@ -1,10 +1,10 @@
 import type * as Api from '@vybora/api';
+import { resetCodeCooldowns } from '@vybora/core';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/utils';
-import { resetCodeCooldowns } from './codeCooldown';
 import Login from './Login';
 import Signup from './Signup';
 
@@ -22,6 +22,7 @@ vi.mock('@/lib/supabase', () => ({ supabase: { auth: {} } }));
 const NEXT = '/friends?add=maya';
 const WRONG_CODE = 'That code didn’t work. Check it or send a new one.';
 const NEUTRAL_SENT = 'If there’s an account for that email, we’ve sent a code.';
+const EMAIL_LIMIT = 'Too many emails were sent just now. Wait a few minutes, then try again.';
 
 type User = ReturnType<typeof userEvent.setup>;
 
@@ -446,9 +447,7 @@ describe('sign in by code', () => {
     await user.type(screen.getByLabelText('Email'), 'maya@example.com');
     await user.click(screen.getByRole('button', { name: 'Send code' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Too many tries. Wait a minute, then try again.',
-    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(EMAIL_LIMIT);
     expect(screen.queryByRole('group', { name: 'Verification code' })).not.toBeInTheDocument();
   });
 });

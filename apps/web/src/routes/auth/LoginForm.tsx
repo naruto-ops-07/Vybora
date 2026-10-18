@@ -1,10 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { EMAIL_CODE_LENGTH, emailCodeError, friendlyError } from '@vybora/core';
-import { emailSchema, signInSchema, type SignInInput } from '@vybora/validation';
+import { resetRequestSchema, signInSchema, type SignInInput } from '@vybora/validation';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link } from 'react-router';
-import { z } from 'zod';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Field';
 import { FormError } from './AuthLayout';
@@ -19,9 +18,6 @@ export interface LoginFormProps {
   defaultEmail?: string;
   defaultMode?: LoginMode;
 }
-
-const codeRequestSchema = z.object({ email: emailSchema });
-type CodeRequest = z.infer<typeof codeRequestSchema>;
 
 /** Password sign-in (the default) or, when offered, a request for an emailed code. */
 export function LoginForm({
@@ -162,8 +158,9 @@ function CodeRequestForm({
     getValues,
     setFocus,
     formState: { errors, isSubmitting },
-  } = useForm<CodeRequest>({
-    resolver: zodResolver(codeRequestSchema),
+  } = useForm<{ email: string }>({
+    // Asking for a code needs only the address, the same rule as asking for a reset link.
+    resolver: zodResolver(resetRequestSchema),
     defaultValues: { email: defaultEmail },
   });
 

@@ -1,5 +1,5 @@
 import { isUsernameAvailable, resendConfirmation, signUp } from '@vybora/api';
-import { EMAIL_CODE_LENGTH } from '@vybora/core';
+import { codeCooldownLeft, EMAIL_CODE_LENGTH, markCodeSent } from '@vybora/core';
 import type { SignUpInput } from '@vybora/validation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
@@ -7,7 +7,6 @@ import { Button, ButtonLink } from '@/components/ui/Button';
 import { siteUrl } from '@/lib/env';
 import { supabase } from '@/lib/supabase';
 import { AuthLayout } from './AuthLayout';
-import { codeCooldownLeft, markCodeSent } from './codeCooldown';
 import { EmailCodeStep } from './EmailCodeStep';
 import { rememberNext, safeNext, takeRememberedNext, withNext } from './next';
 import { SignupForm } from './SignupForm';

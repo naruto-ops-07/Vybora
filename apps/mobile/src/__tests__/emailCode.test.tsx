@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { themes } from '@vybora/config';
+import { resetCodeCooldowns } from '@vybora/core';
 import * as Haptics from 'expo-haptics';
-import { TextInput } from 'react-native';
+import { StyleSheet, TextInput } from 'react-native';
 
 const mockSignUp = jest.fn();
 const mockSignIn = jest.fn();
@@ -43,12 +44,11 @@ jest.mock('expo-haptics', () => ({
 
 import Login from '@/app/(auth)/login';
 import Signup from '@/app/(auth)/signup';
-import { resetCodeCooldowns } from '@/features/auth/codeCooldown';
 
 const WRONG_CODE = 'That code didn’t work. Check it or send a new one.';
 const NEUTRAL_SENT = 'If there’s an account for that email, we’ve sent a code.';
 const CALLBACK = 'vybora://auth/callback';
-const TOO_MANY = 'Too many tries. Wait a minute, then try again.';
+const EMAIL_LIMIT = 'Too many emails were sent just now. Wait a few minutes, then try again.';
 
 /** Every TextInput shares one mocked `focus`; its `this` says which field was focused. */
 const focusMock = (TextInput as unknown as { prototype: { focus: jest.Mock } }).prototype.focus;
@@ -236,6 +236,31 @@ describe('code step at sign-up', () => {
     await waitFor(() => expect(box(0)).toHaveStyle({ borderColor: ui.success }));
   });
 
+  it('sizes the boxes for large text instead of clipping the digits', async () => {
+    await signUpToCode();
+    await fireEvent.changeText(codeInput(), '12');
+
+    const styles = Array.from({ length: 6 }, (_, i) =>
+      StyleSheet.flatten(
+        screen.getByTestId(`code-box-${i}`, { includeHiddenElements: true }).props.style,
+      ),
+    );
+    for (const style of styles) {
+      // A minimum, never a fixed height: a box grows rather than cutting off its digit.
+      expect(style.height).toBeUndefined();
+      expect(style.minHeight).toBeGreaterThanOrEqual(56);
+    }
+    // React Native's Jest preset reports a system font scale of 2: every box,
+    // empty or filled, starts with room for a 24 pt digit at twice its size.
+    expect(new Set(styles.map((s) => s.minHeight)).size).toBe(1);
+    expect(styles[0]?.minHeight).toBeGreaterThan(24 * 2 * 1.2);
+    // Past twice its size a digit would no longer fit a box's width.
+    expect(screen.getByText('1', { includeHiddenElements: true })).toHaveProp(
+      'maxFontSizeMultiplier',
+      2,
+    );
+  });
+
   it('asks for every digit before checking', async () => {
     await signUpToCode();
     await fireEvent.changeText(codeInput(), '12');
@@ -330,7 +355,7 @@ describe('code step at sign-up', () => {
 
     await fireEvent.press(resendButton());
 
-    expect(await screen.findByText('Too many tries. Wait a minute, then try again.')).toBeTruthy();
+    expect(await screen.findByText(EMAIL_LIMIT)).toBeTruthy();
     expect(resendButton()).toBeEnabled();
     expect(resendButton()).toHaveTextContent(/^Resend code$/);
   });
@@ -391,11 +416,7 @@ describe('code step at sign-up', () => {
       }),
     );
     await pressing;
-    expect(
-      await screen.findByText(
-        'Too many emails were sent just now. Wait a few minutes, then try again.',
-      ),
-    ).toBeTruthy();
+    expect(await screen.findByText(EMAIL_LIMIT)).toBeTruthy();
 
     expect(screen.queryByRole('header', { name: 'Create your account' })).toBeTruthy();
     // Same field (a remount would re-run autoFocus), never focused or selected.
@@ -582,12 +603,12 @@ describe('sign in by code', () => {
     await act(async () => finish());
     await pressing;
     expect(await header('Enter the code')).toBeTruthy();
-    expect(screen.queryByText(TOO_MANY)).toBeNull();
+    expect(screen.queryByText(EMAIL_LIMIT)).toBeNull();
 
     // Nothing stale is waiting on the form either.
     await fireEvent.press(screen.getByRole('button', { name: 'Use a different email' }));
     expect(await header('Sign in')).toBeTruthy();
-    expect(screen.queryByText(TOO_MANY)).toBeNull();
+    expect(screen.queryByText(EMAIL_LIMIT)).toBeNull();
     expect(mockSendSignInCode).toHaveBeenCalledTimes(1);
   });
 
@@ -598,7 +619,7 @@ describe('sign in by code', () => {
     await fireEvent.changeText(screen.getByLabelText('Email'), 'maya@example.com');
     await fireEvent.press(screen.getByRole('button', { name: 'Send code' }));
 
-    expect(await screen.findByText('Too many tries. Wait a minute, then try again.')).toBeTruthy();
+    expect(await screen.findByText(EMAIL_LIMIT)).toBeTruthy();
     expect(screen.queryByLabelText('Verification code')).toBeNull();
     expect(screen.getByRole('button', { name: 'Send code' })).toBeTruthy();
   });

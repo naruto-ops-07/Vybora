@@ -167,6 +167,18 @@ describe('friendlyError', () => {
     expect(friendlyError({ message: 'weird' }, 'fallback')).toBe('fallback');
   });
 
+  it('points an unconfirmed account at signing in with a code', () => {
+    expect(friendlyError({ code: 'email_not_confirmed', message: 'Email not confirmed' })).toBe(
+      'Your email isn’t confirmed yet. Sign in with a code to confirm it.',
+    );
+  });
+
+  it('only matches its own auth codes, never Object.prototype keys', () => {
+    for (const code of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+      expect(friendlyError({ code, message: 'weird' }, 'fallback')).toBe('fallback');
+    }
+  });
+
   it('names the Supabase Auth email and sign-up failures instead of a generic error', () => {
     const cantEmail = 'We couldn’t send an email to that address. Try again later.';
     expect(

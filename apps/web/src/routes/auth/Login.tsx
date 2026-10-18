@@ -1,11 +1,10 @@
 import { sendSignInCode, signIn } from '@vybora/api';
-import { SIGN_IN_CODE_SENT } from '@vybora/core';
+import { codeCooldownLeft, markCodeSent, SIGN_IN_CODE_SENT } from '@vybora/core';
 import { useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { siteUrl } from '@/lib/env';
 import { supabase } from '@/lib/supabase';
 import { AuthLayout } from './AuthLayout';
-import { codeCooldownLeft, markCodeSent } from './codeCooldown';
 import { EmailCodeStep } from './EmailCodeStep';
 import { LoginForm, type LoginMode } from './LoginForm';
 import { safeNext, withNext } from './next';

@@ -1,9 +1,15 @@
 import { verifyEmailCode } from '@vybora/api';
 import {
+  codeResentMessage,
+  countdownClock,
   digitsFromCode,
-  emailCodeError,
+  EMAIL_CODE_INCOMPLETE,
   EMAIL_CODE_LENGTH,
-  EMAIL_CODE_RESEND_SECONDS,
+  emailCodeError,
+  lastCodeSent,
+  markCodeSent,
+  resendWaitLeft,
+  type CodePurpose,
 } from '@vybora/core';
 import {
   Fragment,
@@ -19,17 +25,11 @@ import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import { FormError } from './AuthLayout';
-import { lastCodeSent, markCodeSent, secondsUntil, type CodePurpose } from './codeCooldown';
 import { logDevError } from '@/lib/devLog';
 
 const EMPTY: readonly string[] = Array.from({ length: EMAIL_CODE_LENGTH }, () => '');
 /** The boxes sit in two groups of three, the way people read a code aloud. */
 const GROUP_AT = EMAIL_CODE_LENGTH / 2;
-
-/** 59 → "0:59". */
-function clock(seconds: number): string {
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-}
 
 export interface EmailCodeStepProps {
   email: string;
@@ -64,13 +64,12 @@ export function EmailCodeStep({
   const resendButton = useRef<HTMLButtonElement>(null);
   const errorId = useId();
 
-  // The wait follows the address (see codeCooldown), so coming back to the
-  // same email picks up where the last send left off.
-  const [sentAt, setSentAt] = useState(
-    () => lastCodeSent(purpose, email) ?? markCodeSent(purpose, email),
-  );
+  // The wait follows the address (see markCodeSent in core), so coming back to
+  // the same email picks up where the last send left off. The screen that sent
+  // the code records the send; rendering never does.
+  const [sentAt, setSentAt] = useState(() => lastCodeSent(purpose, email) ?? Date.now());
   const [now, setNow] = useState(() => Date.now());
-  const wait = secondsUntil(sentAt + EMAIL_CODE_RESEND_SECONDS * 1000, now);
+  const wait = resendWaitLeft(sentAt, now);
   const cooling = wait > 0;
   useEffect(() => {
     if (!cooling) return;
@@ -93,7 +92,7 @@ export function EmailCodeStep({
     if (inFlight.current) return;
     const missing = code.findIndex((d) => !d);
     if (missing !== -1) {
-      setError(`Enter all ${EMAIL_CODE_LENGTH} digits.`);
+      setError(EMAIL_CODE_INCOMPLETE);
       focusBox(missing);
       return;
     }
@@ -226,11 +225,7 @@ export function EmailCodeStep({
     setNow(at);
     setResending(false);
     setDigits(EMPTY);
-    setNotice(
-      purpose === 'signin'
-        ? 'If there’s an account for that email, we’ve sent a new code.'
-        : 'We sent a new code.',
-    );
+    setNotice(codeResentMessage(purpose));
     // The button is counting down again, so focus goes where the new code goes.
     focusBox(0);
   }
@@ -305,7 +300,7 @@ export function EmailCodeStep({
         >
           {cooling ? (
             <>
-              Resend code in <span className="font-mono tabular-nums">{clock(wait)}</span>
+              Resend code in <span className="font-mono tabular-nums">{countdownClock(wait)}</span>
             </>
           ) : (
             'Resend code'

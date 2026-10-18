@@ -1,11 +1,11 @@
 import type * as Api from '@vybora/api';
+import { resetCodeCooldowns } from '@vybora/core';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/utils';
 import AuthCallback from './AuthCallback';
-import { resetCodeCooldowns } from './codeCooldown';
 import Login from './Login';
 import { rememberNext, safeNext, takeRememberedNext, withNext } from './next';
 import Signup from './Signup';

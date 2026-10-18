@@ -1,12 +1,18 @@
 import { sendSignInCode, signIn } from '@vybora/api';
-import { EMAIL_CODE_LENGTH, emailCodeError, friendlyError, SIGN_IN_CODE_SENT } from '@vybora/core';
+import {
+  codeCooldownLeft,
+  EMAIL_CODE_LENGTH,
+  emailCodeError,
+  friendlyError,
+  markCodeSent,
+  SIGN_IN_CODE_SENT,
+} from '@vybora/core';
 import { emailSchema, signInSchema } from '@vybora/validation';
-import * as Linking from 'expo-linking';
 import { Link } from 'expo-router';
 import { useRef, useState } from 'react';
 import { Button, Text, TextField } from '@/components/ui';
 import { AuthScreen, FormError, Strong } from '@/features/auth/AuthScreen';
-import { codeCooldownLeft, markCodeSent } from '@/features/auth/codeCooldown';
+import { authCallbackUrl } from '@/features/auth/callbackUrl';
 import { EmailCodeStep } from '@/features/auth/EmailCodeStep';
 import { takeLoginHandoff } from '@/features/auth/loginHandoff';
 import { logDevError } from '@/lib/devLog';
@@ -14,9 +20,6 @@ import { supabase } from '@/lib/supabase';
 import { font, useTheme } from '@/lib/theme';
 
 type Mode = 'password' | 'code';
-
-// The link in the same email is a fallback to typing the code.
-const callbackUrl = () => Linking.createURL('/auth/callback');
 
 export default function Login() {
   const t = useTheme();
@@ -83,7 +86,7 @@ export default function Login() {
       // Within a minute of the last code to this address, that code still works
       // and the wait carries on: show it instead of sending again.
       if (codeCooldownLeft('signin', address) === 0) {
-        await sendSignInCode(supabase, address, callbackUrl());
+        await sendSignInCode(supabase, address, authCallbackUrl());
         markCodeSent('signin', address);
       }
       // The same screen whether or not the address has an account.
@@ -116,7 +119,7 @@ export default function Login() {
           key={codeEmail}
           email={codeEmail}
           purpose="signin"
-          onResend={() => sendSignInCode(supabase, codeEmail, callbackUrl())}
+          onResend={() => sendSignInCode(supabase, codeEmail, authCallbackUrl())}
           onChangeEmail={() => {
             setEmail(codeEmail);
             setErrors({});
