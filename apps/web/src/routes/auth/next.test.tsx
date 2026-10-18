@@ -15,6 +15,8 @@ const api = vi.hoisted(() => ({
   signIn: vi.fn(),
   isUsernameAvailable: vi.fn(),
   resendConfirmation: vi.fn(),
+  sendSignInCode: vi.fn(),
+  verifyEmailCode: vi.fn(),
 }));
 vi.mock('@vybora/api', async (orig) => ({ ...(await orig<typeof Api>()), ...api }));
 const auth = vi.hoisted(() => ({
@@ -117,6 +119,37 @@ describe('next, from login to signup and back', () => {
     renderAt('/auth/callback');
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/messages'));
     expect(takeRememberedNext('new@example.com')).toBe(NEXT);
+  });
+
+  it('after the link in a sign-in code email, the callback goes to the destination', async () => {
+    api.sendSignInCode.mockResolvedValue(undefined);
+    const view = renderAt(`/login?next=${NEXT_PARAM}`);
+    await userEvent.click(screen.getByRole('button', { name: 'Email me a code instead' }));
+    await userEvent.type(screen.getByLabelText('Email'), 'Maya@Example.com');
+    await userEvent.click(screen.getByRole('button', { name: 'Send code' }));
+    expect(await screen.findByRole('heading', { name: 'Enter the code' })).toBeInTheDocument();
+    view.unmount();
+
+    auth.getSession.mockResolvedValue({
+      data: { session: { user: { id: 'u1', email: 'maya@example.com' } } },
+    });
+    renderAt('/auth/callback');
+    expect(await screen.findByTestId('where')).toHaveTextContent(NEXT);
+    expect(takeRememberedNext('maya@example.com')).toBe('/messages');
+  });
+
+  it('signing in with the code itself spends the remembered destination', async () => {
+    api.sendSignInCode.mockResolvedValue(undefined);
+    api.verifyEmailCode.mockResolvedValue(undefined);
+    renderAt(`/login?next=${NEXT_PARAM}`);
+    await userEvent.click(screen.getByRole('button', { name: 'Email me a code instead' }));
+    await userEvent.type(screen.getByLabelText('Email'), 'maya@example.com');
+    await userEvent.click(screen.getByRole('button', { name: 'Send code' }));
+    expect(await screen.findByRole('heading', { name: 'Enter the code' })).toBeInTheDocument();
+
+    await userEvent.paste('123456');
+    expect(await screen.findByTestId('where')).toHaveTextContent(NEXT);
+    expect(localStorage.getItem('vybora.auth.next')).toBeNull();
   });
 
   it('without a destination, both paths go to messages', async () => {

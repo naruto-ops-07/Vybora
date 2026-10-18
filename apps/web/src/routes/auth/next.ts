@@ -25,10 +25,11 @@ export function withNext(path: string, next: string | null | undefined): string 
 }
 
 /**
- * Sign-up with email confirmation: the link opens `/auth/callback` (on this
- * device), which can't carry `?next=` through the redirect allow-list, so the
- * destination waits in this browser for it, tied to the address signing up so
- * only that account's confirmation (not some other callback) picks it up.
+ * An emailed code also carries a link (sign-up confirmation, or sign-in by
+ * code): the link opens `/auth/callback` (on this device), which can't carry
+ * `?next=` through the redirect allow-list, so the destination waits in this
+ * browser for it, tied to the address the code went to so only that account's
+ * callback (not some other one) picks it up.
  */
 export function rememberNext(next: string | null | undefined, email: string): void {
   const safe = safeNext(next);
@@ -45,7 +46,7 @@ export function rememberNext(next: string | null | undefined, email: string): vo
 }
 
 /**
- * The destination remembered for `email`'s sign-up (once: it is then cleared),
+ * The destination remembered for `email` (once: it is then cleared),
  * or the default. Another account's callback leaves it for its owner; a stale
  * or unreadable one is dropped.
  */

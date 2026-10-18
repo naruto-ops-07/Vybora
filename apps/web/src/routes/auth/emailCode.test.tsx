@@ -24,6 +24,15 @@ const WRONG_CODE = 'That code didn’t work. Check it or send a new one.';
 const NEUTRAL_SENT = 'If there’s an account for that email, we’ve sent a code.';
 const EMAIL_LIMIT = 'Too many emails were sent just now. Wait a few minutes, then try again.';
 
+/**
+ * The countdown reads Date.now() on a setInterval tick: fake exactly those, so
+ * the clock moves only when a test moves it (no drift under load), while
+ * setTimeout stays real for user-event and findBy*.
+ */
+function fakeClock() {
+  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+}
+
 type User = ReturnType<typeof userEvent.setup>;
 
 function Where() {
@@ -164,8 +173,8 @@ describe('code step at sign-up', () => {
   });
 
   it('counts down before resend is allowed', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    fakeClock();
+    const user = userEvent.setup();
     await signUpToCode(user);
 
     expect(resendButton()).toBeDisabled();
@@ -204,6 +213,69 @@ describe('code step at sign-up', () => {
     expect(screen.getByLabelText('Email')).toHaveFocus();
   });
 
+  it('holds "Use a different email" while a new code is being sent', async () => {
+    fakeClock();
+    let finish!: () => void;
+    api.resendConfirmation.mockReturnValue(new Promise<void>((resolve) => (finish = resolve)));
+    const user = userEvent.setup();
+    await signUpToCode(user);
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+    });
+
+    await user.click(resendButton());
+    expect(resendButton()).toHaveAttribute('aria-busy', 'true');
+    const different = screen.getByRole('button', { name: 'Use a different email' });
+    expect(different).toBeDisabled();
+    await user.click(different);
+    expect(screen.getByRole('heading', { name: 'Enter the code' })).toBeInTheDocument();
+
+    await act(async () => finish());
+    expect(screen.getByRole('button', { name: 'Use a different email' })).toBeEnabled();
+    expect(resendButton()).toHaveTextContent('Resend code in 1:00');
+    expect(api.resendConfirmation).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a failed resend as a send problem, not a wrong code, and gives Resend its focus back', async () => {
+    fakeClock();
+    api.resendConfirmation.mockRejectedValue({
+      status: 429,
+      code: 'over_email_send_rate_limit',
+      message: 'email rate limit exceeded',
+    });
+    const user = userEvent.setup();
+    await signUpToCode(user);
+    await user.type(box(0), '12');
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+    });
+    // A browser ignores focus() on a disabled button (jsdom doesn't), so record
+    // whether Resend was still disabled each time focus was sent its way.
+    const button = resendButton() as HTMLButtonElement;
+    const focusButton = button.focus.bind(button);
+    const disabledAtFocus: boolean[] = [];
+    vi.spyOn(button, 'focus').mockImplementation((options) => {
+      disabledAtFocus.push(button.disabled);
+      focusButton(options);
+    });
+
+    await user.click(button);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(EMAIL_LIMIT);
+    // The code typed so far is untouched and not marked wrong.
+    expect(boxes().map((b) => b.value)).toEqual(['1', '2', '', '', '', '']);
+    for (const b of boxes()) expect(b).not.toHaveAttribute('aria-invalid');
+    expect(codeGroup()).not.toHaveAttribute('aria-describedby');
+    // Resend is usable again and has the focus, described by the message.
+    expect(resendButton()).toBeEnabled();
+    expect(resendButton()).toHaveTextContent(/^Resend code$/);
+    expect(resendButton()).toBe(button);
+    expect(button).toHaveFocus();
+    expect(disabledAtFocus.length).toBeGreaterThan(0);
+    expect(disabledAtFocus).not.toContain(true);
+    expect(button).toHaveAccessibleDescription(EMAIL_LIMIT);
+  });
+
   it('leaves focus alone while sign-up is sending and after it fails', async () => {
     let fail!: (reason: unknown) => void;
     api.signUp.mockReturnValue(new Promise((_, reject) => (fail = reject)));
@@ -236,8 +308,8 @@ describe('code step at sign-up', () => {
   });
 
   it('re-submitting sign-up to the same address within a minute returns to the code without sending again', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    fakeClock();
+    const user = userEvent.setup();
     await signUpToCode(user);
     expect(api.signUp).toHaveBeenCalledTimes(1);
     await act(async () => {
@@ -254,7 +326,7 @@ describe('code step at sign-up', () => {
     expect(await screen.findByRole('heading', { name: 'Enter the code' })).toBeInTheDocument();
     expect(api.signUp).toHaveBeenCalledTimes(1);
     // The wait carries on from the first send rather than starting over.
-    expect(resendButton()).toHaveTextContent(/^Resend code in 0:[34]\d$/);
+    expect(resendButton()).toHaveTextContent(/^Resend code in 0:40$/);
     expect(resendButton()).toBeDisabled();
   });
 
@@ -404,8 +476,8 @@ describe('sign in by code', () => {
   });
 
   it('keeps the send cooldown with the email, not the screen', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    fakeClock();
+    const user = userEvent.setup();
     renderAt('/login');
     await requestSignInCode(user, 'maya@example.com');
     expect(api.sendSignInCode).toHaveBeenCalledTimes(1);

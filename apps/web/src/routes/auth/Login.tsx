@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { AuthLayout } from './AuthLayout';
 import { EmailCodeStep } from './EmailCodeStep';
 import { LoginForm, type LoginMode } from './LoginForm';
-import { safeNext, withNext } from './next';
+import { rememberNext, safeNext, takeRememberedNext, withNext } from './next';
 
 export { safeNext };
 
@@ -55,7 +55,11 @@ export default function Login() {
           key={codeEmail}
           email={codeEmail}
           purpose="signin"
-          onVerified={() => navigate(safeNext(next), { replace: true })}
+          onVerified={() => {
+            // Finished here rather than through the link: spend its remembered destination.
+            takeRememberedNext(codeEmail);
+            navigate(safeNext(next), { replace: true });
+          }}
           onResend={() => sendSignInCode(supabase, codeEmail, callbackUrl)}
           onChangeEmail={() => {
             setForm({ email: codeEmail, mode: 'code' });
@@ -86,6 +90,8 @@ export default function Login() {
             await sendSignInCode(supabase, email, callbackUrl);
             markCodeSent('signin', email);
           }
+          // The link in the same email comes back through /auth/callback on this device.
+          rememberNext(next, email);
           setCodeEmail(email);
         }}
       />

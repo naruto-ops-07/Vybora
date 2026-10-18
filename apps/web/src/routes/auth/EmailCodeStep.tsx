@@ -31,6 +31,9 @@ const EMPTY: readonly string[] = Array.from({ length: EMAIL_CODE_LENGTH }, () =>
 /** The boxes sit in two groups of three, the way people read a code aloud. */
 const GROUP_AT = EMAIL_CODE_LENGTH / 2;
 
+/** A wrong or incomplete code marks the boxes; a failed resend says nothing about them. */
+type StepError = { message: string; kind: 'code' | 'send' };
+
 export interface EmailCodeStepProps {
   email: string;
   purpose: CodePurpose;
@@ -53,7 +56,7 @@ export function EmailCodeStep({
   onChangeEmail,
 }: EmailCodeStepProps) {
   const [digits, setDigits] = useState<readonly string[]>(EMPTY);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<StepError | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
@@ -62,6 +65,8 @@ export function EmailCodeStep({
   const inFlight = useRef(false);
   const boxes = useRef<(HTMLInputElement | null)[]>([]);
   const resendButton = useRef<HTMLButtonElement>(null);
+  // Set when a resend fails: focus goes back to Resend once it is enabled again.
+  const refocusResend = useRef(false);
   const errorId = useId();
 
   // The wait follows the address (see markCodeSent in core), so coming back to
@@ -82,6 +87,13 @@ export function EmailCodeStep({
     boxes.current[0]?.focus();
   }, []);
 
+  // A disabled button can't take focus, so wait until the failed send has finished.
+  useEffect(() => {
+    if (resending || !refocusResend.current) return;
+    refocusResend.current = false;
+    resendButton.current?.focus();
+  }, [resending]);
+
   function focusBox(i: number) {
     const box = boxes.current[Math.min(Math.max(i, 0), EMAIL_CODE_LENGTH - 1)];
     box?.focus();
@@ -92,7 +104,7 @@ export function EmailCodeStep({
     if (inFlight.current) return;
     const missing = code.findIndex((d) => !d);
     if (missing !== -1) {
-      setError(EMAIL_CODE_INCOMPLETE);
+      setError({ message: EMAIL_CODE_INCOMPLETE, kind: 'code' });
       focusBox(missing);
       return;
     }
@@ -106,7 +118,7 @@ export function EmailCodeStep({
       logDevError('verify code', e);
       inFlight.current = false;
       setVerifying(false);
-      setError(emailCodeError(e));
+      setError({ message: emailCodeError(e), kind: 'code' });
       setDigits(EMPTY);
       focusBox(0);
       return;
@@ -215,9 +227,10 @@ export function EmailCodeStep({
       await onResend();
     } catch (e) {
       logDevError('resend code', e);
+      // A failed send says nothing about the code typed so far: the boxes stay as they are.
+      setError({ message: emailCodeError(e), kind: 'send' });
+      refocusResend.current = true;
       setResending(false);
-      setError(emailCodeError(e));
-      resendButton.current?.focus();
       return;
     }
     const at = markCodeSent(purpose, email);
@@ -235,12 +248,14 @@ export function EmailCodeStep({
     void verify(digits);
   }
 
+  const codeError = error?.kind === 'code';
+
   return (
     <form noValidate onSubmit={onSubmit} className="space-y-5">
       <div
         role="group"
         aria-label="Verification code"
-        aria-describedby={error ? errorId : undefined}
+        aria-describedby={codeError ? errorId : undefined}
         className="flex items-center gap-2"
       >
         {digits.map((digit, i) => (
@@ -258,7 +273,7 @@ export function EmailCodeStep({
               autoCorrect="off"
               spellCheck={false}
               aria-label={`Digit ${i + 1} of ${EMAIL_CODE_LENGTH}`}
-              aria-invalid={error ? true : undefined}
+              aria-invalid={codeError || undefined}
               value={digit}
               readOnly={verifying}
               onChange={(e) => onChange(i, e.target.value)}
@@ -268,7 +283,7 @@ export function EmailCodeStep({
               className={cn(
                 'h-14 w-full min-w-0 flex-1 rounded-md border bg-surface text-center font-mono text-2xl font-medium tabular-nums text-ink caret-accent',
                 'transition-colors duration-150 focus:border-accent read-only:text-muted',
-                error
+                codeError
                   ? 'border-danger'
                   : digit
                     ? 'border-muted'
@@ -281,7 +296,7 @@ export function EmailCodeStep({
 
       {error && (
         <div id={errorId}>
-          <FormError message={error} />
+          <FormError message={error.message} />
         </div>
       )}
 
@@ -296,6 +311,7 @@ export function EmailCodeStep({
           className="touch-target text-accent disabled:text-muted disabled:opacity-100"
           disabled={cooling || verifying}
           loading={resending}
+          aria-describedby={error?.kind === 'send' ? errorId : undefined}
           onClick={resend}
         >
           {cooling ? (
@@ -310,7 +326,9 @@ export function EmailCodeStep({
         <Button
           variant="ghost"
           className="touch-target text-muted hover:text-ink"
-          disabled={verifying}
+          // Not mid-send either: leaving now would let the same address be asked
+          // again before this send is recorded.
+          disabled={verifying || resending}
           onClick={onChangeEmail}
         >
           Use a different email
