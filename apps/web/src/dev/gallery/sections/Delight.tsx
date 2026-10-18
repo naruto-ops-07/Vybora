@@ -36,7 +36,7 @@ function MotionNote({ children }: { children: string }) {
 }
 
 /** Still frames of the timeline, in the real send button. */
-const FRAMES = [0, 60, 120, 160, SEAL_MS.close, SEAL_MS.total];
+const FRAMES = [0, 40, 100, SEAL_MS.close, SEAL_MS.close + SEAL_MS.hold, 280, SEAL_MS.total];
 
 export function SealedSendSection() {
   const [run, setRun] = useState(0);
@@ -69,8 +69,8 @@ export function SealedSendSection() {
       <figure>
         <figcaption>
           <Meta>
-            Frames: the lock fades in open, its shackle drops 3 px and closes by 320 ms, then the
-            plane returns
+            Frames: the lock fades in open, its shackle drops 3 px and closes by {SEAL_MS.close} ms,
+            holds, then the plane is back by {SEAL_MS.total} ms
           </Meta>
         </figcaption>
         <ol className="mt-2 flex flex-wrap gap-4">
