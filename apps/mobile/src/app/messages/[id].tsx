@@ -328,9 +328,11 @@ function Chat() {
     if (index > 0) list.current?.scrollToIndex({ index, viewPosition: 1, animated: false });
   }, [rows, id, readMark]);
 
-  const run = async (fn: () => Promise<unknown>) => {
+  /** Runs a send; false (after telling the person) when it didn't go out. */
+  const run = async (fn: () => Promise<unknown>): Promise<boolean> => {
     try {
       await fn();
+      return true;
     } catch (e) {
       const code = (e as { code?: string }).code;
       if (code === 'not_ready')
@@ -339,6 +341,7 @@ function Chat() {
           'This device is waiting to be added to the conversation. Try again in a moment.',
         );
       else if (code !== 'network') Alert.alert('Message not sent', friendlyError(e));
+      return false;
     }
   };
 
@@ -361,8 +364,8 @@ function Chat() {
       ? { id: reply.id, senderId: reply.senderId, preview: reply.preview }
       : undefined;
     setReplyTo(null);
-    void run(() => engine!.send(id, { t: 'text', body, replyTo: r }));
     if (showOnline) void touchActivity(supabase).catch(() => undefined);
+    return run(() => engine!.send(id, { t: 'text', body, replyTo: r }));
   };
 
   const sendFile = async (

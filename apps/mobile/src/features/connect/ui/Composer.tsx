@@ -1,11 +1,14 @@
 import type { ReplyRef } from '@vybora/e2ee';
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { Icon, type IconName } from '@/components/Icon';
 import { Text, TextInput } from '@/components/Text';
+import { useA11y } from '@/lib/a11y';
+import { useHaptics } from '@/lib/haptics';
 import { radii } from '@/lib/theme';
 import { useCc } from './primitives';
+import { SendGlyph, useSealedSend } from './SealedSend';
 
 export interface ComposerProps {
   accent: string;
@@ -13,7 +16,8 @@ export interface ComposerProps {
   disabledReason?: string;
   replyTo: (ReplyRef & { name: string }) | null;
   onCancelReply: () => void;
-  onSend: (text: string) => void;
+  /** Resolve `false` when the send failed: the seal only plays for a send that went out. */
+  onSend: (text: string) => void | Promise<boolean | void>;
   onAttach: () => void;
   onVoice: (uri: string, durationMs: number) => void;
   onTyping: (typing: boolean) => void;
@@ -25,12 +29,15 @@ function SquareButton({
   onPress,
   filled,
   color,
+  glyph,
 }: {
   icon: IconName;
   label: string;
   onPress: () => void;
   filled?: boolean;
   color?: string;
+  /** Replaces the icon (the send button's sealed-send glyph). */
+  glyph?: ReactNode;
 }) {
   const cc = useCc();
   return (
@@ -48,12 +55,14 @@ function SquareButton({
         opacity: filled && pressed ? 0.8 : 1,
       })}
     >
-      <Icon
-        name={icon}
-        size={filled ? 18 : 22}
-        color={filled ? cc.onAccent : (color ?? cc.textMuted)}
-        weight={filled ? 'fill' : 'regular'}
-      />
+      {glyph ?? (
+        <Icon
+          name={icon}
+          size={filled ? 18 : 22}
+          color={filled ? cc.onAccent : (color ?? cc.textMuted)}
+          weight={filled ? 'fill' : 'regular'}
+        />
+      )}
     </Pressable>
   );
 }
@@ -75,6 +84,16 @@ export function Composer({
   const [elapsed, setElapsed] = useState(0);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const started = useRef(0);
+  const { reduceMotion } = useA11y();
+  const haptic = useHaptics();
+  const seal = useSealedSend(reduceMotion);
+  const mounted = useRef(true);
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!recording) return;
@@ -82,12 +101,23 @@ export function Composer({
     return () => clearInterval(t);
   }, [recording]);
 
+  const sealed = () => {
+    if (!mounted.current) return;
+    seal.play();
+    haptic('light');
+  };
   const send = () => {
     const body = text.trim();
     if (!body) return;
-    onSend(body);
+    const result = onSend(body);
     setText('');
     onTyping(false);
+    if (result && typeof result.then === 'function')
+      void result.then(
+        (ok) => ok !== false && sealed(),
+        () => undefined,
+      );
+    else sealed();
   };
 
   const startRecording = async () => {
@@ -234,8 +264,14 @@ export function Composer({
               fontSize: 16,
             }}
           />
-          {text.trim() ? (
-            <SquareButton icon="send" label="Send" onPress={send} filled />
+          {text.trim() || seal.playing ? (
+            <SquareButton
+              icon="send"
+              label="Send"
+              onPress={send}
+              filled
+              glyph={<SendGlyph seal={seal} color={cc.onAccent} />}
+            />
           ) : (
             <SquareButton
               icon="mic"
