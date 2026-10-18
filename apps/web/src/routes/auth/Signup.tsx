@@ -21,11 +21,17 @@ export default function Signup() {
   const [params] = useSearchParams();
   const next = params.get('next');
   const [stage, setStage] = useState<Stage>({ step: 'form' });
-  // What "Use a different email" brings back into the form.
+  // The last values sent, and what "Use a different email" seeds the form with.
+  // Seeding happens only on the way back, never during a submit: a re-render
+  // mid-request must not move focus or select the address.
+  const submitted = useRef<Partial<SignUpInput>>({});
   const [kept, setKept] = useState<Partial<SignUpInput>>({});
   const checkUsername = useCallback((u: string) => isUsernameAvailable(supabase, u), []);
   const callbackUrl = `${siteUrl()}/auth/callback`;
-  const backToForm = () => setStage({ step: 'form' });
+  const backToForm = () => {
+    setKept(submitted.current);
+    setStage({ step: 'form' });
+  };
 
   if (stage.step === 'code') {
     const { email } = stage;
@@ -78,7 +84,7 @@ export default function Signup() {
         defaultValues={kept}
         onSubmit={async (values) => {
           const { email } = values;
-          setKept({ email, displayName: values.displayName });
+          submitted.current = { email, displayName: values.displayName };
           // Within a minute of the last code to this address, that code still
           // works and the wait carries on: go back to it instead of sending again.
           if (codeCooldownLeft('signup', email) === 0) {

@@ -35,7 +35,8 @@ export function SignupForm({ onSubmit, checkUsername, defaultValues }: SignupFor
   });
 
   // Back from the code step to change the address: it's selected, ready to retype.
-  const returning = !!defaultValues?.email;
+  // Decided once, when the form appears, so nothing later can move focus here.
+  const [returning] = useState(() => !!defaultValues?.email);
   useEffect(() => {
     if (returning) setFocus('email', { shouldSelect: true });
   }, [returning, setFocus]);

@@ -203,6 +203,60 @@ describe('code step at sign-up', () => {
     expect(screen.getByLabelText('Email')).toHaveFocus();
   });
 
+  it('leaves focus alone while sign-up is sending and after it fails', async () => {
+    let fail!: (reason: unknown) => void;
+    api.signUp.mockReturnValue(new Promise((_, reject) => (fail = reject)));
+    const user = userEvent.setup();
+    renderAt('/signup');
+    const email = screen.getByLabelText('Email') as HTMLInputElement;
+    await user.type(email, 'new@example.com');
+    await user.type(screen.getByLabelText('Username'), 'fresh.face');
+    await user.type(screen.getByLabelText('Password'), 'letters123');
+    expect(await screen.findByText('Available')).toBeInTheDocument();
+    const select = vi.spyOn(email, 'select');
+
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
+    await waitFor(() => expect(api.signUp).toHaveBeenCalledTimes(1));
+    expect(email).not.toHaveFocus();
+
+    await act(async () =>
+      fail({
+        status: 429,
+        code: 'over_email_send_rate_limit',
+        message: 'email rate limit exceeded',
+      }),
+    );
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    // Same field, untouched: the next keystroke can't wipe the address.
+    expect(screen.getByLabelText('Email')).toBe(email);
+    expect(email).not.toHaveFocus();
+    expect(select).not.toHaveBeenCalled();
+    expect(email).toHaveValue('new@example.com');
+  });
+
+  it('re-submitting sign-up to the same address within a minute returns to the code without sending again', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await signUpToCode(user);
+    expect(api.signUp).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      vi.advanceTimersByTime(20_000);
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Use a different email' }));
+    expect(screen.getByLabelText('Email')).toHaveValue('new@example.com');
+    await user.type(screen.getByLabelText('Username'), 'fresh.face');
+    await user.type(screen.getByLabelText('Password'), 'letters123');
+    expect(await screen.findByText('Available')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
+
+    expect(await screen.findByRole('heading', { name: 'Enter the code' })).toBeInTheDocument();
+    expect(api.signUp).toHaveBeenCalledTimes(1);
+    // The wait carries on from the first send rather than starting over.
+    expect(resendButton()).toHaveTextContent(/^Resend code in 0:[34]\d$/);
+    expect(resendButton()).toBeDisabled();
+  });
+
   it('offers code or password sign-in for an existing email', async () => {
     api.signUp.mockResolvedValue({ status: 'already_registered' });
     const user = userEvent.setup();
@@ -230,6 +284,23 @@ describe('code step at sign-up', () => {
     expect(await screen.findByLabelText('Password')).toBeInTheDocument();
     expect(screen.getByLabelText('Email')).toHaveValue('new@example.com');
     expect(screen.getByTestId('url')).toHaveTextContent(/^\/login$/);
+  });
+
+  it('a sign-in code request does not hold up signing up with the same address', async () => {
+    api.signUp.mockResolvedValue({ status: 'confirm_email' });
+    const user = userEvent.setup();
+    renderAt('/login');
+    await requestSignInCode(user, 'new@example.com');
+    expect(api.sendSignInCode).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('link', { name: 'Create an account' }));
+    expect(await screen.findByRole('heading', { name: 'Create your account' })).toBeInTheDocument();
+    await fillSignup(user);
+
+    expect(await screen.findByRole('heading', { name: 'Enter the code' })).toBeInTheDocument();
+    expect(api.signUp).toHaveBeenCalledTimes(1);
+    // Its own clock: a fresh minute for the sign-up code.
+    expect(resendButton()).toHaveTextContent('Resend code in 1:00');
   });
 });
 
