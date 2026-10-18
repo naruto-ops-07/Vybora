@@ -111,11 +111,15 @@ Staff and admins have **no** policy that lets them read conversations, envelopes
 | Disappearing messages                    | 5 min – 1 week; enforced on every device (local purge) and on the server (`purge_expired_envelopes`, run by `cleanup-media`)           |
 | Read receipts / typing / online status   | Each is opt-out; typing and presence use **private** realtime channels limited to conversation members                                 |
 | Phone number                             | Optional, E.164 only, visibility Nobody (default) / Chats & mutual follows / Everyone; read only through `get_contact_phone()`         |
-| Who can message me                       | Everyone, or people you follow                                                                                                         |
+| Who can start chats with me              | Everyone (default) or Friends only (`message_privacy = 'friends'`); the legacy "people you follow" value still works until changed     |
 | Block / report                           | Blocking prevents new conversations and messages; reports contain no message content                                                   |
 | App lock (mobile)                        | Face ID / fingerprint / passcode via `expo-local-authentication`                                                                       |
 
 Address books are never uploaded and there is no contact discovery by phone number.
+
+## Friends
+
+People add each other by **exact username** (no search, no suggestions, no contact sync). A request is accepted, declined (silently) or cancelled; if they had already asked you, adding them accepts it at once. Friends appear first in the new-message picker, and "Friends only" restricts who can start a chat with you. Friendship never changes encryption, and never widens online status or last seen, which still need a shared chat. The database rules are described in [SECURITY.md → Friends](SECURITY.md#friends). Requires migration `20261016000013_friends.sql` (additive, not yet pushed to the hosted project).
 
 ## Last seen and online status
 

@@ -1,5 +1,53 @@
 # Changelog
 
+## 2026-10-17 — Friends by username, and "Your circle, in colour"
+
+### Database
+
+- New migration `20261016000013_friends.sql`: tables `friend_requests` and `friendships` (`user_low < user_high`), both with RLS on and every client grant revoked. Clients use only `security definer` RPCs with `search_path = ''` that act as `auth.uid()`: `send_friend_request(username)` → `sent | accepted | already_friends | already_sent`, `respond_friend_request`, `cancel_friend_request`, `remove_friend`, `my_friends()`, `my_friend_requests()`, `are_friends`.
+  - Unknown, inactive and blocked users all get the same `user_not_found`.
+  - At most 100 pending outgoing requests.
+  - Blocking someone removes the friendship and any requests either way.
+  - `message_privacy` gains `'friends'` ("only friends can start chats with me"); the legacy `'following'` branch now applies only to that value.
+- **Not pushed** to the hosted project (nor is 0012). Review it first, then run `supabase db push`.
+
+### Core, config and API
+
+- `packages/api/src/friends.ts` (friend RPCs, query keys `qk.connect.friends` / `friendRequests`); `FriendRequestResult` has one source in core.
+- Personal tones: `personTone(userId)` (FNV-1a, 8 tones) and `initialsFor` in core; `personTones` light/dark tokens in config, with contrast tests.
+  - Lime light name `#3F6212`.
+  - Light initials one step darker for turquoise, emerald, aqua and sky (the spec values failed 4.5:1).
+- Onboarding rules (`getStartedProgress`, `friendInviteLink`, `usernameFromAddParam`, `orderQuickPick`), and the sealed-send timeline (`SEAL_MS`, `sealFrame`) shared by web and mobile.
+
+### Web
+
+- Friends pane (`/friends`): add by exact username with an inline message per outcome; requests with Accept / Decline / Cancel (optimistic, rolled back item by item); friends with Message and Remove; an incoming-request badge on the rail and the bottom nav; "Add a friend" in the command palette.
+- Privacy → "Who can start chats with me": Everyone / Friends only.
+- New-message quick-pick: friends by most recent chat, the first 8 then "Show all friends (N)".
+- People are the colour: avatar fallbacks and group sender names in each person's tone (high contrast uses bold text instead). Group avatars show two overlapping members.
+- Four flat illustrations and illustrated empty states: welcome, no chats, no friends, nothing found.
+- "Get started" panel (share your username → add a friend → say hi; stored per device and per user).
+- HandleCard: copy `@username`, or share a `/friends?add=` link; the link only prefills, it never sends.
+- Sealed send (320 ms, the plane gives way to a closing lock) and friendship joined (avatars slide together, "Say hi"). Both are off under reduced motion.
+- `cn()` now merges with `tailwind-merge` 3.7.0; caller overrides win (the flips were checked and recorded).
+- Sign-up keeps `?next=`. An emailed confirmation returns there only for the account that signed up on this device. `safeNext` rejects control characters and backslashes.
+- Landing: a "Friends by username" feature, in a grid of six.
+- Message hover bar never covers sender names or neighbouring messages.
+- Dev-only `/__gallery`, with `scripts/gallery-shots.mjs` for screenshots. It is never in production builds.
+
+### Mobile
+
+- Friends screen (inbox header button with badge, also reachable from Settings), the privacy choice, and a new-chat quick-pick ordered and capped like web, with an illustrated no-results state.
+- Same tones, group avatars and sender names; the same four illustrations (react-native-svg); empty states; Get started (SecureStore); HandleCard (clipboard and the share sheet).
+  - The share sheet carries the `?add=` link only when `EXPO_PUBLIC_SITE_URL` is set, otherwise just the `@handle`.
+  - `messages/friends?add=` prefills the field.
+- Sealed send with Reanimated (sampled from the shared timeline) and a light haptic on success; friendship joined with a medium haptic once. Both respect reduced motion and the Haptics setting.
+- Compact buttons keep a 44 px touch area (`hitSlop`).
+
+### Not verified
+
+- No device or simulator run of the mobile changes. No signed-in browser run against a real backend: test accounts on the hosted project weren't available. The gallery screenshots cover web only.
+
 ## 2026-10-15 — Messenger layout, accessibility settings and last seen
 
 ### Database

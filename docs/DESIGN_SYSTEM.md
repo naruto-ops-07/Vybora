@@ -6,13 +6,13 @@ _Established 2026-10-14. Source of truth for tokens: [`packages/config/src/index
 
 A private messaging product should feel **quiet, precise and trustworthy**: the interface recedes so conversations are the focus. Style family: _Minimalism / Swiss_ (selected with the UI/UX Pro Max design-system search for "private secure messaging"; its default palette and typeface were overridden by the product brief).
 
-| Principle                  | In practice                                                                                                        |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Flat, layered by tone      | Surfaces are separated by 1px borders and three surface tones — never by shadows or gradients                      |
-| One accent, used sparingly | Teal/turquoise marks the primary action, the current selection, focus and unread state. Everything else is neutral |
-| Data looks like data       | Timestamps, counts and protocol details use IBM Plex Mono; labels stay in sentence case                            |
-| Dense but calm             | Compact type scale and 4‑pt spacing so chat lists and threads show more content                                    |
-| Motion only for state      | Colour/opacity transitions ≤ 180 ms in the app (see Motion and libraries). No lift, scale or decorative animation  |
+| Principle                  | In practice                                                                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Flat, layered by tone      | Surfaces are separated by 1px borders and three surface tones — never by shadows or gradients                                                          |
+| One accent, used sparingly | Teal/turquoise marks the primary action, the current selection, focus and unread state. Everything else is neutral, except people (see Personal tones) |
+| Data looks like data       | Timestamps, counts and protocol details use IBM Plex Mono; labels stay in sentence case                                                                |
+| Dense but calm             | Compact type scale and 4‑pt spacing so chat lists and threads show more content                                                                        |
+| Motion only for state      | Colour/opacity transitions ≤ 180 ms in the app (see Motion and libraries). No lift, scale or decorative animation                                      |
 
 ### Hard constraints
 
@@ -100,6 +100,39 @@ Shared by web and mobile; the grouping logic lives in `packages/core` (`layoutTh
 - **Chat rows.** Receipt ticks, sender name in groups, typing indicator, unread badge, muted icon. Web: row context menu. Mobile: swipe actions (`ReanimatedSwipeable`, Archive button; no full-swipe). Destructive row actions show an Undo toast (web: the shared 7 s action toast; mobile: 5 s `UndoBar`, safe-area aware).
 - **Header status.** "Online", "last seen …" (minute precision), or the "end-to-end encrypted" line when neither may be shown.
 
+## Personal tones ("Your circle, in colour")
+
+_Added 2026-10-17._ People are the colour; the interface stays graphite. `personTone(userId)` in `packages/core` hashes the user id (FNV-1a, 32 bit) into one of eight tones, so a person has the same colour on every device. Values: `personTones` in `packages/config`, mirrored as `--vy-tone-<name>-fill|ink|name` on web.
+
+| Tone      | Dark fill / name | Light fill | Light name (text) | Light initials |
+| --------- | ---------------- | ---------- | ----------------- | -------------- |
+| turquoise | `#2DD4BF`        | `#99F6E4`  | `#0F766E`         | `#115E59`      |
+| emerald   | `#34D399`        | `#A7F3D0`  | `#047857`         | `#065F46`      |
+| lime      | `#A3E635`        | `#D9F99D`  | `#3F6212`         | `#3F6212`      |
+| aqua      | `#22D3EE`        | `#A5F3FC`  | `#0E7490`         | `#155E75`      |
+| sky       | `#38BDF8`        | `#BAE6FD`  | `#0369A1`         | `#075985`      |
+| mint      | `#6EE7B7`        | `#D1FAE5`  | `#065F46`         | `#065F46`      |
+| ocean     | `#60A5FA`        | `#BFDBFE`  | `#1D4ED8`         | `#1D4ED8`      |
+| glacier   | `#A5B4FC`        | `#E0E7FF`  | `#4338CA`         | `#4338CA`      |
+
+- Dark initials are `#0A0E0F` on every fill. Contrast is checked in core tests: names ≥ 4.5:1 on surfaces and incoming bubbles, initials ≥ 4.5:1 on fills.
+- **Only** for avatar fallbacks (flat circle, one or two initials in Archivo semibold), group sender names and mentions. Never on chrome, buttons, backgrounds or status: typing and unread stay in the accent.
+- High contrast: sender names use the text colour in bold; initials switch to the theme ink.
+- Group avatars: the first two other members by id, overlapping, the front one with a 2 px ring in the row colour (a border, not a shadow).
+
+## Illustrations and empty states
+
+Four flat drawings (welcome, no chats, no friends, nothing found) on web (`apps/web/src/components/illustrations`) and mobile (`apps/mobile/src/components/illustrations.tsx`, react-native-svg), in one grammar: graphite line (muted text) at 1.5 px with round caps (non-scaling), two or three flat fills from the tones and the accent, radii 8–12, VYBORA's own bubble tail and a lock seal. They are decorative (hidden from assistive tech). An empty state is an illustration, a heading, one sentence and at most two actions:
+
+| Where                  | Heading                   | Sentence                                                     |
+| ---------------------- | ------------------------- | ------------------------------------------------------------ |
+| No chat selected (web) | Pick a chat, or start one | Messages here are sealed on your device before they're sent. |
+| Empty chat list        | No chats yet              | Add a friend by their username, then say hi.                 |
+| No friends             | Your circle starts here   | Share your username or add someone by theirs.                |
+| Search found no one    | No one by that name       | Check the spelling, or add them by username.                 |
+
+The first-run **Get started** panel sits at the top of the chat list: three steps (share your username, add a friend, say hi), each with a check icon and "Done" in its accessible name (never colour alone), "N of 3" in Plex Mono, three flat progress segments, and a hide button. **HandleCard** shows your avatar, name and `@username` with Copy and Share.
+
 ## Accessibility settings
 
 Settings → Accessibility on web and mobile. Preferences are stored **per device** (web `localStorage`, mobile `expo-secure-store`, both under the key `vybora.a11y`) and never leave the device.
@@ -117,11 +150,12 @@ High-contrast token rules (checked in core tests, light and dark): primary text 
 
 ## Motion and libraries (web)
 
-| Where                   | What                                                                                                                                                                                                               | Library                                                                                                    |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| Messaging workspace     | Colour/opacity state changes ≤ 180 ms; tooltips fade in (120 ms); the details drawer slides 24 px in from its edge (220 ms, below `xl`) because it answers a click                                                 | CSS, [`@radix-ui/react-tooltip`](https://www.radix-ui.com/primitives/docs/components/tooltip)              |
-| Command menu (Ctrl/⌘ K) | Jump to any chat, start a message, open settings or switch theme                                                                                                                                                   | [`cmdk`](https://cmdk.paco.me)                                                                             |
-| Landing page only       | One orchestrated hero reveal (masked headline lines); the "How a message travels" diagram is driven by scroll position; the workspace preview reveals once; FAQ expands to measured height; smooth wheel scrolling | [`motion`](https://motion.dev), [`lenis`](https://lenis.darkroom.engineering), `@radix-ui/react-accordion` |
+| Where                   | What                                                                                                                                                                                                                                                                                                                                                  | Library                                                                                                    |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Messaging workspace     | Colour/opacity state changes ≤ 180 ms; tooltips fade in (120 ms); the details drawer slides 24 px in from its edge (220 ms, below `xl`) because it answers a click                                                                                                                                                                                    | CSS, [`@radix-ui/react-tooltip`](https://www.radix-ui.com/primitives/docs/components/tooltip)              |
+| Two delight moments     | **Sealed send:** after a send goes out, the plane gives way to a lock whose shackle closes, then returns (320 ms in all, opacity/transform only, timeline `sealFrame` in core, mobile via Reanimated plus a light haptic). **Friendship joined:** two avatars slide 16 px together (280 ms) on the new-friend card. Both are off under reduced motion | CSS keyframes; mobile `react-native-reanimated`                                                            |
+| Command menu (Ctrl/⌘ K) | Jump to any chat, start a message, open settings or switch theme                                                                                                                                                                                                                                                                                      | [`cmdk`](https://cmdk.paco.me)                                                                             |
+| Landing page only       | One orchestrated hero reveal (masked headline lines); the "How a message travels" diagram is driven by scroll position; the workspace preview reveals once; FAQ expands to measured height; smooth wheel scrolling                                                                                                                                    | [`motion`](https://motion.dev), [`lenis`](https://lenis.darkroom.engineering), `@radix-ui/react-accordion` |
 
 Everything is wrapped in `MotionConfig reducedMotion="user"`; Lenis and the ciphertext scramble switch off under `prefers-reduced-motion`, and the global CSS rule collapses keyframe and transition durations. Nothing lifts, scales or bounces.
 

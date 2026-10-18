@@ -43,6 +43,19 @@ New conversations are end-to-end encrypted with MLS (RFC 9420); the server store
 - Push payloads contain no message content; the server applies mute/notification settings via a service-role-only function.
 - Encrypted attachments live in the private `connect` bucket (`application/octet-stream`, 26 MB), readable only by conversation members.
 
+## Friends
+
+Added by migration `20261016000013_friends.sql` (not yet pushed to the hosted project).
+
+- **`friend_requests`** and **`friendships`** have RLS on and **all client grants revoked**. Clients reach them only through `security definer` RPCs (`search_path = ''`, execute granted to `authenticated` only) that act as `auth.uid()`; no RPC takes the caller's id as an argument, so nobody can create or answer a request on someone else's behalf.
+- **No enumeration through blocks.** `send_friend_request(username)` gives the same `user_not_found` for an unknown, inactive or blocked username, in either direction. It is an exact, case-insensitive match (a leading `@` is ignored), never a search.
+- **Bounded.** At most 100 pending outgoing requests per user (`too_many_requests`). Declining is silent: the request disappears from the sender's list.
+- **Blocks win.** A trigger on `blocks` deletes the friendship and requests in both directions; `respond_friend_request` refuses to accept across a block; `my_friends()` and `my_friend_requests()` leave out blocked pairs and inactive profiles.
+- **"Only friends can start chats with me"** (`message_privacy = 'friends'`) is enforced in `private.can_message`, which `create_secure_conversation` checks. The legacy follows branch applies only when the value is `'following'`.
+- **Presence is not widened by friendship.** Online status and last seen still need a shared chat (see below); clients only watch presence for friends they already chat with.
+- **Add-me links** (`/friends?add=<username>` on web, `messages/friends?add=` on mobile) only prefill the add field after a strict username check (`usernameFromAddParam`). They never send a request. A signed-out visitor goes through sign-in and back (`safeNext`: same-origin relative paths only, no control characters or backslashes).
+- The first-run record ("Get started") and the remembered sign-up destination are kept on the device only (web `localStorage`, mobile `expo-secure-store`). The sign-up destination is tied to the address that signed up and expires after a day.
+
 ## Last seen and presence
 
 Added by migration `20261015000012_last_seen.sql` (not yet pushed to the hosted project).
@@ -74,7 +87,7 @@ Rate limits (BEFORE INSERT triggers, per user): posts 30/h, comments 20/min, lik
 
 ## Web hardening
 
-`vercel.json` sets `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`. User text is rendered as React text nodes (no `dangerouslySetInnerHTML`); links use `rel="noopener noreferrer nofollow ugc"`. Post-login redirects accept same-origin relative paths only (`safeNext`).
+`vercel.json` sets `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`. User text is rendered as React text nodes (no `dangerouslySetInnerHTML`); links use `rel="noopener noreferrer nofollow ugc"`. Post-login redirects accept same-origin relative paths only and refuse control characters and backslashes (`safeNext`).
 
 ## Verified by tests
 
