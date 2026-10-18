@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-10-18 — Email codes: confirm sign-up and sign in with a 6-digit code
+
+- **Sign-up (web and mobile):** after "Create account", you type the 6-digit code from the email on "Enter the code". The link in the same email still works as a fallback, and on web it still returns to `?next=`.
+  - An address that already has an account gets "That email already has an account", with **Sign in with a code** or **Sign in with password**.
+  - The address travels in router state (web) or in memory (mobile), never in a URL.
+- **Sign in by code (optional; password stays the default):** "Email me a code instead", then the same screen whether or not the account exists: "If there’s an account for that email, we’ve sent a code."
+- **The code screen:**
+  - Six boxes in two groups of three. A pasted or autofilled code ("123 456", "123-456", "Your code: 123456") fills them all.
+  - The sixth digit checks the code, exactly once.
+  - A wrong or expired code says "That code didn’t work. Check it or send a new one." and clears the boxes.
+  - Resend after 60 s, and the wait follows the address, not the screen. A failed resend keeps the digits typed so far. "Use a different email" goes back with the address kept, and waits while a resend is under way.
+  - Mobile: one field drives the boxes, so the keyboard's code suggestion and autofill reach it. A light haptic on success and a small shake on a wrong code (no shake with reduced motion). The boxes grow with large text instead of clipping.
+- **Shared rules:** code shape, paste clean-up, error copy, the resend wait and the countdown are in `@vybora/core`; `sendSignInCode` and `verifyEmailCode` in `@vybora/api`. The email templates are in `supabase/templates/`, wired in `supabase/config.toml` (6 digits, 10 minutes, `token_verifications = 30`).
+- **Fixes made along the way:**
+  - Mobile PKCE uses SHA-256 on Hermes (noble WebCrypto adapter). supabase-js had fallen back to `plain`.
+  - Mobile chat details no longer link to the removed `/u/[username]` screen.
+  - Supabase sign-up and email failures get their own copy instead of "Something went wrong": address not authorised, email limit, weak password, invalid email, sign-ups paused, database error. Each Supabase error has one message everywhere. "Email not confirmed" now points at signing in with a code. Development builds log the raw error.
+- **Owner steps, not done here:** custom SMTP, both templates, the code length and expiry, and the rate limits on the hosted project. See [DEPLOYMENT.md → Email codes](docs/DEPLOYMENT.md#email-codes-step-for-the-owner). The 10-minute expiry also applies to confirmation, magic and password-reset links.
+- **Tests:** `pnpm check` exits 0: web 217, mobile 147, core 136, api 36, e2ee 23, validation 22, database 129. Web tests now get 15 s each, as mobile's do: in the full parallel run, four sign-up code tests passed the 5 s default and timed out. They take 2–3.5 s alone.
+- **Not verified:** real email delivery, the hosted template and settings change, and any real device or simulator.
+
 ## 2026-10-18 — Polish pass: homepage, sign-in and settings
 
 - **Homepage**

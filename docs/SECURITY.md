@@ -8,6 +8,17 @@
 - Profiles are created by the `on_auth_user_created` trigger; reserved/invalid usernames fall back to a generated name.
 - Roles live in `user_roles`, which has **no client insert/update/delete grant**. The first admin is granted via SQL by an operator. `admin_set_role` is admin-only, audited, and refuses to revoke your own admin role.
 
+## Email codes and account enumeration
+
+Sign-up is confirmed, and sign-in can be done, with a 6-digit emailed code (Supabase Auth `verifyOtp`). Codes expire after 10 minutes (a hosted setting; see [DEPLOYMENT.md → Email codes](DEPLOYMENT.md#email-codes-step-for-the-owner)). Guessing is capped by Supabase's token-verification rate limit (30 per 5 minutes per IP address locally; the hosted value is the owner's step), and sends by the hourly email limit.
+
+- **Sign in by code is neutral in the UI.** Asking for a code shows the same screen, "If there’s an account for that email, we’ve sent a code.", with the same code boxes, whether or not the address has an account. `sendSignInCode` swallows Supabase's "no such user" answers (`otp_disabled`, `user_not_found`, "Signups not allowed for otp"), and a resend says "If there’s an account for that email, we’ve sent a new code." The 60-second resend wait follows the address, not the screen, so going back and sending again can't be used to compare timings.
+- **The email is never put in a URL.** It travels in router state (web) or an in-memory handoff (mobile).
+- **It is not enumeration-proof, and doesn't claim to be:**
+  - **Sign-up says so.** Signing up with an address that already has an account shows "That email already has an account" and offers sign-in. That is a deliberate trade-off, so people aren't stranded. The app learns it from Supabase's own sign-up response (an existing address comes back with no identities), which anyone calling the API can read too.
+  - **The Supabase API answers differently.** A direct call to request a sign-in code (`/otp` with `create_user: false`) returns an `otp_disabled` error for an unknown address and success for a known one. The app hides the difference; the API does not. Rate limits slow a scripted probe but don't stop it.
+  - Password sign-in for an unconfirmed account says "Your email isn’t confirmed yet." This needs the right password.
+
 ## Visibility rules (`private.viewer_can_view_profile`)
 
 Content of an account is visible to a viewer if the viewer is the owner, **or** is staff, **or** the owner is active, neither has blocked the other, and the account is public or the viewer is an accepted follower. Posts, media, likes, comments, hashtags links, stories, story media and follower lists all build on it. Staff can view content for moderation but **never** read private messages (no staff clause in messaging policies).

@@ -13,7 +13,7 @@ Nothing in this document has been executed against real infrastructure yet; it i
 3. **Auth → URL configuration**
    - Site URL: `https://<your-domain>`
    - Redirect URLs: `https://<your-domain>/auth/callback`, `https://<your-domain>/reset-password`, `vybora://auth/callback`
-   - Enable email confirmations (production). Configure custom SMTP for deliverability.
+   - Enable email confirmations (production). Custom SMTP is required for that: see [Email codes](#email-codes-step-for-the-owner) below.
 4. **Storage:** buckets and policies are created by migration `0007`. Verify in the dashboard that `media` and `dm` are private.
 5. **Realtime:** `messages` and `notifications` are added to `supabase_realtime` by migration `0007`.
 6. **Edge Functions**
@@ -31,12 +31,16 @@ Nothing in this document has been executed against real infrastructure yet; it i
 
 ### Email codes (step for the owner)
 
-Sign-up confirmation and sign-in by code both use 6-digit codes emailed by Supabase. The local stack gets this from `supabase/config.toml`; the hosted project must be set by hand in the dashboard (Authentication), and nothing here has been applied to it yet:
+Sign-up confirmation and sign-in by code both use 6-digit codes emailed by Supabase. The local stack gets this from `supabase/config.toml`; the hosted project must be set by hand in the dashboard (Authentication), and nothing here has been applied to it yet. Do the steps in order:
 
+0. **Custom SMTP first (required).** Set up your own SMTP provider under **Emails → SMTP Settings** before turning on codes. With **Confirm email** on, Supabase's built-in mailer refuses addresses outside the project's team (sign-up fails with `email_address_not_authorized`, shown as "We couldn’t send an email to that address") and sends only a few emails an hour in total. Without custom SMTP, real people can't sign up.
 1. **Email Templates → Confirm signup:** set the subject to `Your VYBORA code` and paste the contents of `supabase/templates/confirmation.html`.
 2. **Email Templates → Magic Link:** set the subject to `Your VYBORA sign-in code` and paste the contents of `supabase/templates/magic_link.html`. Sign-in by code sends this template.
-3. **Sign In / Providers → Email:** set **Email OTP Length** to `6` and **Email OTP Expiration** to `600` seconds (10 minutes, as the templates say).
+3. **Sign In / Providers → Email:** set **Email OTP Length** to `6` and **Email OTP Expiration** to `600` seconds (10 minutes, as the templates say). This one setting is the lifetime of _every_ emailed token: the confirmation link, the magic link **and the password-reset link** also expire after 10 minutes.
 4. Keep **Confirm email** on, so a new account has to enter its code before it can sign in.
+5. **Rate Limits** (once custom SMTP is on, the email limit becomes editable):
+   - **Emails sent per hour:** big enough for your sign-up and sign-in traffic. Each sign-up, sign-in code, resend and password reset is one email. Over the limit, people see "Too many emails were sent just now. Wait a few minutes, then try again."
+   - **Token verifications** (per 5 minutes per IP address): `30`, the same as `token_verifications` locally. This caps guesses at a 6-digit code. Over the limit, the code screen shows "Too many tries. Wait a minute, then try again."
 
 Both templates show the code (`{{ .Token }}`) and keep the link (`{{ .ConfirmationURL }}`) as a fallback. They contain no tracking pixels or remote images. Locally, `enable_confirmations` stays `false` so the E2E tests can sign up directly.
 

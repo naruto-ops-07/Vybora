@@ -71,9 +71,15 @@ subject = "Your VYBORA sign-in code"
 content_path = "./supabase/templates/magic_link.html"
 
 [auth.rate_limit]
+# Emails sent per hour (local mail goes to Inbucket).
 email_sent = 4
+# Sign-up and sign-in requests per 5 minutes per IP address.
 sign_in_sign_ups = 30
+# Sessions refreshed per 5 minutes per IP address.
 token_refresh = 150
+# Code and link checks (verifyOtp) per 5 minutes per IP address: caps guessing
+# at a 6-digit code. Set the hosted value too (docs/DEPLOYMENT.md, "Email codes").
+token_verifications = 30
 
 [edge_runtime]
 enabled = true
