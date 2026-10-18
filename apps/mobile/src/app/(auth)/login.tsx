@@ -5,6 +5,7 @@ import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Button, Text, TextField } from '@/components/ui';
 import { AuthScreen, FormError } from '@/features/auth/AuthScreen';
+import { logDevError } from '@/lib/devLog';
 import { supabase } from '@/lib/supabase';
 import { font, useTheme } from '@/lib/theme';
 
@@ -28,6 +29,7 @@ export default function Login() {
     try {
       await signIn(supabase, parsed.data); // the auth layout redirects on session change
     } catch (e) {
+      logDevError('sign-in', e);
       setServerError(friendlyError(e));
     } finally {
       setBusy(false);

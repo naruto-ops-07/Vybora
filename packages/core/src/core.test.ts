@@ -166,6 +166,42 @@ describe('friendlyError', () => {
     expect(friendlyError(new TypeError('Failed to fetch'))).toMatch(/offline/);
     expect(friendlyError({ message: 'weird' }, 'fallback')).toBe('fallback');
   });
+
+  it('names the Supabase Auth email and sign-up failures instead of a generic error', () => {
+    const cantEmail = 'We couldn’t send an email to that address. Try again later.';
+    expect(
+      friendlyError({
+        code: 'email_address_not_authorized',
+        message: 'Email address not authorized',
+      }),
+    ).toBe(cantEmail);
+    expect(friendlyError({ status: 500, message: 'Error sending confirmation email' })).toBe(
+      cantEmail,
+    );
+    expect(friendlyError({ message: 'Error sending magic link email' })).toBe(cantEmail);
+    expect(
+      friendlyError({
+        status: 429,
+        code: 'over_email_send_rate_limit',
+        message: 'email rate limit exceeded',
+      }),
+    ).toBe('Too many emails were sent just now. Wait a few minutes, then try again.');
+    expect(
+      friendlyError({
+        code: 'weak_password',
+        message: 'Password should be at least 8 characters.',
+      }),
+    ).toBe('Choose a stronger password: at least 8 characters with a letter and a number.');
+    expect(
+      friendlyError({ code: 'email_address_invalid', message: 'Email address "x" is invalid' }),
+    ).toBe('Enter a valid email address.');
+    expect(
+      friendlyError({ code: 'signup_disabled', message: 'Signups not allowed for this instance' }),
+    ).toBe('New sign-ups are paused right now.');
+    expect(friendlyError({ status: 500, message: 'Database error saving new user' })).toBe(
+      'We couldn’t create your account. Try a different username, or try again in a minute.',
+    );
+  });
 });
 
 describe('permissions', () => {

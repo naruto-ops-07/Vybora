@@ -6,6 +6,7 @@ import { Link } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Button, Empty, Text, TextField } from '@/components/ui';
 import { AuthScreen, FormError } from '@/features/auth/AuthScreen';
+import { logDevError } from '@/lib/devLog';
 import { supabase } from '@/lib/supabase';
 import { font, useTheme } from '@/lib/theme';
 
@@ -58,6 +59,7 @@ export default function Signup() {
         setServerError('An account with this email already exists.');
       else if (result.status === 'confirm_email') setSentTo(form.email);
     } catch (e) {
+      logDevError('signup', e);
       setServerError(friendlyError(e));
     } finally {
       setBusy(false);

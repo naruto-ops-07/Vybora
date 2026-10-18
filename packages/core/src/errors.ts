@@ -27,6 +27,32 @@ const KNOWN: Record<string, string> = {
   'User already registered': 'An account with this email already exists.',
 };
 
+const CANT_EMAIL = 'We couldn’t send an email to that address. Try again later.';
+const EMAIL_LIMIT = 'Too many emails were sent just now. Wait a few minutes, then try again.';
+const SIGNUP_FAILED =
+  'We couldn’t create your account. Try a different username, or try again in a minute.';
+
+/**
+ * Supabase Auth failures, by error `code` and by message (older servers send
+ * only the message). "Email address not authorized" is the built-in mailer
+ * refusing addresses outside the project team until custom SMTP is set up.
+ */
+const AUTH_CODES: Record<string, string> = {
+  email_address_not_authorized: CANT_EMAIL,
+  over_email_send_rate_limit: EMAIL_LIMIT,
+  weak_password: 'Choose a stronger password: at least 8 characters with a letter and a number.',
+  email_address_invalid: 'Enter a valid email address.',
+  signup_disabled: 'New sign-ups are paused right now.',
+};
+const AUTH_MESSAGES: Record<string, string> = {
+  'Email address not authorized': CANT_EMAIL,
+  'Error sending confirmation email': CANT_EMAIL,
+  'Error sending magic link email': CANT_EMAIL,
+  'Error sending recovery email': CANT_EMAIL,
+  'email rate limit exceeded': EMAIL_LIMIT,
+  'Database error saving new user': SIGNUP_FAILED,
+};
+
 export interface ErrorLike {
   message?: string;
   code?: string;
@@ -42,7 +68,8 @@ export function friendlyError(
   if (!error) return fallback;
   const e = error as ErrorLike;
   const message = typeof e.message === 'string' ? e.message : String(error);
-  for (const [needle, copy] of Object.entries(KNOWN)) {
+  if (e.code && AUTH_CODES[e.code]) return AUTH_CODES[e.code]!;
+  for (const [needle, copy] of Object.entries({ ...AUTH_MESSAGES, ...KNOWN })) {
     if (message.includes(needle)) return copy;
   }
   if (e.code === '23505' || message.includes('duplicate key')) {

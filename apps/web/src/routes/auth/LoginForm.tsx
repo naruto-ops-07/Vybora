@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Field';
 import { FormError } from './AuthLayout';
+import { logDevError } from '@/lib/devLog';
 
 export type LoginMode = 'password' | 'code';
 
@@ -98,6 +99,7 @@ function PasswordForm({
         try {
           await onSubmit(values);
         } catch (e) {
+          logDevError('sign-in', e);
           setServerError(friendlyError(e));
         }
       })}
@@ -179,6 +181,7 @@ function CodeRequestForm({
         try {
           await onSendCode(values.email);
         } catch (e) {
+          logDevError('sign-in code', e);
           setServerError(emailCodeError(e));
         }
       })}

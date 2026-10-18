@@ -20,6 +20,7 @@ import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import { FormError } from './AuthLayout';
 import { lastCodeSent, markCodeSent, secondsUntil, type CodePurpose } from './codeCooldown';
+import { logDevError } from '@/lib/devLog';
 
 const EMPTY: readonly string[] = Array.from({ length: EMAIL_CODE_LENGTH }, () => '');
 /** The boxes sit in two groups of three, the way people read a code aloud. */
@@ -103,6 +104,7 @@ export function EmailCodeStep({
     try {
       await verifyEmailCode(supabase, { email, code: code.join(''), purpose });
     } catch (e) {
+      logDevError('verify code', e);
       inFlight.current = false;
       setVerifying(false);
       setError(emailCodeError(e));
@@ -213,6 +215,7 @@ export function EmailCodeStep({
     try {
       await onResend();
     } catch (e) {
+      logDevError('resend code', e);
       setResending(false);
       setError(emailCodeError(e));
       resendButton.current?.focus();

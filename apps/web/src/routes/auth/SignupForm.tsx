@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Field';
 import { FormError } from './AuthLayout';
+import { logDevError } from '@/lib/devLog';
 
 export interface SignupFormProps {
   onSubmit: (values: SignUpInput) => Promise<void>;
@@ -75,6 +76,7 @@ export function SignupForm({ onSubmit, checkUsername, defaultValues }: SignupFor
         try {
           await onSubmit(values);
         } catch (e) {
+          logDevError('signup', e);
           setServerError(friendlyError(e));
         }
       })}
