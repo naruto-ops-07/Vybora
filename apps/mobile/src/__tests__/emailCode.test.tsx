@@ -48,6 +48,7 @@ import { resetCodeCooldowns } from '@/features/auth/codeCooldown';
 const WRONG_CODE = 'That code didn’t work. Check it or send a new one.';
 const NEUTRAL_SENT = 'If there’s an account for that email, we’ve sent a code.';
 const CALLBACK = 'vybora://auth/callback';
+const TOO_MANY = 'Too many tries. Wait a minute, then try again.';
 
 /** Every TextInput shares one mocked `focus`; its `this` says which field was focused. */
 const focusMock = (TextInput as unknown as { prototype: { focus: jest.Mock } }).prototype.focus;
@@ -68,6 +69,22 @@ const boxDigits = () =>
   });
 const resendButton = () => screen.getByRole('button', { name: /^Resend code/ });
 const header = (name: string) => screen.findByRole('header', { name });
+
+/**
+ * The `onPress` a button was last rendered with, found the way fireEvent finds
+ * it (up the fiber from the host view). Calling it twice inside one act() is a
+ * double tap that lands before React re-renders; separate fireEvent calls each
+ * re-render in between, and nesting them in one act() overlaps act scopes.
+ */
+function renderedOnPress(element: unknown): () => unknown {
+  type Fiber = { memoizedProps?: { onPress?: unknown } | null; return: Fiber | null };
+  let fiber = (element as { unstable_fiber?: Fiber }).unstable_fiber ?? null;
+  for (; fiber; fiber = fiber.return) {
+    const onPress = fiber.memoizedProps?.onPress;
+    if (typeof onPress === 'function') return onPress as () => unknown;
+  }
+  throw new Error('No onPress handler on this element');
+}
 
 async function advance(ms: number) {
   await act(async () => {
@@ -141,13 +158,14 @@ describe('code step at sign-up', () => {
     let finish!: () => void;
     mockVerifyEmailCode.mockReturnValue(new Promise<void>((resolve) => (finish = resolve)));
     await signUpToCode();
-    const verifyButton = screen.getByRole('button', { name: 'Verify' });
+    const typeCode = codeInput().props.onChangeText as (text: string) => void;
+    const tapVerify = renderedOnPress(screen.getByRole('button', { name: 'Verify' }));
 
     // The sixth digit and two fast taps, all before React renders the busy state.
     await act(async () => {
-      void fireEvent.changeText(codeInput(), '123456');
-      void fireEvent.press(verifyButton);
-      void fireEvent.press(verifyButton);
+      typeCode('123456');
+      tapVerify();
+      tapVerify();
     });
     expect(mockVerifyEmailCode).toHaveBeenCalledTimes(1);
     expect(screen.queryByText('Enter all 6 digits.')).toBeNull();
@@ -259,6 +277,49 @@ describe('code step at sign-up', () => {
     expect(await screen.findByText('We sent a new code.')).toBeTruthy();
     expect(resendButton()).toHaveTextContent('Resend code in 1:00');
     expect(resendButton()).toBeDisabled();
+  });
+
+  it('holds "Use a different email" while a new code is being sent', async () => {
+    jest.useFakeTimers();
+    let finish!: () => void;
+    mockResendConfirmation.mockReturnValue(new Promise<void>((resolve) => (finish = resolve)));
+    await signUpToCode();
+    await advance(60_000);
+
+    await fireEvent.press(resendButton());
+    expect(resendButton()).toBeBusy();
+    const different = screen.getByRole('button', { name: 'Use a different email' });
+    expect(different).toBeDisabled();
+    await fireEvent.press(different);
+    expect(screen.getByRole('header', { name: 'Enter the code' })).toBeTruthy();
+
+    await act(async () => finish());
+    expect(screen.getByRole('button', { name: 'Use a different email' })).toBeEnabled();
+    expect(resendButton()).toHaveTextContent('Resend code in 1:00');
+    expect(mockResendConfirmation).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends one sign-up at a time', async () => {
+    let finish!: (result: unknown) => void;
+    mockSignUp.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    await render(<Signup />);
+    await fillSignup();
+    const tapCreate = renderedOnPress(screen.getByRole('button', { name: 'Create account' }));
+
+    // Two fast taps, both before React renders the busy state.
+    let first!: unknown;
+    await act(async () => {
+      first = tapCreate();
+      void tapCreate();
+    });
+    expect(mockSignUp).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      finish({ status: 'confirm_email' });
+      await first;
+    });
+    expect(await header('Enter the code')).toBeTruthy();
+    expect(mockSignUp).toHaveBeenCalledTimes(1);
   });
 
   it('shows a failed resend and lets you try again', async () => {
@@ -498,6 +559,36 @@ describe('sign in by code', () => {
       await screen.findByText('If there’s an account for that email, we’ve sent a new code.'),
     ).toBeTruthy();
     expect(mockSendSignInCode).toHaveBeenCalledTimes(3);
+  });
+
+  it('sends one code request at a time, from the button or the keyboard', async () => {
+    let finish!: () => void;
+    mockSendSignInCode
+      .mockReturnValueOnce(new Promise<void>((resolve) => (finish = resolve)))
+      // Supabase's per-user limit would turn a second send for a real account into a 429.
+      .mockRejectedValue({ status: 429, code: 'over_email_send_rate_limit' });
+    await render(<Login />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Email me a code instead' }));
+    await fireEvent.changeText(screen.getByLabelText('Email'), 'maya@example.com');
+
+    // fireEvent resolves with the handler's own promise, which waits on the send.
+    const pressing = fireEvent.press(screen.getByRole('button', { name: 'Send code' }));
+    await waitFor(() => expect(mockSendSignInCode).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: 'Send code' })).toBeBusy();
+    // A tap leaves the keyboard up, so its Send key still reaches the field.
+    await fireEvent(screen.getByLabelText('Email'), 'submitEditing');
+    expect(mockSendSignInCode).toHaveBeenCalledTimes(1);
+
+    await act(async () => finish());
+    await pressing;
+    expect(await header('Enter the code')).toBeTruthy();
+    expect(screen.queryByText(TOO_MANY)).toBeNull();
+
+    // Nothing stale is waiting on the form either.
+    await fireEvent.press(screen.getByRole('button', { name: 'Use a different email' }));
+    expect(await header('Sign in')).toBeTruthy();
+    expect(screen.queryByText(TOO_MANY)).toBeNull();
+    expect(mockSendSignInCode).toHaveBeenCalledTimes(1);
   });
 
   it('shows a send failure on the form and stays there', async () => {

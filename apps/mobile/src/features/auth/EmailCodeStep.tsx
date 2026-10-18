@@ -326,7 +326,9 @@ export function EmailCodeStep({ email, purpose, onResend, onChangeEmail }: Email
         <AuthTextButton
           label="Use a different email"
           tone="muted"
-          disabled={verifying}
+          // Not mid-send either: leaving now would let the same address be asked again
+          // before this send is recorded.
+          disabled={verifying || resending}
           onPress={onChangeEmail}
         />
       </View>

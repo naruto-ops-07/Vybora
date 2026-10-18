@@ -3,7 +3,7 @@ import { EMAIL_CODE_LENGTH, emailCodeError, friendlyError, SIGN_IN_CODE_SENT } f
 import { emailSchema, signInSchema } from '@vybora/validation';
 import * as Linking from 'expo-linking';
 import { Link } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button, Text, TextField } from '@/components/ui';
 import { AuthScreen, FormError, Strong } from '@/features/auth/AuthScreen';
 import { codeCooldownLeft, markCodeSent } from '@/features/auth/codeCooldown';
@@ -28,6 +28,9 @@ export default function Login() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // One request at a time: the keyboard's Send key and a tap on the button can
+  // both arrive before the busy state renders (the keyboard stays up on a tap).
+  const inFlight = useRef(false);
   const [codeEmail, setCodeEmail] = useState<string | null>(null);
   // Focus is set only by arriving or coming back, and read when a field mounts:
   // nothing during a submit can move it. Only "Use a different email" puts the
@@ -43,6 +46,7 @@ export default function Login() {
   };
 
   const submit = async () => {
+    if (inFlight.current) return;
     setServerError(null);
     const parsed = signInSchema.safeParse({ email, password });
     if (!parsed.success) {
@@ -50,6 +54,7 @@ export default function Login() {
       return;
     }
     setErrors({});
+    inFlight.current = true;
     setBusy(true);
     try {
       await signIn(supabase, parsed.data); // the auth layout redirects on session change
@@ -57,11 +62,13 @@ export default function Login() {
       logDevError('sign-in', e);
       setServerError(friendlyError(e));
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   };
 
   const sendCode = async () => {
+    if (inFlight.current) return;
     setServerError(null);
     const parsed = emailSchema.safeParse(email);
     if (!parsed.success) {
@@ -69,6 +76,7 @@ export default function Login() {
       return;
     }
     setErrors({});
+    inFlight.current = true;
     setBusy(true);
     try {
       const address = parsed.data;
@@ -84,6 +92,7 @@ export default function Login() {
       logDevError('sign-in code', e);
       setServerError(emailCodeError(e));
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   };
@@ -110,6 +119,8 @@ export default function Login() {
           onResend={() => sendSignInCode(supabase, codeEmail, callbackUrl())}
           onChangeEmail={() => {
             setEmail(codeEmail);
+            setErrors({});
+            setServerError(null);
             setMode('code');
             setFocusEmail(true);
             setCodeEmail(null);

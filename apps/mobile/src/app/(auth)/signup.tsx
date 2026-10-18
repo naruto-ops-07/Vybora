@@ -3,7 +3,7 @@ import { EMAIL_CODE_LENGTH, friendlyError } from '@vybora/core';
 import { emailSchema, signUpSchema } from '@vybora/validation';
 import * as Linking from 'expo-linking';
 import { Link, router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button, Text, TextField } from '@/components/ui';
 import { AuthScreen, AuthTextButton, FormError, Strong } from '@/features/auth/AuthScreen';
 import { codeCooldownLeft, markCodeSent } from '@/features/auth/codeCooldown';
@@ -29,6 +29,8 @@ export default function Signup() {
     'idle',
   );
   const [busy, setBusy] = useState(false);
+  // One sign-up at a time: a fast double tap can land before the busy state renders.
+  const inFlight = useRef(false);
   const [stage, setStage] = useState<Stage>({ step: 'form' });
   // Only "Use a different email" puts the keyboard back on the address. It is
   // read when the form mounts, so nothing during a submit can move focus.
@@ -64,6 +66,7 @@ export default function Signup() {
   };
 
   const submit = async () => {
+    if (inFlight.current) return;
     setServerError(null);
     // Within a minute of the last code to this address, that code still works
     // and the account is already waiting for it: go back instead of signing up again.
@@ -83,6 +86,7 @@ export default function Signup() {
       return;
     }
     setErrors({});
+    inFlight.current = true;
     setBusy(true);
     try {
       const { email } = parsed.data;
@@ -97,6 +101,7 @@ export default function Signup() {
       logDevError('signup', e);
       setServerError(friendlyError(e));
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   };
