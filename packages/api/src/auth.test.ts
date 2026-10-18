@@ -20,6 +20,14 @@ describe('email code auth', () => {
     });
   });
 
+  it('points the link in the sign-in email back to the app when given a redirect', async () => {
+    await sendSignInCode(client, 'maya@example.com', 'https://vybora.app/auth/callback');
+    expect(auth.signInWithOtp).toHaveBeenCalledWith({
+      email: 'maya@example.com',
+      options: { shouldCreateUser: false, emailRedirectTo: 'https://vybora.app/auth/callback' },
+    });
+  });
+
   it('stays silent when there is no account (no enumeration)', async () => {
     auth.signInWithOtp.mockResolvedValue({
       error: { code: 'otp_disabled', message: 'Signups not allowed for otp' },

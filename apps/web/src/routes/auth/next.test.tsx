@@ -5,6 +5,7 @@ import { Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/utils';
 import AuthCallback from './AuthCallback';
+import { resetCodeCooldowns } from './codeCooldown';
 import Login from './Login';
 import { rememberNext, safeNext, takeRememberedNext, withNext } from './next';
 import Signup from './Signup';
@@ -55,6 +56,7 @@ beforeEach(() => {
   Object.values(api).forEach((f) => f.mockReset());
   Object.values(auth).forEach((f) => f.mockReset());
   api.isUsernameAvailable.mockResolvedValue(true);
+  resetCodeCooldowns();
 });
 afterEach(() => localStorage.clear());
 
@@ -90,7 +92,7 @@ describe('next, from login to signup and back', () => {
     api.signUp.mockResolvedValue({ status: 'confirm_email' });
     const view = renderAt(`/signup?next=${NEXT_PARAM}`);
     await fillSignup();
-    expect(await screen.findByText('Check your inbox')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Enter the code' })).toBeInTheDocument();
     view.unmount();
 
     auth.getSession.mockResolvedValue({
@@ -106,7 +108,7 @@ describe('next, from login to signup and back', () => {
     api.signUp.mockResolvedValue({ status: 'confirm_email' });
     const view = renderAt(`/signup?next=${NEXT_PARAM}`);
     await fillSignup();
-    expect(await screen.findByText('Check your inbox')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Enter the code' })).toBeInTheDocument();
     view.unmount();
 
     auth.getSession.mockResolvedValue({

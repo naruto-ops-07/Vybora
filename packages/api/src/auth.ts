@@ -88,12 +88,17 @@ export async function resendConfirmation(
 /**
  * Email the user a 6-digit sign-in code. Never creates an account, and stays
  * silent when there is none, so the response can't reveal which emails are
- * registered. Rate limits and other failures are thrown.
+ * registered. Rate limits and other failures are thrown. `emailRedirectTo` is
+ * where the link in the same email lands, a fallback to typing the code.
  */
-export async function sendSignInCode(client: VyboraClient, email: string): Promise<void> {
+export async function sendSignInCode(
+  client: VyboraClient,
+  email: string,
+  emailRedirectTo?: string,
+): Promise<void> {
   const { error } = await client.auth.signInWithOtp({
     email: emailSchema.parse(email),
-    options: { shouldCreateUser: false },
+    options: { shouldCreateUser: false, emailRedirectTo },
   });
   if (!error) return;
   const e = error as { code?: string; message?: string };

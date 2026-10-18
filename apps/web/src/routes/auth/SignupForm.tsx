@@ -11,9 +11,11 @@ import { FormError } from './AuthLayout';
 export interface SignupFormProps {
   onSubmit: (values: SignUpInput) => Promise<void>;
   checkUsername: (username: string) => Promise<boolean>;
+  /** Values to start from, e.g. the email kept by "Use a different email". */
+  defaultValues?: Partial<SignUpInput>;
 }
 
-export function SignupForm({ onSubmit, checkUsername }: SignupFormProps) {
+export function SignupForm({ onSubmit, checkUsername, defaultValues }: SignupFormProps) {
   const [serverError, setServerError] = useState<string | null>(null);
   const [availability, setAvailability] = useState<'idle' | 'checking' | 'available' | 'taken'>(
     'idle',
@@ -23,12 +25,19 @@ export function SignupForm({ onSubmit, checkUsername }: SignupFormProps) {
     handleSubmit,
     watch,
     setError,
+    setFocus,
     formState: { errors, isSubmitting },
   } = useForm<SignUpInput>({
     resolver: zodResolver(signUpSchema),
-    defaultValues: { email: '', password: '', username: '', displayName: '' },
+    defaultValues: { email: '', password: '', username: '', displayName: '', ...defaultValues },
     mode: 'onBlur',
   });
+
+  // Back from the code step to change the address: it's selected, ready to retype.
+  const returning = !!defaultValues?.email;
+  useEffect(() => {
+    if (returning) setFocus('email', { shouldSelect: true });
+  }, [returning, setFocus]);
 
   const username = watch('username');
   useEffect(() => {
