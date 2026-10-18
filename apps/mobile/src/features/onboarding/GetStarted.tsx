@@ -5,7 +5,7 @@ import {
   type GetStartedStep,
 } from '@vybora/core';
 import type { LocalMessage } from '@vybora/e2ee';
-import { router } from 'expo-router';
+import { router, useIsFocused } from 'expo-router';
 import { useEffect, useMemo, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { Icon } from '@/components/Icon';
@@ -195,7 +195,8 @@ export function GetStarted({
   const { userId, profile } = useAuth();
   const [record, update, loaded] = useOnboarding(userId ?? undefined);
   const friends = useFriends();
-  const requests = useFriendRequests();
+  // Poll requests only while the chat list is on screen.
+  const requests = useFriendRequests(useIsFocused());
   const inbox = useSecureInbox();
   const ready =
     !!userId &&
