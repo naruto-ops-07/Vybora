@@ -71,6 +71,12 @@ export const usernameSchema = z
 
 export const emailSchema = z.string().trim().toLowerCase().email('Enter a valid email address');
 
+/** The one-time code emailed for sign-up confirmation and code sign-in. */
+export const emailCodeSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{6}$/, 'Enter the 6-digit code');
+
 export const passwordSchema = z
   .string()
   .min(8, 'Use at least 8 characters')

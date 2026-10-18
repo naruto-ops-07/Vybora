@@ -29,6 +29,17 @@ Nothing in this document has been executed against real infrastructure yet; it i
 8. **Push webhook:** Database → Webhooks → on `INSERT` into `public.notifications` → HTTP POST to the `send-push` function URL with header `x-webhook-secret: <WEBHOOK_SECRET>`.
 9. Grant the first admin via the SQL editor (see README).
 
+### Email codes (step for the owner)
+
+Sign-up confirmation and sign-in by code both use 6-digit codes emailed by Supabase. The local stack gets this from `supabase/config.toml`; the hosted project must be set by hand in the dashboard (Authentication), and nothing here has been applied to it yet:
+
+1. **Email Templates → Confirm signup:** set the subject to `Your VYBORA code` and paste the contents of `supabase/templates/confirmation.html`.
+2. **Email Templates → Magic Link:** set the subject to `Your VYBORA sign-in code` and paste the contents of `supabase/templates/magic_link.html`. Sign-in by code sends this template.
+3. **Sign In / Providers → Email:** set **Email OTP Length** to `6` and **Email OTP Expiration** to `600` seconds (10 minutes, as the templates say).
+4. Keep **Confirm email** on, so a new account has to enter its code before it can sign in.
+
+Both templates show the code (`{{ .Token }}`) and keep the link (`{{ .ConfirmationURL }}`) as a fallback. They contain no tracking pixels or remote images. Locally, `enable_confirmations` stays `false` so the E2E tests can sign up directly.
+
 ### OAuth providers (optional)
 
 Not wired in the UI yet. To add: enable the provider in Auth, add its redirect URL, then call `supabase.auth.signInWithOAuth({ provider, options: { redirectTo: <site>/auth/callback } })`. The callback route already handles PKCE code exchange.

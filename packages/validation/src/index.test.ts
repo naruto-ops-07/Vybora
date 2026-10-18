@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   commentSchema,
+  emailCodeSchema,
   newPasswordSchema,
   profileUpdateSchema,
   publicEnvSchema,
@@ -92,5 +93,13 @@ describe('publicEnvSchema', () => {
   it('fails clearly for missing configuration', () => {
     const r = publicEnvSchema.safeParse({ supabaseUrl: '', supabaseAnonKey: '' });
     expect(r.success).toBe(false);
+  });
+});
+
+describe('emailCodeSchema', () => {
+  it('accepts a 6-digit code and rejects anything else', () => {
+    expect(emailCodeSchema.parse(' 123456 ')).toBe('123456');
+    for (const bad of ['12345', '1234567', '12a456', ''])
+      expect(emailCodeSchema.safeParse(bad).success).toBe(false);
   });
 });

@@ -1,4 +1,10 @@
-import { signUpSchema, type SignInInput, type SignUpInput } from '@vybora/validation';
+import {
+  emailCodeSchema,
+  emailSchema,
+  signUpSchema,
+  type SignInInput,
+  type SignUpInput,
+} from '@vybora/validation';
 import { unwrap, type VyboraClient } from './client';
 
 export type SignUpResult =
@@ -77,6 +83,49 @@ export async function resendConfirmation(
     options: { emailRedirectTo },
   });
   if (error) throw error;
+}
+
+/**
+ * Email the user a 6-digit sign-in code. Never creates an account, and stays
+ * silent when there is none, so the response can't reveal which emails are
+ * registered. Rate limits and other failures are thrown.
+ */
+export async function sendSignInCode(client: VyboraClient, email: string): Promise<void> {
+  const { error } = await client.auth.signInWithOtp({
+    email: emailSchema.parse(email),
+    options: { shouldCreateUser: false },
+  });
+  if (!error) return;
+  const e = error as { code?: string; message?: string };
+  if (
+    e.code === 'otp_disabled' ||
+    e.code === 'user_not_found' ||
+    /signups not allowed/i.test(e.message ?? '')
+  ) {
+    return;
+  }
+  throw error;
+}
+
+/**
+ * Check a code emailed for sign-up confirmation (`signup`) or sign-in
+ * (`signin`). On success the client holds a session. Throws the Supabase
+ * error (e.g. `otp_expired`) when the code is wrong or has expired.
+ */
+export async function verifyEmailCode(
+  client: VyboraClient,
+  input: { email: string; code: string; purpose: 'signup' | 'signin' },
+): Promise<void> {
+  const email = emailSchema.parse(input.email);
+  // Accept a pasted "123 456" / "123-456", but never truncate a longer string.
+  const token = emailCodeSchema.parse(input.code.replace(/\D/g, ''));
+  const { data, error } = await client.auth.verifyOtp({
+    email,
+    token,
+    type: input.purpose === 'signup' ? 'signup' : 'email',
+  });
+  if (error) throw error;
+  if (!data.session) throw new Error('no_session');
 }
 
 /**
