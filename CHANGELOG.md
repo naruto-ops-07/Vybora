@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-18 — Polish pass: homepage, sign-in and settings
+
+- **Homepage**
+  - The intro and closing band speak to friends and groups ("Bring your circle. Keep it between you."); every factual claim is unchanged.
+  - Features lead with the social ones.
+  - The product preview is now "Your circle, in colour": a group chat and friends drawn with the real avatar components and personal colours.
+  - "How a message travels" becomes an ordinary section under reduced motion, with no pinning and no scroll-driven movement, and its steps are buttons. The active step uses a 1 px line.
+- **Sign in / sign up / reset:** the welcome illustration in the brand panel (web), and at the top of the mobile auth screens. The mobile note no longer uses monospace or a middle dot.
+- **Settings:** your shareable username card on Profile (web) and in the mobile profile section. The photo buttons keep a 44 px touch area.
+- **Tests:** web (Vitest) and mobile (Jest) run on 4 workers. One worker per core oversubscribed the machine during `pnpm check` and caused timeouts. Plain `pnpm check` now exits 0: web 197, mobile 125, core 124, api 30, e2ee 23, validation 21, database 129.
+
 ## 2026-10-17 — Friends by username, and "Your circle, in colour"
 
 ### Database

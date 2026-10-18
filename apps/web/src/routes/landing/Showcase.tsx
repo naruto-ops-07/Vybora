@@ -9,32 +9,72 @@ import {
   UsersThreeIcon,
 } from '@phosphor-icons/react';
 import { motion } from 'motion/react';
+import { Avatar, GroupAvatar, type AvatarPerson } from '@/components/ui/Avatar';
 import { LogoMark } from '@/components/ui/Logo';
 import { cn } from '@/lib/cn';
+import { toneVars } from '@/lib/tones';
 import { EASE_OUT } from './motion';
 
-const CHATS = [
+// Sample people for the illustration (ids picked so each lands on a different tone).
+const MAYA: AvatarPerson = { id: 'landing-6', username: 'maya', display_name: 'Maya Chen' };
+const THEO: AvatarPerson = { id: 'landing-1', username: 'theo', display_name: 'Theo Park' };
+const INES: AvatarPerson = { id: 'landing-5', username: 'ines', display_name: 'Ines Duarte' };
+const KOFI: AvatarPerson = { id: 'landing-0', username: 'kofi', display_name: 'Kofi Mensah' };
+const CREW = [INES, THEO, MAYA];
+
+const CHATS: {
+  name: string;
+  preview: string;
+  time: string;
+  unread: number;
+  person?: AvatarPerson;
+  group?: AvatarPerson[];
+  active?: boolean;
+}[] = [
   {
-    name: 'Maya Chen',
-    preview: 'Signed copy attached',
-    time: '09:42',
-    unread: 0,
-    color: '#1D4ED8',
+    name: 'Saturday crew',
+    preview: 'Ines: I’ll bring the speaker',
+    time: '18:04',
+    unread: 3,
+    group: CREW,
     active: true,
   },
-  {
-    name: 'Design review',
-    preview: 'Ari: shipping Thursday',
-    time: '09:10',
-    unread: 3,
-    color: '',
-    group: true,
-  },
-  { name: 'Jonas Weber', preview: 'Voice message', time: 'Tue', unread: 0, color: '#B45309' },
-  { name: 'Priya N.', preview: 'See you there', time: 'Mon', unread: 0, color: '#047857' },
+  { name: 'Maya Chen', preview: 'Voice message', time: '17:20', unread: 0, person: MAYA },
+  { name: 'Kofi Mensah', preview: 'You: see you at 7', time: 'Tue', unread: 0, person: KOFI },
+  { name: 'Theo Park', preview: 'Photo', time: 'Mon', unread: 0, person: THEO },
 ];
 
-/** A static, illustrative rendering of the real workspace (no live data). */
+const avatarOf = (p: AvatarPerson, size: number) => (
+  <Avatar
+    path={null}
+    name={p.username}
+    userId={p.id}
+    displayName={p.display_name}
+    username={p.username}
+    size={size}
+    decorative
+  />
+);
+
+function Incoming({ from, text, time }: { from: AvatarPerson; text: string; time: string }) {
+  return (
+    <div className="flex items-end gap-2">
+      {avatarOf(from, 26)}
+      <div className="max-w-[70%] rounded-lg rounded-bl-sm border border-line bg-bubble-in px-3 py-2 text-sm">
+        <span
+          className="mb-0.5 block text-xs font-semibold"
+          style={{ color: toneVars(from.id).text }}
+        >
+          {from.display_name}
+        </span>
+        {text}
+        <span className="mt-0.5 block text-right font-mono text-[10px] text-subtle">{time}</span>
+      </div>
+    </div>
+  );
+}
+
+/** A static, illustrative rendering of the real workspace (sample people, no live data). */
 export function Showcase() {
   return (
     <section
@@ -47,11 +87,12 @@ export function Showcase() {
             id="showcase-title"
             className="type-wide text-3xl font-semibold tracking-tight md:text-4xl"
           >
-            Built for long conversations
+            Your circle, in colour
           </h2>
           <p className="mt-4 text-lg leading-relaxed text-muted">
-            A calm three-pane workspace on the web, the same chats on your phone. Keyboard
-            shortcuts, a command palette and themes you can share with everyone in a chat.
+            Everyone you talk to gets their own colour, the same on every device, so you can tell
+            who’s talking at a glance. Groups, voice notes and photos on your phone, and the same
+            chats in a roomy workspace on the web.
           </p>
         </div>
 
@@ -62,15 +103,16 @@ export function Showcase() {
           transition={{ duration: 0.9, ease: EASE_OUT }}
           className="mt-12 overflow-hidden rounded-lg border border-line-strong bg-bg"
           role="img"
-          aria-label="Illustration of the VYBORA workspace: chat list, an open conversation and the composer"
+          aria-label="Illustration of the VYBORA workspace: a chat list with friends in their own colours, an open group chat and the composer"
         >
           <div
-            className="grid h-[460px] grid-cols-[56px_1fr] md:grid-cols-[64px_280px_1fr]"
+            className="grid h-[480px] grid-cols-[56px_1fr] md:grid-cols-[64px_280px_1fr]"
             aria-hidden="true"
           >
             <div className="flex flex-col items-center gap-5 border-r border-line bg-surface py-4">
               <LogoMark size={26} />
               <ChatsCircleIcon size={20} className="text-accent" />
+              <UsersThreeIcon size={20} className="text-muted" />
               <GearSixIcon size={20} className="text-muted" />
             </div>
             <div className="hidden flex-col border-r border-line bg-surface md:flex">
@@ -87,23 +129,19 @@ export function Showcase() {
                     'relative flex items-center gap-3 px-4 py-2.5',
                     c.active && 'bg-surface-strong',
                   )}
+                  style={
+                    c.active
+                      ? { ['--avatar-ring' as string]: 'var(--vy-surface-strong)' }
+                      : undefined
+                  }
                 >
                   {c.active && <span className="absolute inset-y-0 left-0 w-0.5 bg-accent" />}
-                  {c.group ? (
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-strong text-accent">
-                      <UsersThreeIcon size={16} />
-                    </span>
-                  ) : (
-                    <span
-                      className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold text-white"
-                      style={{ background: c.color }}
-                    >
-                      {c.name[0]}
-                    </span>
-                  )}
+                  {c.group ? <GroupAvatar members={c.group} size={40} /> : avatarOf(c.person!, 40)}
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center text-sm font-medium">
-                      <span className="truncate">{c.name}</span>
+                      <span className={cn('truncate', c.unread > 0 && 'font-semibold')}>
+                        {c.name}
+                      </span>
                       <span
                         className={cn(
                           'ml-auto font-mono text-[10px]',
@@ -127,34 +165,24 @@ export function Showcase() {
             </div>
             <div className="flex min-w-0 flex-col">
               <div className="flex h-12 items-center gap-3 border-b border-line bg-surface px-4">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1D4ED8] text-xs font-semibold text-white">
-                  M
-                </span>
-                <span className="text-sm font-semibold">Maya Chen</span>
-                <span className="flex items-center gap-1 font-mono text-[10px] text-subtle">
+                <GroupAvatar members={CREW} size={34} />
+                <span className="text-sm font-semibold">Saturday crew</span>
+                <span className="hidden items-center gap-1 font-mono text-[10px] text-subtle sm:flex">
                   <LockSimpleIcon size={10} /> end-to-end encrypted
                 </span>
                 <InfoIcon size={18} className="ml-auto text-muted" />
               </div>
               <div className="flex flex-1 flex-col justify-end gap-2 p-4 md:p-6">
                 <p className="mx-auto mb-2 font-mono text-[10px] text-subtle">Today</p>
-                <div className="max-w-[70%] rounded-lg rounded-bl-sm border border-line bg-bubble-in px-3 py-2 text-sm">
-                  Did the contract come through?
-                  <span className="mt-0.5 block text-right font-mono text-[10px] text-subtle">
-                    09:41
-                  </span>
-                </div>
+                <Incoming from={INES} text="Picnic at the lake, 3 pm?" time="17:58" />
+                <Incoming from={THEO} text="I’ll bring the big blanket" time="18:01" />
                 <div className="ml-auto max-w-[70%] rounded-lg rounded-br-sm bg-[#0F766E] px-3 py-2 text-sm text-white">
-                  Yes. Sending it here so it stays between us.
+                  Count me in. Maya’s coming too
                   <span className="mt-0.5 block text-right font-mono text-[10px] text-white/75">
-                    09:42 read
+                    18:02 read
                   </span>
                 </div>
-                <div className="ml-auto flex w-64 max-w-[70%] items-center gap-3 rounded-lg rounded-br-sm bg-[#0F766E] px-3 py-2.5 text-sm text-white">
-                  <span className="font-mono text-[10px]">PDF</span>
-                  <span className="min-w-0 flex-1 truncate">agreement-v3.pdf</span>
-                  <span className="font-mono text-[10px] text-white/75">2.4 MB</span>
-                </div>
+                <Incoming from={INES} text="I’ll bring the speaker" time="18:04" />
               </div>
               <div className="flex items-center gap-2 border-t border-line bg-surface px-3 py-2.5">
                 <PaperclipIcon size={18} className="text-muted" />

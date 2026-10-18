@@ -19,21 +19,12 @@ import { Journey } from './landing/Journey';
 import { useSmoothScroll } from './landing/motion';
 import { Showcase } from './landing/Showcase';
 
+// Social first (what people come for), then what keeps it private.
 const FEATURES = [
   {
-    icon: <LockSimpleIcon size={20} />,
-    title: 'Encrypted by default',
-    body: 'Every chat uses MLS, the IETF standard for end-to-end encrypted group messaging. There is no unencrypted mode.',
-  },
-  {
-    icon: <DevicesIcon size={20} />,
-    title: 'Phone and web',
-    body: 'Each device has its own keys. Remove a lost device and it’s cut off from new messages immediately.',
-  },
-  {
-    icon: <FingerprintIcon size={20} />,
-    title: 'Verify, don’t trust',
-    body: 'Compare a safety number with a contact to confirm nobody is in the middle. Key changes are flagged.',
+    icon: <UserPlusIcon size={20} />,
+    title: 'Friends by username',
+    body: 'Add people by their exact username, no phone number needed. Choose whether only friends can start chats with you.',
   },
   {
     icon: <UsersThreeIcon size={20} />,
@@ -46,9 +37,19 @@ const FEATURES = [
     body: 'Set a timer per chat, from five minutes to a week. Messages are removed from devices and the server.',
   },
   {
-    icon: <UserPlusIcon size={20} />,
-    title: 'Friends by username',
-    body: 'Add people by their exact username. Choose whether only friends can start chats with you.',
+    icon: <DevicesIcon size={20} />,
+    title: 'Phone and web',
+    body: 'Each device has its own keys. Remove a lost device and it’s cut off from new messages immediately.',
+  },
+  {
+    icon: <LockSimpleIcon size={20} />,
+    title: 'Encrypted by default',
+    body: 'Every chat uses MLS, the IETF standard for end-to-end encrypted group messaging. There is no unencrypted mode.',
+  },
+  {
+    icon: <FingerprintIcon size={20} />,
+    title: 'Verify, don’t trust',
+    body: 'Compare a safety number with a contact to confirm nobody is in the middle. Key changes are flagged.',
   },
 ];
 
@@ -173,7 +174,7 @@ export default function Landing() {
           <section className="bg-[#0F4C47] text-[#E6EEEE]">
             <div className="mx-auto flex max-w-6xl flex-col items-start gap-8 px-5 py-20 md:flex-row md:items-end md:justify-between md:py-24">
               <h2 className="type-display max-w-[16ch] text-4xl md:text-6xl">
-                Start a conversation that stays private.
+                Bring your circle. Keep it between you.
               </h2>
               <div className="flex flex-wrap gap-3">
                 <ButtonLink

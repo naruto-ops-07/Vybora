@@ -103,8 +103,9 @@ export function Hero() {
           transition={{ duration: 0.6, delay: 0.55 }}
         >
           <p className="mt-7 max-w-[50ch] text-lg leading-relaxed text-muted">
-            VYBORA is a private messenger for your phone and the web. Messages, photos and files are
-            encrypted before they’re sent, and only the people in the chat can open them.
+            Chat with your friends and groups on your phone and the web. Every message, photo and
+            voice note is sealed on your device before it’s sent, and only the people in the chat
+            can open it.
           </p>
           <div className="mt-9 flex flex-wrap gap-3">
             <ButtonLink to="/signup" size="lg">

@@ -1,6 +1,7 @@
 import { DeviceMobileIcon, HardDrivesIcon, LockSimpleIcon } from '@phosphor-icons/react';
 import { motion, useMotionValueEvent, useScroll, useTransform } from 'motion/react';
 import { useRef, useState } from 'react';
+import { useA11y } from '@/features/a11y/A11yProvider';
 import { cn } from '@/lib/cn';
 
 const PLAIN = 'Meet at 7.';
@@ -39,25 +40,42 @@ const NODES = [
   { x: 530, label: 'Their phone', icon: <DeviceMobileIcon size={22} /> },
 ];
 
-/** A tall section whose sticky diagram follows the reader's scroll position. */
+/** Where the packet sits, and how much of the route is lit, at each step (reduced motion). */
+const STILL = [
+  { x: 70, trail: 0 },
+  { x: 120, trail: 0.1 },
+  { x: 300, trail: 0.5 },
+  { x: 530, trail: 1 },
+];
+
+/**
+ * A tall section whose sticky diagram follows the reader's scroll position.
+ * Under reduced motion it is an ordinary section instead: no pinning and no
+ * scroll-driven movement; each step is a button that shows its state at once.
+ */
 export function Journey() {
+  const { reduceMotion } = useA11y();
   const ref = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end end'] });
-  const [active, setActive] = useState(0);
+  const [scrolled, setScrolled] = useState(0);
+  const [picked, setPicked] = useState(0);
   useMotionValueEvent(scrollYProgress, 'change', (p) =>
-    setActive(Math.min(STEPS.length - 1, Math.floor(p * STEPS.length))),
+    setScrolled(Math.min(STEPS.length - 1, Math.floor(p * STEPS.length))),
   );
-  const packetX = useTransform(scrollYProgress, [0, 0.3, 0.55, 0.8, 1], [70, 95, 300, 530, 530]);
-  const trail = useTransform(scrollYProgress, [0, 0.8], [0, 1]);
+  const scrollX = useTransform(scrollYProgress, [0, 0.3, 0.55, 0.8, 1], [70, 95, 300, 530, 530]);
+  const scrollTrail = useTransform(scrollYProgress, [0, 0.8], [0, 1]);
+  const active = reduceMotion ? picked : scrolled;
+  const packetX = reduceMotion ? STILL[active]!.x : scrollX;
+  const trail = reduceMotion ? STILL[active]!.trail : scrollTrail;
   const step = STEPS[active]!;
 
   return (
     <section
       ref={ref}
-      className="relative h-[320vh] border-t border-line"
+      className={cn('border-t border-line', reduceMotion ? 'py-20 md:py-28' : 'relative h-[320vh]')}
       aria-labelledby="journey-title"
     >
-      <div className="sticky top-0 flex h-dvh items-center">
+      <div className={reduceMotion ? undefined : 'sticky top-0 flex h-dvh items-center'}>
         <div className="mx-auto grid w-full max-w-6xl items-center gap-10 px-5 md:grid-cols-[0.9fr_1.1fr]">
           <div>
             <h2
@@ -72,10 +90,19 @@ export function Journey() {
                   key={s.title}
                   aria-current={i === active ? 'step' : undefined}
                   className={cn(
-                    'grid grid-cols-[2rem_1fr] gap-x-3 border-l-2 py-3 pl-4 transition-colors duration-300',
+                    'relative grid grid-cols-[2rem_1fr] gap-x-3 border-l py-3 pl-4 transition-colors duration-300',
                     i === active ? 'border-accent' : 'border-line',
                   )}
                 >
+                  {reduceMotion && (
+                    <button
+                      type="button"
+                      className="absolute inset-0 rounded-sm"
+                      aria-label={`Show step ${i + 1}: ${s.title}`}
+                      aria-pressed={i === active}
+                      onClick={() => setPicked(i)}
+                    />
+                  )}
                   <span
                     className={cn(
                       'font-mono text-sm tabular-nums',
@@ -96,7 +123,7 @@ export function Journey() {
                     <span
                       className={cn(
                         'mt-1 text-sm leading-relaxed text-muted transition-opacity duration-300',
-                        i === active ? 'block' : 'hidden md:block',
+                        i === active || reduceMotion ? 'block' : 'hidden md:block',
                         i === active ? 'opacity-100' : 'opacity-60',
                       )}
                     >

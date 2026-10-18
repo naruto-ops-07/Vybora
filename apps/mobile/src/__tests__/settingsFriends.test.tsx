@@ -19,9 +19,16 @@ jest.mock('@/lib/media', () => ({ pickMedia: jest.fn() }));
 // Stable identity: Settings copies the profile into its form on change.
 const mockMe = {
   userId: 'me',
-  profile: { username: 'me', display_name: 'Me', bio: '', website: null, avatar_path: null },
+  profile: {
+    id: 'me',
+    username: 'me',
+    display_name: 'Me',
+    bio: '',
+    website: null,
+    avatar_path: null,
+  },
 };
-jest.mock('@/features/auth/AuthProvider', () => ({ useMe: () => mockMe }));
+jest.mock('@/features/auth/AuthProvider', () => ({ useMe: () => mockMe, useAuth: () => mockMe }));
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn() },
   useIsFocused: () => mockFocused,
@@ -61,6 +68,8 @@ describe('Settings friend requests', () => {
     const qc = await renderSettings();
     await waitFor(() => expect(screen.getByText('1 friend request')).toBeTruthy());
     expect(interval(qc)).toBe(30_000);
+    // Your username, ready to pass on, under your profile.
+    expect(screen.getByRole('button', { name: 'Copy @me' })).toBeTruthy();
   });
 
   it('stops polling while another screen is on top', async () => {

@@ -38,5 +38,8 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
     css: false,
+    // jsdom suites are CPU-heavy: one worker per core oversubscribes the machine (and
+    // `pnpm check` runs other packages alongside), which turns waits into timeouts.
+    maxWorkers: 4,
   },
 });

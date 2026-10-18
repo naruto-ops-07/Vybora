@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { PageSpinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { useAuth, useMe } from '@/features/auth/AuthProvider';
+import { HandleCard } from '@/features/friends/HandleCard';
 import { prepareFile, releasePreview } from '@/lib/media';
 import { supabase, supabaseConfig } from '@/lib/supabase';
 import { ProfileForm } from './ProfileForm';
@@ -83,6 +84,7 @@ export default function EditProfilePage() {
             <Button
               variant="ghost"
               size="sm"
+              className="touch-target"
               onClick={async () => {
                 try {
                   await setAvatarPath(supabase, userId, null);
@@ -95,7 +97,12 @@ export default function EditProfilePage() {
               Remove
             </Button>
           )}
-          <Button size="sm" loading={uploading} onClick={() => input.current?.click()}>
+          <Button
+            size="sm"
+            className="touch-target"
+            loading={uploading}
+            onClick={() => input.current?.click()}
+          >
             Change photo
           </Button>
         </div>
@@ -108,6 +115,12 @@ export default function EditProfilePage() {
           onChange={(e) => void changeAvatar(e.target.files?.[0])}
         />
       </div>
+      <section aria-labelledby="share-handle-title">
+        <h2 id="share-handle-title" className="mb-3 text-sm font-semibold">
+          Your username
+        </h2>
+        <HandleCard />
+      </section>
       <ProfileForm
         initial={{
           username: profile.username,

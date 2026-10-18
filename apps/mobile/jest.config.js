@@ -2,6 +2,9 @@
 module.exports = {
   preset: 'jest-expo',
   testMatch: ['**/__tests__/**/*.test.ts?(x)'],
+  // One worker per core oversubscribes the machine when `pnpm check` runs every
+  // package's tests at once, which turns 5 s test limits into timeouts.
+  maxWorkers: 4,
   moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
   // Workspace packages ship TypeScript source; let babel transform them.
   transformIgnorePatterns: [

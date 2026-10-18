@@ -17,6 +17,7 @@ import { Alert, KeyboardAvoidingView, Platform, ScrollView, Switch, View } from 
 import { Avatar, Button, Loading, Text, TextField } from '@/components/ui';
 import { useMe } from '@/features/auth/AuthProvider';
 import { Row, SectionCard } from '@/features/connect/ui/primitives';
+import { HandleCard } from '@/features/friends/HandleCard';
 import { useFriendRequests } from '@/features/friends/hooks';
 import { pickMedia } from '@/lib/media';
 import { supabase, supabaseConfig } from '@/lib/supabase';
@@ -172,6 +173,7 @@ export default function Settings() {
                 disabled={avatar.isPending}
               />
             </View>
+            <HandleCard variant="compact" />
             <TextField
               label="Username"
               value={form.username}

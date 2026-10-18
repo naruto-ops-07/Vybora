@@ -1,6 +1,7 @@
 import { FingerprintIcon, KeyIcon, LockSimpleIcon } from '@phosphor-icons/react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
+import { WelcomeIllustration } from '@/components/illustrations';
 import { Logo } from '@/components/ui/Logo';
 
 const POINTS = [
@@ -27,7 +28,8 @@ export function AuthLayout({
           <Logo />
         </Link>
         <div className="max-w-sm">
-          <p className="type-display text-4xl">
+          <WelcomeIllustration width={248} />
+          <p className="type-display mt-10 text-4xl">
             Conversations that stay between the people in them.
           </p>
           <ul className="mt-8 space-y-3">

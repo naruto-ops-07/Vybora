@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { Icon } from '@/components/Icon';
+import { WelcomeIllustration } from '@/components/illustrations';
 import { Text } from '@/components/ui';
 import { radii, useTheme } from '@/lib/theme';
 
@@ -50,6 +51,7 @@ export function AuthScreen({
             <LogoMark size={28} />
             <Text style={{ fontSize: 16, fontWeight: '700', letterSpacing: 2.2 }}>VYBORA</Text>
           </View>
+          <WelcomeIllustration width={176} />
           <View style={{ gap: 6 }}>
             <Text variant="title" accessibilityRole="header">
               {title}
@@ -59,8 +61,8 @@ export function AuthScreen({
           <View style={{ gap: 16 }}>{children}</View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Icon name="lock" size={14} color={t.accent} />
-            <Text variant="mono" style={{ flex: 1 }}>
-              End-to-end encrypted · keys stay on your devices
+            <Text variant="small" style={{ flex: 1, color: t.textMuted }}>
+              End-to-end encrypted. Your keys stay on your devices.
             </Text>
           </View>
           {footer && (
