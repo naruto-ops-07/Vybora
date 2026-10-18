@@ -1,17 +1,13 @@
-import { readFileSync, readdirSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { PGlite, type Transaction } from '@electric-sql/pglite';
+import { type PGlite, type Transaction } from '@electric-sql/pglite';
+import {
+  applyMigrations,
+  bootDatabase,
+  grantsModeFromEnv,
+  migrationFiles,
+  type GrantsMode,
+} from './boot.mjs';
 
-const here = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(here, '..', '..', 'migrations');
-
-export function migrationFiles(): string[] {
-  return readdirSync(migrationsDir)
-    .filter((f) => f.endsWith('.sql'))
-    .sort()
-    .map((f) => join(migrationsDir, f));
-}
+export { migrationFiles, type GrantsMode };
 
 export type Actor = { id: string } | 'anon' | 'service';
 
@@ -23,41 +19,37 @@ export interface Row {
  * A real Postgres 17 (PGlite/WASM) with the Supabase shim and all VYBORA
  * migrations applied. Queries can run as anon, as a specific authenticated
  * user (via request.jwt.claims, exactly like PostgREST), or as service_role.
+ *
+ * The whole suite runs twice (vitest.config.ts): once with Supabase's old
+ * default privileges and once in strict mode without them, the way newer
+ * hosted projects behave (see harness/boot.mjs).
  */
 export class TestDb {
-  private constructor(readonly pg: PGlite) {}
+  private constructor(
+    readonly pg: PGlite,
+    readonly grants: GrantsMode,
+  ) {}
 
   /**
    * @param upTo apply only migrations whose filename sorts at or before this
    *   prefix (e.g. '20261010000010'); use `applyRemainingMigrations()` later to
    *   test a migration against data created under the previous schema.
+   * @param options.grants privilege mode; defaults to the Vitest project's
+   *   (VYBORA_DB_GRANTS), or 'defaults' when unset.
    */
-  static async create(upTo?: string): Promise<TestDb> {
-    const pg = new PGlite();
-    await pg.exec(readFileSync(join(here, 'supabase-shim.sql'), 'utf8'));
-    const db = new TestDb(pg);
-    await db.apply(migrationFiles().filter((f) => !upTo || basename(f) <= `${upTo}~`));
+  static async create(upTo?: string, options: { grants?: GrantsMode } = {}): Promise<TestDb> {
+    const grants = options.grants ?? grantsModeFromEnv();
+    const db = new TestDb(await bootDatabase({ mode: grants, ...(upTo ? { upTo } : {}) }), grants);
     db.applied = upTo;
     return db;
   }
 
   private applied: string | undefined;
 
-  private async apply(files: string[]) {
-    for (const file of files) {
-      try {
-        await this.pg.exec(readFileSync(file, 'utf8'));
-      } catch (error) {
-        throw new Error(`Migration failed: ${file}\n${(error as Error).message}`);
-      }
-    }
-  }
-
   /** Apply the migrations skipped by `create(upTo)`. */
   async applyRemainingMigrations() {
     if (!this.applied) return;
-    const after = `${this.applied}~`;
-    await this.apply(migrationFiles().filter((f) => basename(f) > after));
+    await applyMigrations(this.pg, migrationFiles({ after: this.applied }));
     this.applied = undefined;
   }
 

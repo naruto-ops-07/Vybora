@@ -3,7 +3,9 @@
 --   * roles anon / authenticated / service_role (service_role bypasses RLS)
 --   * auth.users + auth.uid()/auth.role()/auth.jwt() reading request.jwt.claims
 --   * storage.buckets / storage.objects / storage.foldername()
---   * default privileges matching Supabase (grant all → then migrations revoke)
+--   * default privileges matching older Supabase projects (grant all → then
+--     migrations revoke); the strict test mode (harness/boot.mjs) drops the
+--     three schema-public lines below, like newer hosted projects
 --   * the supabase_realtime publication
 
 create role anon nologin noinherit;

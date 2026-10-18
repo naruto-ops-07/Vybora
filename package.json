@@ -20,6 +20,9 @@
     "format:check": "prettier --check .",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "db:types": "node scripts/gen-db-types.mjs",
+    "db:grants": "node scripts/gen-explicit-grants.mjs",
+    "db:push": "npx supabase@latest db push",
+    "db:status": "npx supabase@latest migration list",
     "seed:demo": "node scripts/seed-demo.mjs",
     "brand:assets": "node scripts/generate-brand-assets.mjs",
     "brand:tones": "node scripts/generate-tones.mjs"
