@@ -274,10 +274,6 @@ function Details() {
     if (m.id === userId) return;
     Alert.alert(nicknames.data?.[m.id] ?? m.username, undefined, [
       {
-        text: 'View profile',
-        onPress: () => router.push({ pathname: '/u/[username]', params: { username: m.username } }),
-      },
-      {
         text: 'Verify safety number',
         onPress: () =>
           router.push({
@@ -388,13 +384,6 @@ function Details() {
               description="Only shown if they choose to share it with contacts."
             />
           )}
-          <Row
-            icon="user"
-            label="View profile"
-            onPress={() =>
-              router.push({ pathname: '/u/[username]', params: { username: peer.username } })
-            }
-          />
         </SectionCard>
       )}
 
