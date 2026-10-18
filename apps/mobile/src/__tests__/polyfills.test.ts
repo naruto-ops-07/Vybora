@@ -25,7 +25,11 @@ describe('crypto polyfills', () => {
 
   it('keeps native WebCrypto where it already exists', () => {
     const native = { getRandomValues: () => undefined, subtle: { digest: jest.fn() } };
-    Object.defineProperty(globalThis, 'crypto', { value: native, configurable: true, writable: true });
+    Object.defineProperty(globalThis, 'crypto', {
+      value: native,
+      configurable: true,
+      writable: true,
+    });
     jest.isolateModules(() => {
       require('@/lib/connect/polyfills');
     });

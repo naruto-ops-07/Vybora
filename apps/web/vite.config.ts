@@ -41,5 +41,9 @@ export default defineConfig({
     // jsdom suites are CPU-heavy: one worker per core oversubscribes the machine (and
     // `pnpm check` runs other packages alongside), which turns waits into timeouts.
     maxWorkers: 4,
+    // The sign-up code tests type a whole form key by key (2–3.5 s alone). Under
+    // `pnpm check`, with mobile and the database suite running alongside, they
+    // passed 5 s and timed out. 15 s matches the mobile Jest budget.
+    testTimeout: 15_000,
   },
 });
