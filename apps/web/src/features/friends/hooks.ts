@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router';
 import { useToast } from '@/components/ui/Toast';
 import { useMe } from '@/features/auth/AuthProvider';
 import { supabase } from '@/lib/supabase';
+import { logDevError } from '@/lib/devLog';
 
 type Requests = Awaited<ReturnType<typeof fetchFriendRequests>>;
 type Person = Pick<Friend, 'userId' | 'username' | 'displayName'>;
@@ -165,13 +166,15 @@ export function useMessageFriend() {
       void qc.invalidateQueries({ queryKey: qk.connect.inbox });
       navigate(`/messages/${id}`);
     },
-    onError: (e, friend) =>
+    onError: (e, friend) => {
+      logDevError('start chat', e);
       toast.show(
         String((e as { message?: unknown }).message ?? '').includes('cannot_message')
           ? `You can’t message ${nameOf(friend)} right now.`
           : friendlyError(e),
         'error',
-      ),
+      );
+    },
   });
   const open = (friend: Friend) => {
     const existing = qc

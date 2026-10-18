@@ -18,6 +18,7 @@ import { Alert } from 'react-native';
 import { useMe } from '@/features/auth/AuthProvider';
 import { useHaptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
+import { logDevError } from '@/lib/devLog';
 
 type Requests = Awaited<ReturnType<typeof fetchFriendRequests>>;
 type Person = Pick<Friend, 'username' | 'displayName'>;
@@ -162,13 +163,15 @@ export function useMessageFriend() {
       void qc.invalidateQueries({ queryKey: qk.connect.inbox });
       openChat(id);
     },
-    onError: (e, friend) =>
+    onError: (e, friend) => {
+      logDevError('start chat', e);
       Alert.alert(
         'Couldn’t start chat',
         String((e as { message?: unknown } | null)?.message ?? '').includes('cannot_message')
           ? `You can’t message ${nameOf(friend)} right now.`
           : friendlyError(e),
-      ),
+      );
+    },
   });
   const open = (friend: Friend) => {
     if (create.isPending) return;
