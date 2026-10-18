@@ -19,6 +19,8 @@ Success: a person coming from WhatsApp finds every everyday thing they rely on, 
 
 Build in this order; each part gets its own plan and review.
 
+**How it gets built (owner):** the main session stays on Claude Opus 5.5 to plan, review and integrate. All UI design and UI implementation work (every screen and component in every part) is done by Claude Fable 5.1 subagents (`model: fable`), and Opus reviews each result.
+
 ### Next round (owner: "next round")
 
 Voice and video calls, Status / Stories, communities and channels, chat backup and export **(call: the owner deferred calls and Status; the other two were grouped with them)**.
