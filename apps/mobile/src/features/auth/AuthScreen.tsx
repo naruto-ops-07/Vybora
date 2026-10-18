@@ -1,11 +1,19 @@
 import type { ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { Icon } from '@/components/Icon';
 import { WelcomeIllustration } from '@/components/illustrations';
+import { Text as BaseText } from '@/components/Text';
 import { Text } from '@/components/ui';
-import { radii, useTheme } from '@/lib/theme';
+import { font, radii, useTheme } from '@/lib/theme';
 
 /** VYBORA mark (same geometry as the web logo): flat, two colours. */
 export function LogoMark({ size = 32 }: { size?: number }) {
@@ -32,7 +40,8 @@ export function AuthScreen({
   footer,
 }: {
   title: string;
-  subtitle?: string;
+  /** Plain text, or text with a `<Strong>` part (an email address). */
+  subtitle?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
 }) {
@@ -99,5 +108,59 @@ export function FormError({ message }: { message: string | null }) {
     >
       <Text style={{ color: t.danger, fontWeight: '500' }}>{message}</Text>
     </View>
+  );
+}
+
+/** The part of a sentence to read first, such as the email a code went to. */
+export function Strong({ children }: { children: ReactNode }) {
+  const t = useTheme();
+  return <BaseText style={{ color: t.text, fontFamily: font.semibold }}>{children}</BaseText>;
+}
+
+/**
+ * A quiet text action under a form ("Use a different email"). At least 44 px
+ * tall; when disabled it stays legible in a quieter colour instead of fading.
+ */
+export function AuthTextButton({
+  label,
+  children,
+  onPress,
+  disabled,
+  busy,
+  tone = 'accent',
+}: {
+  /** What a screen reader says; also the visible text unless `children` is given. */
+  label: string;
+  children?: ReactNode;
+  onPress: () => void;
+  disabled?: boolean;
+  busy?: boolean;
+  tone?: 'accent' | 'muted';
+}) {
+  const t = useTheme();
+  const color = disabled ? t.textSubtle : tone === 'muted' ? t.textMuted : t.accent;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!disabled, busy: !!busy }}
+      disabled={disabled}
+      onPress={onPress}
+      hitSlop={4}
+      style={({ pressed }) => ({
+        minHeight: 44,
+        paddingHorizontal: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        opacity: pressed ? 0.7 : 1,
+      })}
+    >
+      {busy && <ActivityIndicator size="small" color={t.accent} />}
+      <BaseText style={{ color, fontFamily: font.semibold, fontSize: 15, textAlign: 'center' }}>
+        {children ?? label}
+      </BaseText>
+    </Pressable>
   );
 }

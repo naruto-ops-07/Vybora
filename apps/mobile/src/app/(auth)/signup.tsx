@@ -1,14 +1,24 @@
-import { isUsernameAvailable, signUp } from '@vybora/api';
-import { friendlyError } from '@vybora/core';
-import { signUpSchema } from '@vybora/validation';
+import { isUsernameAvailable, resendConfirmation, signUp } from '@vybora/api';
+import { EMAIL_CODE_LENGTH, friendlyError } from '@vybora/core';
+import { emailSchema, signUpSchema } from '@vybora/validation';
 import * as Linking from 'expo-linking';
-import { Link } from 'expo-router';
+import { Link, router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Button, Empty, Text, TextField } from '@/components/ui';
-import { AuthScreen, FormError } from '@/features/auth/AuthScreen';
+import { Button, Text, TextField } from '@/components/ui';
+import { AuthScreen, AuthTextButton, FormError, Strong } from '@/features/auth/AuthScreen';
+import { codeCooldownLeft, markCodeSent } from '@/features/auth/codeCooldown';
+import { EmailCodeStep } from '@/features/auth/EmailCodeStep';
+import { handOffToLogin } from '@/features/auth/loginHandoff';
 import { logDevError } from '@/lib/devLog';
 import { supabase } from '@/lib/supabase';
 import { font, useTheme } from '@/lib/theme';
+
+type Stage =
+  { step: 'form' } | { step: 'code'; email: string } | { step: 'registered'; email: string };
+
+// The link in the same email opens the app via the vybora:// scheme
+// (must be allow-listed in Supabase Auth).
+const callbackUrl = () => Linking.createURL('/auth/callback');
 
 export default function Signup() {
   const t = useTheme();
@@ -19,7 +29,10 @@ export default function Signup() {
     'idle',
   );
   const [busy, setBusy] = useState(false);
-  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [stage, setStage] = useState<Stage>({ step: 'form' });
+  // Only "Use a different email" puts the keyboard back on the address. It is
+  // read when the form mounts, so nothing during a submit can move focus.
+  const [focusEmail, setFocusEmail] = useState(false);
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   useEffect(() => {
@@ -39,8 +52,27 @@ export default function Signup() {
     };
   }, [form.username]);
 
+  /** Back to the form with the email (and display name) kept. */
+  const backToForm = ({ keepUsername }: { keepUsername: boolean }) => {
+    // After a code was sent, the username is held by the unconfirmed account,
+    // so offering it again would only say "taken". A password is never kept.
+    setForm((f) => ({ ...f, username: keepUsername ? f.username : '', password: '' }));
+    setErrors({});
+    setServerError(null);
+    setFocusEmail(true);
+    setStage({ step: 'form' });
+  };
+
   const submit = async () => {
     setServerError(null);
+    // Within a minute of the last code to this address, that code still works
+    // and the account is already waiting for it: go back instead of signing up again.
+    const address = emailSchema.safeParse(form.email);
+    if (address.success && codeCooldownLeft('signup', address.data) > 0) {
+      setErrors({});
+      setStage({ step: 'code', email: address.data });
+      return;
+    }
     const parsed = signUpSchema.safeParse(form);
     if (!parsed.success || availability === 'taken') {
       const errs = parsed.success
@@ -53,11 +85,14 @@ export default function Signup() {
     setErrors({});
     setBusy(true);
     try {
-      // Email links open the app via the vybora:// scheme (must be allow-listed in Supabase Auth).
-      const result = await signUp(supabase, form, Linking.createURL('/auth/callback'));
-      if (result.status === 'already_registered')
-        setServerError('An account with this email already exists.');
-      else if (result.status === 'confirm_email') setSentTo(form.email);
+      const { email } = parsed.data;
+      const result = await signUp(supabase, form, callbackUrl());
+      if (result.status === 'already_registered') setStage({ step: 'registered', email });
+      else if (result.status === 'confirm_email') {
+        markCodeSent('signup', email);
+        setStage({ step: 'code', email });
+      }
+      // signed_in: the auth layout redirects on the session change.
     } catch (e) {
       logDevError('signup', e);
       setServerError(friendlyError(e));
@@ -66,17 +101,58 @@ export default function Signup() {
     }
   };
 
-  if (sentTo) {
+  if (stage.step === 'code') {
+    const { email } = stage;
     return (
-      <AuthScreen title="Check your inbox">
-        <Empty
-          icon="mail"
-          title="Confirm your email"
-          body={`We sent a link to ${sentTo}. Open it on this device to finish signing up.`}
+      <AuthScreen
+        title="Enter the code"
+        subtitle={
+          <>
+            {`We sent a ${EMAIL_CODE_LENGTH}-digit code to `}
+            <Strong>{email}</Strong>.
+          </>
+        }
+        footer={
+          <Text variant="muted" style={{ textAlign: 'center' }}>
+            You can also open the link in the email on this device.
+          </Text>
+        }
+      >
+        <EmailCodeStep
+          key={email}
+          email={email}
+          purpose="signup"
+          onResend={() => resendConfirmation(supabase, email, callbackUrl())}
+          onChangeEmail={() => backToForm({ keepUsername: false })}
         />
-        <Link href="/login" style={{ color: t.accent, fontWeight: '700', textAlign: 'center' }}>
-          Back to sign in
-        </Link>
+      </AuthScreen>
+    );
+  }
+
+  if (stage.step === 'registered') {
+    const { email } = stage;
+    // The address rides along in memory, never in the route (see loginHandoff).
+    const openLogin = (useCode: boolean) => {
+      handOffToLogin({ email, useCode });
+      router.push('/login');
+    };
+    return (
+      <AuthScreen
+        title="That email already has an account"
+        subtitle={
+          <>
+            Sign in as <Strong>{email}</Strong> instead.
+          </>
+        }
+      >
+        <Button title="Sign in with a code" onPress={() => openLogin(true)} />
+        <Button title="Sign in with password" variant="outline" onPress={() => openLogin(false)} />
+        <AuthTextButton
+          label="Use a different email"
+          tone="muted"
+          // Nothing was created for this address, so the username is still free to use.
+          onPress={() => backToForm({ keepUsername: true })}
+        />
       </AuthScreen>
     );
   }
@@ -102,6 +178,7 @@ export default function Signup() {
         autoCapitalize="none"
         keyboardType="email-address"
         autoComplete="email"
+        autoFocus={focusEmail}
         error={errors.email}
       />
       <TextField
