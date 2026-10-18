@@ -166,6 +166,18 @@ High contrast keeps its own token set, flattens gradients and shadows, and meets
 - **Sealed send and friendship joined:** unchanged in behaviour, restyled.
 - **Motion:** each look may add one ambient effect: Aurora's slow light drift, Bloom's soft glow. Each is off under reduced motion. No hover lift or scale on controls **(call: kept, because it stops jank in lists)**.
 
+### Empty chat list: a fresh account (owner request)
+
+When the Chats tab has no chats, the empty state depends on whether the person has friends yet. Web InboxPane and the mobile inbox use the same rule, shared in `packages/core`:
+
+| State                                            | Heading            | Sentence                                                       | Actions                                                                                                                                          |
+| ------------------------------------------------ | ------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| No friends, no outgoing requests (fresh account) | **No friends yet** | "Find your friends by their username and start chatting."      | Primary **Find friends** (opens Friends with the username field focused); secondary **Share your username** (opens the share sheet / HandleCard) |
+| No friends, but requests sent                    | **No friends yet** | "Waiting on {n} request(s). Find more friends while you wait." | **Find friends**                                                                                                                                 |
+| Friends, no chats                                | **No chats yet**   | "Say hi to a friend."                                          | Up to 5 friends as one-tap avatars (opens or creates the direct chat), then **New message**                                                      |
+
+The friends query decides which state shows. While it loads, the state stays neutral (no flash of "No friends yet"). If it fails, the "Friends, no chats" copy is shown without the avatars **(call)**. The Get started panel stays above it.
+
 ### Coverage (every surface)
 
 - **Web:** landing, sign in / up / reset / code, the 404 page, workspace (rail, chat list, chat, details, friends, new message, command palette), settings (all pages including Appearance and App lock), and the dev gallery.
