@@ -52,6 +52,6 @@ supabase gen types typescript --local > packages/types/src/database.ts
 
 ## Migration workflow & rollback
 
-1. New file per change, never edit applied migrations. 2. `pnpm test:db` + `pnpm db:types`. 3. Review SQL in PR. 4. `supabase db push` to staging, verify, then production.
+1. New file per change, never edit applied migrations; grant explicitly whatever a new table, view, sequence or function needs (hosted projects have no default privileges, see `20261018000014_explicit_client_grants.sql`). 2. `pnpm test:db` (runs with and without default privileges and fails on any difference) + `pnpm db:types`. 3. Review SQL in PR. 4. `pnpm db:push` to staging, verify, then production.
 
 Rollback: write a forward "down" migration (Supabase applies forward-only). Before risky changes take a backup (`supabase db dump -f backup.sql` or dashboard PITR on paid plans). Destructive changes (dropping columns/tables) must be split: stop writing → deploy → drop in a later migration.

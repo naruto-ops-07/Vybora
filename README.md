@@ -87,6 +87,9 @@ pnpm dev:mobile           # Expo dev server; press a / i, or scan with Expo Go
 | `pnpm test:db`      | only the database/RLS/storage-policy suite                                                            |
 | `pnpm test:e2e`     | Playwright against the production web build (smoke always; social flows when `E2E_SUPABASE_*` is set) |
 | `pnpm db:types`     | regenerate `packages/types/src/database.ts` from the migrations                                       |
+| `pnpm db:status`    | list migrations applied on the linked Supabase project (`npx supabase@latest migration list`)         |
+| `pnpm db:push`      | apply pending migrations to the linked project (`npx supabase@latest db push`; see DEPLOYMENT.md)     |
+| `pnpm db:grants`    | write a new migration of explicit grants for the API roles (only when the drift guard asks for one)   |
 | `pnpm brand:assets` | regenerate app icons / splash / PWA icons from the logo geometry                                      |
 | `pnpm brand:tones`  | regenerate the original message tones (WAV) for web and mobile                                        |
 | `pnpm build`        | production web build + type-checked packages                                                          |
@@ -100,9 +103,9 @@ Public values (URL, anon/publishable key, site URL) are safe in client bundles b
 Migrations live in `supabase/migrations` and are applied in filename order. Workflow:
 
 1. Add a new timestamped `.sql` file (never edit an applied migration).
-2. `pnpm test:db` — runs every migration on a fresh Postgres and executes the RLS suite.
+2. `pnpm test:db` — runs every migration on a fresh Postgres and executes the RLS suite, with and without Supabase's old default privileges. Grant explicitly whatever a new object needs: hosted projects no longer add default grants, and the suite fails if a migration relies on them.
 3. `pnpm db:types` — regenerate types; CI fails if they drift.
-4. Review, then `supabase db push` to staging, then production.
+4. Review, then `pnpm db:push` to staging, then production (one-time CLI setup in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#one-time-setup)).
 
 ## Troubleshooting
 

@@ -5,11 +5,7 @@ Nothing in this document has been executed against real infrastructure yet; it i
 ## 1. Supabase (backend)
 
 1. Create a project (staging first, then production). Note the URL, anon/publishable key and service-role key.
-2. Link and push migrations:
-   ```bash
-   supabase link --project-ref <ref>
-   supabase db push            # review the plan before confirming
-   ```
+2. Link the repo once and push migrations: see [One-time setup](#one-time-setup) below, then `pnpm db:push` (review the plan before confirming).
 3. **Auth → URL configuration**
    - Site URL: `https://<your-domain>`
    - Redirect URLs: `https://<your-domain>/auth/callback`, `https://<your-domain>/reset-password`, `vybora://auth/callback`
@@ -28,6 +24,24 @@ Nothing in this document has been executed against real infrastructure yet; it i
    `POST https://<ref>.functions.supabase.co/cleanup-media` with header `x-cron-secret: <CRON_SECRET>`.
 8. **Push webhook:** Database → Webhooks → on `INSERT` into `public.notifications` → HTTP POST to the `send-push` function URL with header `x-webhook-secret: <WEBHOOK_SECRET>`.
 9. Grant the first admin via the SQL editor (see README).
+
+### One-time setup
+
+The repo has no Supabase CLI dependency, so the scripts run it with `npx supabase@latest` (as the other docs do).
+
+```bash
+npx supabase@latest login                        # once per machine
+npx supabase@latest link --project-ref <ref>     # once per checkout; the ref is in the project URL
+```
+
+Then, whenever new migrations land:
+
+```bash
+pnpm db:status   # supabase migration list: which migrations the linked project has applied
+pnpm db:push     # supabase db push: applies the pending ones; review the list before confirming
+```
+
+**Migration `20261018000014_explicit_client_grants.sql`** grants the API roles (`anon`, `authenticated`, `service_role`) explicitly what the earlier migrations got from Supabase's old default privileges. Newer hosted projects don't have those defaults: without this migration "Say hi" (`create_secure_conversation`) and the other encrypted-chat RPCs fail with "You don't have permission to do that", and the Edge Functions' service role has no access to the tables. It only adds grants, and only ones the test suite already runs with, so what the migrations revoked (the friend and last-seen tables, the service-only maintenance RPCs) stays revoked. It is safe to apply more than once. The database suite runs with and without the defaults and fails if a new migration relies on them (see [TESTING.md](TESTING.md#how-the-database-suite-works)).
 
 ### Email codes (step for the owner)
 
