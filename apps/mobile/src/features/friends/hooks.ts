@@ -109,7 +109,8 @@ export function useFriendActions() {
       );
     },
     onSuccess: (_, { accept }) => {
-      if (accept) haptic('light');
+      // Friendship joined: the medium tap, once.
+      if (accept) haptic('medium');
     },
     onSettled: settle,
   });

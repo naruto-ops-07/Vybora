@@ -2,7 +2,7 @@ import { peerOf, qk, sendFriendRequest, type Friend, type FriendRequest } from '
 import { formatRelativeTime, usernameFromAddParam } from '@vybora/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { Stack, useIsFocused, useLocalSearchParams } from 'expo-router';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, FlatList, RefreshControl, View } from 'react-native';
 import { Text } from '@/components/Text';
 import { Button } from '@/components/ui';
@@ -10,6 +10,7 @@ import { useMe } from '@/features/auth/AuthProvider';
 import { useOnlinePeers, useSecureInbox } from '@/features/connect/hooks';
 import { useCc } from '@/features/connect/ui/primitives';
 import { AddFriendForm } from '@/features/friends/AddFriendForm';
+import { FriendJoinedCard, type JoinedPerson } from '@/features/friends/FriendJoined';
 import { FriendRow } from '@/features/friends/FriendRow';
 import { HandleCard } from '@/features/friends/HandleCard';
 import {
@@ -21,8 +22,22 @@ import {
 } from '@/features/friends/hooks';
 import { RequestRow } from '@/features/friends/RequestRow';
 import { FriendsEmpty } from '@/features/onboarding/EmptyStates';
+import { useA11y } from '@/lib/a11y';
 import { radii } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
+
+/** The friendship the joined card is for (or waiting to show). */
+interface Joined {
+  run: number;
+  /** An accepted request: who it was. */
+  person?: JoinedPerson;
+  username: string;
+  /** I accepted their request, or my `send` found theirs waiting. */
+  via: 'accept' | 'send';
+  /** When the friends list had last settled, as it happened. */
+  settles: number;
+  shown: boolean;
+}
 
 function SectionHeading({ title, count }: { title: string; count?: number }) {
   const cc = useCc();
@@ -96,7 +111,8 @@ function Retry({ message, onRetry }: { message: string; onRetry: () => void }) {
 export default function FriendsScreen() {
   const cc = useCc();
   const qc = useQueryClient();
-  const { userId } = useMe();
+  const { userId, profile } = useMe();
+  const { reduceMotion } = useA11y();
   const focused = useIsFocused();
   const { add } = useLocalSearchParams<{ add?: string }>();
   const prefill = usernameFromAddParam(typeof add === 'string' ? add : null);
@@ -107,6 +123,45 @@ export default function FriendsScreen() {
   const message = useMessageFriend();
 
   const list = useMemo(() => friends.data ?? [], [friends.data]);
+
+  // A new friendship: one card at a time, the latest wins; `run` restarts the slide.
+  const [joined, setJoined] = useState<Joined | null>(null);
+  const settles = Math.max(friends.dataUpdatedAt, friends.errorUpdatedAt);
+  const settlesRef = useRef(settles);
+  settlesRef.current = settles;
+  const join = (who: Pick<Joined, 'person' | 'username' | 'via'>) =>
+    setJoined((j) => ({
+      run: (j?.run ?? 0) + 1,
+      ...who,
+      settles: settlesRef.current,
+      shown: false,
+    }));
+  const listed = joined
+    ? list.find((f) =>
+        joined.person ? f.userId === joined.person.userId : f.username === joined.username,
+      )
+    : undefined;
+  // An accepted request carries the person; a `send` that found theirs waits for the list.
+  const joinedFriend: JoinedPerson | undefined =
+    listed ?? (joined?.via === 'accept' && !friends.isSuccess ? joined.person : undefined);
+  const settledSinceJoin = !friends.isFetching && settles > (joined?.settles ?? Infinity);
+  useEffect(() => {
+    if (!joined) return;
+    if (joinedFriend) {
+      if (!joined.shown) setJoined({ ...joined, shown: true });
+      return;
+    }
+    // Shown and since removed, or never found once the list came back: drop it,
+    // so a later refetch can't pop up a stale card. The add form's message stays.
+    if (joined.shown || settledSinceJoin) setJoined(null);
+  }, [joined, joinedFriend, settledSinceJoin]);
+  const joinedRun = joinedFriend ? joined!.run : 0;
+  const me: JoinedPerson = {
+    userId,
+    username: profile?.username ?? '',
+    displayName: profile?.display_name ?? null,
+    avatarPath: profile?.avatar_path ?? null,
+  };
   const incoming = requests.data?.incoming ?? [];
   const outgoing = requests.data?.outgoing ?? [];
 
@@ -128,7 +183,16 @@ export default function FriendsScreen() {
     async (username: string) => {
       const result = await sendFriendRequest(supabase, username);
       void qc.invalidateQueries({ queryKey: qk.connect.friendRequests });
-      if (result === 'accepted') void qc.invalidateQueries({ queryKey: qk.connect.friends });
+      if (result === 'accepted') {
+        setJoined((j) => ({
+          run: (j?.run ?? 0) + 1,
+          username,
+          via: 'send',
+          settles: settlesRef.current,
+          shown: false,
+        }));
+        void qc.invalidateQueries({ queryKey: qk.connect.friends });
+      }
       return result;
     },
     [qc],
@@ -142,7 +206,22 @@ export default function FriendsScreen() {
 
   const header = (
     <View>
-      <AddFriendForm onSubmit={send} prefill={prefill} />
+      {joinedFriend && (
+        <FriendJoinedCard
+          me={me}
+          friend={joinedFriend}
+          animate={!reduceMotion}
+          run={joinedRun}
+          sayingHi={message.pendingId === joinedFriend.userId}
+          onSayHi={() => message.open({ ...joinedFriend, since: null })}
+          onDismiss={() => setJoined(null)}
+        />
+      )}
+      <AddFriendForm
+        onSubmit={send}
+        prefill={prefill}
+        acceptedReplaced={joined?.via === 'send' ? joinedRun : 0}
+      />
       {requests.isError && !requests.data && (
         <Retry message="Couldn’t load friend requests." onRetry={() => void requests.refetch()} />
       )}
@@ -156,6 +235,7 @@ export default function FriendsScreen() {
               request={r}
               when={when(r)}
               onAccept={() => {
+                join({ person: r, username: r.username, via: 'accept' });
                 respond.mutate(
                   { request: r, accept: true },
                   { onSuccess: () => say(`You and ${nameOf(r)} are now friends`) },

@@ -21,6 +21,9 @@ import { useOnlinePeers } from '@/features/connect/hooks';
 import { useFriendActions, useFriendRequests, useMessageFriend } from '@/features/friends/hooks';
 import { RequestRow } from '@/features/friends/RequestRow';
 
+jest.mock('react-native-worklets', () => require('react-native-worklets/src/mock'));
+jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
+
 const mockRespond = jest.fn();
 const mockCancel = jest.fn();
 const mockRemove = jest.fn();
@@ -704,5 +707,66 @@ describe('add-me links and the quick-pick cap', () => {
     await waitFor(() => expect(screen.getByText('No one by that name')).toBeTruthy());
     await fireEvent.press(screen.getByRole('button', { name: 'Add a friend' }));
     expect(mockPush).toHaveBeenCalledWith('/messages/friends?add=ghost.name');
+  });
+});
+
+describe('friendship joined', () => {
+  const renderScreen = async () => {
+    const qc = newClient();
+    await render(
+      <QueryClientProvider client={qc}>
+        <FriendsScreen />
+      </QueryClientProvider>,
+    );
+    return qc;
+  };
+  const card = () => screen.queryByText(/^You and .* are now friends$/);
+
+  it('appears when I accept, with Say hi and a medium tap, and can be dismissed', async () => {
+    mockFetchRequests.mockResolvedValueOnce({ incoming: [askMaya], outgoing: [] });
+    mockFetchRequests.mockResolvedValue({ incoming: [], outgoing: [] });
+    mockFetchFriends.mockResolvedValueOnce([sam]);
+    mockFetchFriends.mockResolvedValue([sam, maya]);
+    mockFetchInbox.mockResolvedValue([]);
+    mockRespond.mockResolvedValue(undefined);
+    await renderScreen();
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Accept request from Maya Rose' }),
+    );
+    await waitFor(() => expect(card()).toBeTruthy());
+    expect(card()!.props.children).toBe('You and Maya Rose are now friends');
+    expect(screen.getByRole('button', { name: 'Say hi to Maya Rose' })).toBeTruthy();
+    await waitFor(() => expect(Haptics.impactAsync).toHaveBeenCalledWith('medium'));
+    await fireEvent.press(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(card()).toBeNull();
+  });
+
+  it('after a send that finds their request, the card takes over from the message', async () => {
+    mockFetchRequests.mockResolvedValue({ incoming: [], outgoing: [] });
+    mockFetchFriends.mockResolvedValueOnce([]);
+    mockFetchFriends.mockResolvedValue([sam]);
+    mockFetchInbox.mockResolvedValue([]);
+    mockSend.mockResolvedValue('accepted');
+    await renderScreen();
+    await fireEvent.changeText(await screen.findByLabelText('Friend’s username'), 'sam');
+    await fireEvent.press(screen.getByRole('button', { name: 'Send request' }));
+    await waitFor(() => expect(screen.getByText('You and sam are now friends')).toBeTruthy());
+    // The inline "You and @sam are now friends" gives way to the card.
+    expect(screen.queryByText('You and @sam are now friends')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Say hi to sam' })).toBeTruthy();
+  });
+
+  it('after a send, keeps the message and shows no card when the list fails', async () => {
+    mockFetchRequests.mockResolvedValue({ incoming: [], outgoing: [] });
+    mockFetchFriends.mockResolvedValueOnce([]);
+    mockFetchFriends.mockRejectedValue(new Error('network'));
+    mockFetchInbox.mockResolvedValue([]);
+    mockSend.mockResolvedValue('accepted');
+    await renderScreen();
+    await fireEvent.changeText(await screen.findByLabelText('Friend’s username'), 'sam');
+    await fireEvent.press(screen.getByRole('button', { name: 'Send request' }));
+    await waitFor(() => expect(mockFetchFriends).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText('You and @sam are now friends')).toBeTruthy());
+    expect(screen.queryByRole('button', { name: /^Say hi/ })).toBeNull();
   });
 });

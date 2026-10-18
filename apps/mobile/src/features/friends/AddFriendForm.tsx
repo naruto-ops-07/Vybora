@@ -27,10 +27,13 @@ const NOTICE_ICON: Record<AddFriendNotice['tone'], IconName> = {
 export function AddFriendForm({
   onSubmit,
   prefill,
+  acceptedReplaced,
 }: {
   onSubmit: (username: string) => Promise<FriendRequestResult>;
   /** From an add-me link (`?add=`): fills the field and focuses it. Never sends. */
   prefill?: string | null;
+  /** Bumped when the joined card takes over from the `accepted` message. */
+  acceptedReplaced?: number;
 }) {
   const cc = useCc();
   const haptic = useHaptics();
@@ -39,6 +42,11 @@ export function AddFriendForm({
   const [pending, setPending] = useState(false);
   const inFlight = useRef(false);
   const input = useRef<RNTextInput>(null);
+  // The `accepted` message, so only it (not a later one) gives way to the card.
+  const acceptedNotice = useRef<AddFriendNotice | null>(null);
+  useEffect(() => {
+    if (acceptedReplaced) setNotice((n) => (n && n === acceptedNotice.current ? null : n));
+  }, [acceptedReplaced]);
   const username = normalizeUsername(value);
 
   useEffect(() => {
@@ -60,10 +68,14 @@ export function AddFriendForm({
     setNotice(null);
     try {
       const result = await onSubmit(username);
-      setNotice(addFriendResultNotice(result, username));
+      const next = addFriendResultNotice(result, username);
+      if (result === 'accepted') acceptedNotice.current = next;
+      setNotice(next);
       setValue('');
-      // Only a real change earns a tap; "already friends / already sent" is just info.
-      if (result === 'sent' || result === 'accepted') haptic('light');
+      // Only a real change earns a tap ("already friends / already sent" is just
+      // info); a new friendship is the bigger moment.
+      if (result === 'sent') haptic('light');
+      else if (result === 'accepted') haptic('medium');
     } catch (e) {
       setNotice(addFriendErrorNotice(e));
     } finally {
