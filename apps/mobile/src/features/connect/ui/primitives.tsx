@@ -23,7 +23,7 @@ import { Icon, type IconName } from '@/components/Icon';
 import { Text } from '@/components/Text';
 import { useA11y } from '@/lib/a11y';
 import { GradientFill } from '@/components/GradientFill';
-import { shadowStyle, tint, useTheme } from '@/lib/theme';
+import { shadowStyle, tint, useTheme, type Theme } from '@/lib/theme';
 
 /**
  * Connect palette, derived from the app theme so messaging follows light/dark
@@ -151,6 +151,20 @@ export function ChatBackground({
   );
 }
 
+/**
+ * A card (web `.vy-card`): the surface with a hairline edge and soft depth at level 1.
+ * High contrast: a strong edge, no shadow. Spread it into a card's own layout style.
+ */
+export function cardStyle(t: Theme): ViewStyle {
+  return {
+    backgroundColor: t.surface,
+    borderRadius: t.radii.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.highContrast ? t.borderStrong : t.border,
+    ...shadowStyle(1, t),
+  };
+}
+
 /** Flat filled surface (kept as a component so callers stay declarative). */
 export function Fill({
   color,
@@ -179,7 +193,7 @@ export function EncryptionBadge({ compact }: { compact?: boolean }) {
   );
 }
 
-/** A segment in a rectangular segmented control (not a pill). */
+/** A choice chip (web `.vy-chip`): a pill, accent when chosen, 44 px to touch. */
 export function Pill({
   label,
   active,
@@ -197,14 +211,15 @@ export function Pill({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: !!active }}
+      hitSlop={{ top: 4, bottom: 4 }}
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        paddingHorizontal: 12,
+        paddingHorizontal: 14,
         minHeight: 36,
-        borderRadius: cc.radii.sm + 2,
-        backgroundColor: active ? cc.accent : pressed ? cc.raised : cc.panel,
+        borderRadius: 999,
+        backgroundColor: active ? cc.accent : pressed ? tint(cc.text, '12') : cc.panel,
         borderWidth: 1,
         borderColor: active ? cc.accent : cc.lineStrong,
       })}

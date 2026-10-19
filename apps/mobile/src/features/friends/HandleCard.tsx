@@ -1,12 +1,12 @@
 import { friendInviteLink } from '@vybora/core';
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Alert, Share, View } from 'react-native';
+import { AccessibilityInfo, Alert, Share, StyleSheet, View } from 'react-native';
 import { Avatar } from '@/components/Avatar';
 import { Text } from '@/components/Text';
 import { Button } from '@/components/ui';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { useCc } from '@/features/connect/ui/primitives';
+import { cardStyle, useCc } from '@/features/connect/ui/primitives';
 import { useOnboarding } from '@/features/onboarding/store';
 import { publicSiteUrl } from '@/lib/env';
 import { useTheme } from '@/lib/theme';
@@ -42,7 +42,8 @@ export function HandleCardView({
   variant?: 'full' | 'compact';
   onShared?: () => void;
 }) {
-  const { radii } = useTheme();
+  const t = useTheme();
+  const { radii } = t;
   const cc = useCc();
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -108,8 +109,8 @@ export function HandleCardView({
             justifyContent: 'center',
             paddingHorizontal: 10,
             borderRadius: radii.md,
-            borderWidth: 1,
-            borderColor: cc.line,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: cc.highContrast ? cc.lineStrong : cc.line,
             backgroundColor: cc.raised,
           }}
         >
@@ -125,10 +126,7 @@ export function HandleCardView({
     <View
       style={{
         alignSelf: 'stretch',
-        borderRadius: radii.lg,
-        borderWidth: 1,
-        borderColor: cc.line,
-        backgroundColor: cc.panel,
+        ...cardStyle(t),
         padding: 16,
         gap: 12,
       }}
@@ -145,7 +143,11 @@ export function HandleCardView({
           decorative
         />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text numberOfLines={1} style={{ color: cc.text, fontSize: 15, fontWeight: '600' }}>
+          <Text
+            numberOfLines={1}
+            display
+            style={{ color: cc.text, fontSize: 17, fontWeight: '600' }}
+          >
             {name}
           </Text>
           <Text mono numberOfLines={1} style={{ color: cc.textMuted, fontSize: 13 }}>

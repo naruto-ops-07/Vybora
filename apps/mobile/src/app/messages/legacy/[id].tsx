@@ -50,10 +50,10 @@ function Attachment({ path }: { path: string }) {
  * can still unsend their old messages.
  */
 export default function LegacyConversation() {
-  const { radii } = useTheme();
   const { id = '' } = useLocalSearchParams<{ id: string }>();
   const { userId } = useMe();
   const t = useTheme();
+  const { radii } = t;
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const key = qk.messages(id);

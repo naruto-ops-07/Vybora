@@ -1,6 +1,6 @@
 import { LOOKS, looks, type Look } from '@vybora/config';
 import type { ModePref } from '@vybora/core';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 import { GradientFill } from '@/components/GradientFill';
@@ -40,6 +40,8 @@ const safeLoaded = (look: Look) => {
 /** The canvas behind the look: its background lit by up to three soft glows (static). */
 function Glows() {
   const t = useTheme();
+  // Unique per preview: three looks render side by side.
+  const uid = `glow-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const glows = [
     { c: t.glow1, cx: '0%', cy: '0%', rx: '120%', ry: '70%' },
     { c: t.glow2, cx: '100%', cy: '45%', rx: '90%', ry: '60%' },
@@ -50,21 +52,14 @@ function Glows() {
     <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
       <Defs>
         {glows.map((g, i) => (
-          <RadialGradient key={i} id={`glow-${t.look}-${i}`} cx="50%" cy="50%" r="50%">
+          <RadialGradient key={i} id={`${uid}-${i}`} cx="50%" cy="50%" r="50%">
             <Stop offset="0" stopColor={g.c} />
             <Stop offset="1" stopColor={g.c} stopOpacity={0} />
           </RadialGradient>
         ))}
       </Defs>
       {glows.map((g, i) => (
-        <Ellipse
-          key={i}
-          cx={g.cx}
-          cy={g.cy}
-          rx={g.rx}
-          ry={g.ry}
-          fill={`url(#glow-${t.look}-${i})`}
-        />
+        <Ellipse key={i} cx={g.cx} cy={g.cy} rx={g.rx} ry={g.ry} fill={`url(#${uid}-${i})`} />
       ))}
     </Svg>
   );

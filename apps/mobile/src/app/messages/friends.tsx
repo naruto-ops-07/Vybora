@@ -54,7 +54,9 @@ function SectionHeading({ title, count }: { title: string; count?: number }) {
         paddingBottom: 4,
       }}
     >
-      <Text style={{ color: cc.textMuted, fontSize: 13, fontWeight: '600' }}>{title}</Text>
+      <Text display style={{ color: cc.text, fontSize: 17, fontWeight: '600' }}>
+        {title}
+      </Text>
       {count !== undefined && (
         <Text mono style={{ color: cc.textSubtle, fontSize: 11 }}>
           {count}
@@ -263,11 +265,11 @@ export default function FriendsScreen() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: cc.panel }}>
+    <View style={{ flex: 1, backgroundColor: cc.night }}>
       <Stack.Screen
         options={{
           title: 'Friends',
-          headerStyle: { backgroundColor: cc.panel },
+          headerStyle: { backgroundColor: cc.bar },
           headerTintColor: cc.text,
         }}
       />

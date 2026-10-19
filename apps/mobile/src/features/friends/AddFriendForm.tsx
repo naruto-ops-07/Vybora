@@ -100,11 +100,11 @@ export function AddFriendForm({
           flexDirection: 'row',
           alignItems: 'center',
           gap: 2,
-          paddingHorizontal: 12,
+          paddingHorizontal: 14,
           borderRadius: radii.md,
           borderWidth: 1,
           borderColor: tone === 'error' ? cc.danger : cc.lineStrong,
-          backgroundColor: cc.night,
+          backgroundColor: cc.raised,
         }}
       >
         <Text mono style={{ color: cc.textSubtle, fontSize: 15 }}>

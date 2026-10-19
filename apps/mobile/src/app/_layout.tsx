@@ -82,12 +82,16 @@ function Navigator() {
 }
 
 function SetupRequired() {
+  const t = useTheme();
   useEffect(() => {
     void SplashScreen.hideAsync();
   }, []);
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 32, paddingTop: 96, gap: 12 }}>
+    <ScrollView
+      style={{ backgroundColor: t.bg }}
+      contentContainerStyle={{ padding: 32, paddingTop: 96, gap: 12 }}
+    >
       <Text variant="title">Configuration required</Text>
       <Text variant="muted">
         Copy apps/mobile/.env.example to apps/mobile/.env and set your Supabase project values, then
@@ -95,7 +99,7 @@ function SetupRequired() {
       </Text>
       <View style={{ gap: 6, marginTop: 12 }}>
         {envProblems.map((problem) => (
-          <Text key={problem} variant="mono" style={{ color: '#B42318' }}>
+          <Text key={problem} variant="mono" style={{ color: t.danger }}>
             {problem}
           </Text>
         ))}

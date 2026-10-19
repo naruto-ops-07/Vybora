@@ -3,6 +3,7 @@ import { Alert, Pressable, View } from 'react-native';
 import { Text } from '@/components/Text';
 import { Avatar, Button } from '@/components/ui';
 import { useCc } from '@/features/connect/ui/primitives';
+import { tint } from '@/lib/theme';
 import { nameOf } from './hooks';
 
 /**
@@ -45,7 +46,7 @@ export function FriendRow({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        paddingLeft: 16,
+        paddingLeft: 8,
         paddingRight: 12,
       }}
     >
@@ -70,7 +71,9 @@ export function FriendRow({
           gap: 12,
           minHeight: 64,
           paddingVertical: 8,
-          backgroundColor: pressed ? cc.raised : 'transparent',
+          paddingHorizontal: 8,
+          borderRadius: cc.radii.md,
+          backgroundColor: pressed ? tint(cc.text, '12') : 'transparent',
         })}
       >
         <View>
@@ -93,13 +96,13 @@ export function FriendRow({
                 borderRadius: 7,
                 backgroundColor: cc.success,
                 borderWidth: 2,
-                borderColor: cc.panel,
+                borderColor: cc.night,
               }}
             />
           )}
         </View>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text scale style={{ color: cc.text, fontSize: 16, fontWeight: '500' }} numberOfLines={1}>
+          <Text scale style={{ color: cc.text, fontSize: 16, fontWeight: '600' }} numberOfLines={1}>
             {name}
           </Text>
           <Text scale style={{ color: cc.textMuted, fontSize: 14 }} numberOfLines={1}>

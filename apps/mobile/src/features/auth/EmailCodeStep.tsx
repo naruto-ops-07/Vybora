@@ -84,8 +84,8 @@ type StepError = { message: string; kind: 'code' | 'send' };
  * then leaves for the inbox, so the step stays busy until it does.
  */
 export function EmailCodeStep({ email, purpose, onResend, onChangeEmail }: EmailCodeStepProps) {
-  const { radii } = useTheme();
   const t = useTheme();
+  const { radii } = t;
   const { fontScale } = useWindowDimensions();
   const boxHeight = boxMinHeight(fontScale);
   const haptic = useHaptics();

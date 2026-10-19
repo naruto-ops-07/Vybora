@@ -296,10 +296,10 @@ function Privacy() {
             accessibilityLabel="Phone number in international format"
             style={{
               height: 46,
-              borderRadius: 12,
+              borderRadius: cc.radii.md,
               backgroundColor: cc.raised,
               borderWidth: 1,
-              borderColor: cc.line,
+              borderColor: cc.lineStrong,
               color: cc.text,
               paddingHorizontal: 12,
             }}

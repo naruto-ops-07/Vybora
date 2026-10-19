@@ -3,16 +3,17 @@ import { qk } from '@vybora/api';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, View, Pressable, StyleSheet } from 'react-native';
 import { Text } from '@/components/Text';
-import { useTheme } from '@/lib/theme';
+import { shadowStyle, useTheme } from '@/lib/theme';
 import { useConnect } from '@/features/connect/ConnectProvider';
 import { ConnectGate } from '@/features/connect/ConnectGate';
 import { useConversation, useNicknames } from '@/features/connect/hooks';
 import { useCc, PrimaryButton, Row, SectionCard } from '@/features/connect/ui/primitives';
 
 function Verify() {
-  const { radii } = useTheme();
+  const t = useTheme();
+  const { radii } = t;
   const cc = useCc();
   const { userId = '', conversationId = '' } = useLocalSearchParams<{
     userId: string;
@@ -73,7 +74,17 @@ function Verify() {
                 : cc.accent
           }
         />
-        <Text style={{ color: cc.text, fontSize: 18, fontWeight: '600', textAlign: 'center' }}>
+        <Text
+          display
+          accessibilityRole="header"
+          style={{
+            color: cc.text,
+            fontSize: 24,
+            fontWeight: '600',
+            letterSpacing: -0.3,
+            textAlign: 'center',
+          }}
+        >
           {status.data?.verified
             ? `You verified ${name}`
             : status.data?.status === 'changed'
@@ -86,27 +97,31 @@ function Verify() {
         </Text>
       </View>
       <View
-        style={{
-          backgroundColor: cc.panel,
-          borderRadius: radii.lg,
-          padding: 20,
-          borderWidth: 1,
-          borderColor: cc.line,
-          flexDirection: 'row',
-          flexWrap: 'wrap',
-          justifyContent: 'space-between',
-          rowGap: 14,
-        }}
+        style={[
+          {
+            backgroundColor: cc.panel,
+            borderRadius: radii.lg,
+            padding: 20,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: t.highContrast ? cc.lineStrong : cc.line,
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            justifyContent: 'space-between',
+            rowGap: 14,
+          },
+          shadowStyle(1, t),
+        ]}
         accessibilityLabel={`Safety number ${number.data ?? ''}`}
       >
         {groups.map((g, i) => (
           <Text
             key={i}
+            mono
             style={{
               color: cc.text,
-              fontSize: 21,
-              fontWeight: '600',
-              letterSpacing: 2,
+              fontSize: 20,
+              fontWeight: '500',
+              letterSpacing: 1.5,
               width: '30%',
               textAlign: 'center',
               fontVariant: ['tabular-nums'],
@@ -136,12 +151,20 @@ function Verify() {
         onPress={() => void trust(true)}
       />
       {status.data?.status === 'changed' && (
-        <Text
+        <Pressable
           onPress={() => void trust(false)}
-          style={{ color: cc.textMuted, textAlign: 'center' }}
+          accessibilityRole="button"
+          style={({ pressed }) => ({
+            minHeight: 44,
+            justifyContent: 'center',
+            borderRadius: radii.md,
+            opacity: pressed ? 0.7 : 1,
+          })}
         >
-          Accept new number without verifying
-        </Text>
+          <Text style={{ color: cc.textMuted, textAlign: 'center', fontWeight: '500' }}>
+            Accept new number without verifying
+          </Text>
+        </Pressable>
       )}
     </ScrollView>
   );

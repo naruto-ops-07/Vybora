@@ -7,13 +7,13 @@ import {
 import type { LocalMessage } from '@vybora/e2ee';
 import { router, useIsFocused } from 'expo-router';
 import { useEffect, useMemo, type ReactNode } from 'react';
-import { View } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Icon } from '@/components/Icon';
 import { Text } from '@/components/Text';
 import { Button, IconButton } from '@/components/ui';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useSecureInbox } from '@/features/connect/hooks';
-import { useCc } from '@/features/connect/ui/primitives';
+import { cardStyle, useCc } from '@/features/connect/ui/primitives';
 import { HandleCard } from '@/features/friends/HandleCard';
 import { useFriendRequests, useFriends } from '@/features/friends/hooks';
 import { useTheme } from '@/lib/theme';
@@ -54,18 +54,10 @@ export function GetStartedView({
   onAddFriend,
   onDismiss,
 }: GetStartedViewProps) {
-  const { radii } = useTheme();
+  const t = useTheme();
   const cc = useCc();
   const { steps, done, complete } = progress;
-  const card = {
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: cc.line,
-    backgroundColor: cc.panel,
-    padding: 14,
-  } as const;
+  const card = [cardStyle(t), { marginHorizontal: 16, marginTop: 12, padding: 16 }];
   const dismiss = (
     <View style={{ marginTop: -10, marginRight: -10 }}>
       <IconButton name="x" label="Hide getting started" size={18} onPress={onDismiss} />
@@ -74,12 +66,13 @@ export function GetStartedView({
 
   if (complete)
     return (
-      <View style={[card, { flexDirection: 'row', alignItems: 'flex-start', gap: 12 }]}>
+      <View style={[...card, { flexDirection: 'row', alignItems: 'flex-start', gap: 12 }]}>
         <Icon name="check-circle" size={22} weight="fill" color={cc.accent} />
         <View style={{ flex: 1 }} accessibilityLiveRegion="polite">
           <Text
             accessibilityRole="header"
-            style={{ color: cc.text, fontSize: 15, fontWeight: '600' }}
+            display
+            style={{ color: cc.text, fontSize: 17, fontWeight: '600' }}
           >
             You’re all set
           </Text>
@@ -112,7 +105,8 @@ export function GetStartedView({
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
         <Text
           accessibilityRole="header"
-          style={{ color: cc.text, fontSize: 15, fontWeight: '600', flex: 1 }}
+          display
+          style={{ color: cc.text, fontSize: 17, fontWeight: '600', flex: 1 }}
         >
           Get started
         </Text>
@@ -127,14 +121,19 @@ export function GetStartedView({
       </View>
       {/* Three flat segments: a glance at progress. The count above carries it for screen readers. */}
       <View
-        style={{ flexDirection: 'row', gap: 4, marginTop: 4 }}
+        style={{ flexDirection: 'row', gap: 4, marginTop: 8 }}
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
       >
         {GET_STARTED_STEPS.map((s) => (
           <View
             key={s}
-            style={{ flex: 1, height: 4, backgroundColor: steps[s] ? cc.accent : cc.strong }}
+            style={{
+              flex: 1,
+              height: 4,
+              borderRadius: 2,
+              backgroundColor: steps[s] ? cc.accent : cc.strong,
+            }}
           />
         ))}
       </View>
@@ -148,7 +147,7 @@ export function GetStartedView({
               gap: 12,
               paddingTop: 12,
               paddingBottom: i === GET_STARTED_STEPS.length - 1 ? 2 : 12,
-              borderBottomWidth: i === GET_STARTED_STEPS.length - 1 ? 0 : 1,
+              borderBottomWidth: i === GET_STARTED_STEPS.length - 1 ? 0 : StyleSheet.hairlineWidth,
               borderBottomColor: cc.line,
             }}
           >

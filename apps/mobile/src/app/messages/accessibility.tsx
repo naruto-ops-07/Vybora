@@ -1,5 +1,5 @@
 import type { ReduceMotionPref, TextSize } from '@vybora/core';
-import { ScrollView, Switch } from 'react-native';
+import { ScrollView, Switch, StyleSheet } from 'react-native';
 import { Text } from '@/components/Text';
 import { Row, SectionCard, useCc } from '@/features/connect/ui/primitives';
 import { Segmented } from '@/features/connect/ui/Segmented';
@@ -82,11 +82,12 @@ export default function AccessibilityScreen() {
             margin: 16,
             marginTop: 0,
             padding: 10,
-            borderWidth: 1,
-            borderColor: cc.line,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: cc.highContrast ? cc.lineStrong : cc.line,
             borderRadius: radii.lg,
             borderBottomLeftRadius: radii.sm,
             backgroundColor: cc.bubbleIn,
+            overflow: 'hidden',
           }}
         >
           This is how messages will look.

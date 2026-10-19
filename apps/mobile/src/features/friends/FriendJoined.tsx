@@ -10,7 +10,7 @@ import Animated, {
 import { Avatar } from '@/components/Avatar';
 import { Text } from '@/components/Text';
 import { Button, IconButton } from '@/components/ui';
-import { useCc } from '@/features/connect/ui/primitives';
+import { cardStyle, useCc } from '@/features/connect/ui/primitives';
 import { useTheme } from '@/lib/theme';
 import { nameOf } from './hooks';
 
@@ -47,7 +47,7 @@ export function FriendJoinedCard({
   onSayHi: () => void;
   onDismiss: () => void;
 }) {
-  const { radii } = useTheme();
+  const t = useTheme();
   const cc = useCc();
   const apart = useSharedValue(animate ? 1 : 0);
   useEffect(() => {
@@ -71,10 +71,7 @@ export function FriendJoinedCard({
         alignItems: 'flex-start',
         gap: 12,
         padding: 16,
-        borderRadius: radii.lg,
-        borderWidth: 1,
-        borderColor: cc.line,
-        backgroundColor: cc.panel,
+        ...cardStyle(t),
       }}
       testID={`friend-joined-${friend.userId}`}
     >
@@ -103,7 +100,7 @@ export function FriendJoinedCard({
               top: -2,
               borderRadius: (SIZE + 4) / 2,
               borderWidth: 2,
-              borderColor: cc.panel,
+              borderColor: t.surface,
             },
             theirs,
           ]}
@@ -122,7 +119,8 @@ export function FriendJoinedCard({
       <View style={{ flex: 1, minWidth: 0, gap: 12 }}>
         <Text
           accessibilityRole="header"
-          style={{ color: cc.text, fontSize: 15, fontWeight: '600', lineHeight: 20 }}
+          display
+          style={{ color: cc.text, fontSize: 16, fontWeight: '600', lineHeight: 22 }}
         >
           {text}
         </Text>

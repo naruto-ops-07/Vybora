@@ -160,9 +160,7 @@ export default function Settings() {
                 size={56}
               />
               <View style={{ flex: 1 }}>
-                <Text style={{ fontWeight: '600' }}>
-                  {profile.display_name || profile.username}
-                </Text>
+                <Text variant="heading">{profile.display_name || profile.username}</Text>
                 <Text variant="mono">@{profile.username}</Text>
               </View>
               <Button

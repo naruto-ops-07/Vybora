@@ -264,6 +264,8 @@ function Inbox() {
               letterSpacing: -0.4,
               flex: 1,
             }}
+            numberOfLines={1}
+            maxFontSizeMultiplier={1.6}
           >
             Chats
           </Text>

@@ -196,6 +196,7 @@ export function FileAttachment({ attachment, tint }: { attachment: AttachmentRef
     attachment.name?.split('.').pop()?.slice(0, 8) || 'bin',
   );
   const kb = attachment.size / 1024;
+  const { radii } = useTheme();
   return (
     <Pressable
       onPress={async () => {
@@ -215,7 +216,7 @@ export function FileAttachment({ attachment, tint }: { attachment: AttachmentRef
         style={{
           width: 40,
           height: 40,
-          borderRadius: 12,
+          borderRadius: radii.md,
           backgroundColor: tintOf(tint, '29'),
           alignItems: 'center',
           justifyContent: 'center',

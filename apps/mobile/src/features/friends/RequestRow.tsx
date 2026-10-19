@@ -39,7 +39,7 @@ export function RequestRow({
           size={48}
         />
         <View style={{ flex: 1, gap: 2 }}>
-          <Text scale style={{ color: cc.text, fontSize: 16, fontWeight: '500' }} numberOfLines={1}>
+          <Text scale style={{ color: cc.text, fontSize: 16, fontWeight: '600' }} numberOfLines={1}>
             {name}
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
