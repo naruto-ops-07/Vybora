@@ -8,8 +8,8 @@
  * - Bloom: pearl / plum night, sunset pink → orange bubbles, violet accents.
  *   Plus Jakarta Sans. Frosted panels, soft glow pulse.
  *
- * Aurora's ThemeTokens are today's `themes` exactly and its person tones are
- * today's `personTones` exactly (owner decision; core tests pin both). Contrast
+ * Aurora's ThemeTokens are today's `themes` except the three contrast fixes listed
+ * below, and its person tones are today's exactly (core tests pin both). Contrast
  * is checked for every look × mode in packages/core/src/looks.test.ts.
  *
  * Hex adjusted away from an anchor because a contrast test needed it:
@@ -23,9 +23,12 @@
  * - Bloom primary (mockup send button): #6D4AFF → #B04AFF became #6D4AFF → #A23EF0.
  *   White text was 3.99:1 on #B04AFF; now 4.68:1.
  *
- * Known gaps kept on purpose (Aurora = today, pinned in looks.test.ts):
- * dark textSubtle on bubbleIn is 4.25:1, and borderStrong is ~1.5:1 in both modes.
- * Velvet and Bloom meet every floor, including borderStrong ≥ 3:1 for control edges.
+ * - Aurora (today's tokens) dark textSubtle #75898B → #798E90: 4.25:1 on bubbleIn
+ *   #1B2528, now 4.54:1 (smallest lift that passes).
+ * - Aurora borderStrong (control edges, ≥ 3:1): light #C2CFCF → #818D8D (was 1.42–1.60:1,
+ *   now 3.03–3.43:1 on surface, bg and surfaceMuted); dark #2E3D41 → #596A6E (was
+ *   1.52–1.72:1, now 3.02–3.43:1).
+ * Every other Aurora value is today's. All three looks meet every floor.
  *
  * Aurora's spec anchors night #060A13, pale sky #F4F7FB and text #EAF2FF are not
  * used (today's graphite set wins); its mockup glows and frosted panel are kept.
@@ -68,7 +71,7 @@ export const themes = {
     surfaceMuted: palette.mist100,
     surfaceStrong: palette.mist200,
     border: palette.mist300,
-    borderStrong: palette.mist400,
+    borderStrong: '#818D8D',
     text: palette.ink,
     textMuted: palette.slate700,
     textSubtle: palette.slate600,
@@ -87,10 +90,10 @@ export const themes = {
     surfaceMuted: palette.graphite850,
     surfaceStrong: palette.graphite800,
     border: palette.graphite750,
-    borderStrong: palette.graphite700,
+    borderStrong: '#596A6E',
     text: palette.graphite100,
     textMuted: palette.graphite400,
-    textSubtle: palette.graphite500,
+    textSubtle: '#798E90',
     accent: palette.turquoise,
     accentHover: palette.turquoiseLight,
     accentSoft: '#0E2B2A',

@@ -121,22 +121,10 @@ function contrastFailures(t: LookTokens): string[] {
   return fails;
 }
 
-/**
- * Aurora is today's look kept exactly (owner decision), so it carries today's known gaps.
- * Listed here so they can't grow silently; fixing one means deleting its line.
- */
-const AURORA_KNOWN_GAPS: Record<Mode, string[]> = {
-  light: [
-    'borderStrong on surface 1.60',
-    'borderStrong on bg 1.47',
-    'borderStrong on surfaceMuted 1.42',
-  ],
-  dark: [
-    'textSubtle on bubbleIn 4.25',
-    'borderStrong on surface 1.63',
-    'borderStrong on bg 1.72',
-    'borderStrong on surfaceMuted 1.52',
-  ],
+/** The only intentional departures from today's tokens: contrast fixes (WCAG binding). */
+const AURORA_CONTRAST_FIXES = {
+  light: { borderStrong: '#818D8D' },
+  dark: { textSubtle: '#798E90', borderStrong: '#596A6E' },
 };
 
 describe('looks', () => {
@@ -216,19 +204,20 @@ describe('looks', () => {
       });
 
       it(`${look} ${mode}: text ≥ 4.5:1 and control borders ≥ 3:1`, () => {
-        expect(contrastFailures(t)).toEqual(look === 'aurora' ? AURORA_KNOWN_GAPS[mode] : []);
+        expect(contrastFailures(t)).toEqual([]);
       });
     }
   }
 
-  it('aurora keeps today’s tokens exactly', () => {
+  it('aurora keeps today’s tokens except the contrast fixes', () => {
     for (const mode of MODES) {
       const t = looks.aurora.modes[mode];
       const picked = Object.fromEntries(
         Object.keys(TODAY_THEMES[mode]).map((k) => [k, t[k as keyof LookTokens]]),
       );
-      expect(picked).toEqual(TODAY_THEMES[mode]);
-      expect(themes[mode]).toEqual(TODAY_THEMES[mode]);
+      const expected = { ...TODAY_THEMES[mode], ...AURORA_CONTRAST_FIXES[mode] };
+      expect(picked).toEqual(expected);
+      expect(themes[mode]).toEqual(expected);
     }
   });
 
