@@ -103,7 +103,7 @@ export function Journey() {
                   <span
                     className={cn(
                       'font-mono text-sm tabular-nums',
-                      i === active ? 'text-accent' : 'text-subtle',
+                      i === active ? 'text-accent' : 'text-muted',
                     )}
                   >
                     {i + 1}
@@ -119,9 +119,9 @@ export function Journey() {
                     </span>
                     <span
                       className={cn(
-                        'mt-1 text-sm leading-relaxed text-muted transition-opacity duration-300',
+                        // Full-strength muted ink in every state: fading it broke 4.5:1.
+                        'mt-1 text-sm leading-relaxed text-muted',
                         i === active || reduceMotion ? 'block' : 'hidden md:block',
-                        i === active ? 'opacity-100' : 'opacity-60',
                       )}
                     >
                       {s.body}

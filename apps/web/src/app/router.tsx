@@ -95,6 +95,12 @@ export const routes: RouteObject[] = [
               path: '__gallery',
               lazy: async () => ({ Component: (await import('@/dev/gallery/Gallery')).default }),
             },
+            {
+              path: '__gallery/email-code',
+              lazy: async () => ({
+                Component: (await import('@/dev/gallery/EmailCodePreview')).default,
+              }),
+            },
           ]
         : []),
       { path: '*', element: <NotFound /> },

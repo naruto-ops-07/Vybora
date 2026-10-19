@@ -35,7 +35,7 @@
  *                      a returning visitor would have it): every look in dark and light at
  *                      1440, dark at 390. High contrast fails if a glow, gradient or blur
  *                      remains anywhere on the page.
- *   {login,signup,forgot,404}-{look}-{mode}-{1440,390}.png  the auth pages and the 404 per
+ *   {login,signup,forgot,email-code,404}-{look}-{mode}-{1440,390}.png  the auth pages and the 404 per
  *                      look, dark at 1440 and 390, light at 1440. Nothing is submitted.
  *
  * Without `?look=` the gallery shows Velvet, the default look.
@@ -104,6 +104,8 @@ const SHOTS = [
       ['login', '/login'],
       ['signup', '/signup'],
       ['forgot', '/forgot-password'],
+      // The sign-up code step, drawn statically by a dev-only route (nothing is sent).
+      ['email-code', '/__gallery/email-code'],
       ['404', '/no-such-page'],
     ].flatMap(([name, path]) =>
       [

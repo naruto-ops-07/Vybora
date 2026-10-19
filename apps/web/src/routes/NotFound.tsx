@@ -1,6 +1,6 @@
 import { ButtonLink } from '@/components/ui/Button';
 import { LogoMark } from '@/components/ui/Logo';
-import { Ambient } from './landing/Ambient';
+import { Ambient } from '@/components/Ambient';
 
 export default function NotFound() {
   return (

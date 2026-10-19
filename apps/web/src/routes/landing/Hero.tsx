@@ -2,7 +2,7 @@ import { LockSimpleIcon } from '@phosphor-icons/react';
 import { motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { ButtonLink } from '@/components/ui/Button';
-import { Ambient } from './Ambient';
+import { Ambient } from '@/components/Ambient';
 import { EASE_OUT, useScramble } from './motion';
 
 const LINES = ['Your words', 'leave this', 'device sealed.'];

@@ -3,7 +3,7 @@ import { isRouteErrorResponse, useRouteError } from 'react-router';
 import { Button, ButtonLink } from '@/components/ui/Button';
 import { LogoMark } from '@/components/ui/Logo';
 import { reportError } from '@/lib/monitoring';
-import { Ambient } from './landing/Ambient';
+import { Ambient } from '@/components/Ambient';
 
 export function RouteError() {
   const error = useRouteError();

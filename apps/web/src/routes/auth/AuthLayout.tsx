@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { WelcomeIllustration } from '@/components/illustrations';
 import { Logo } from '@/components/ui/Logo';
-import { Ambient } from '../landing/Ambient';
+import { Ambient } from '@/components/Ambient';
 
 const POINTS = [
   { icon: <LockSimpleIcon size={18} />, text: 'End-to-end encrypted with MLS (RFC 9420)' },

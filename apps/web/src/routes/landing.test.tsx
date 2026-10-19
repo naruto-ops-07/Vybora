@@ -79,6 +79,33 @@ describe('How a message travels, under reduced motion', () => {
   });
 });
 
+describe('How a message travels, contrast', () => {
+  it('never fades the step copy or numbers below full muted ink', () => {
+    renderWithProviders(<Landing />);
+    const section = screen.getByRole('region', { name: 'How a message travels' });
+    for (const li of within(section).getAllByRole('listitem')) {
+      expect(li.innerHTML).not.toMatch(/opacity-\d|text-subtle/);
+    }
+  });
+});
+
+describe('Landing header', () => {
+  it('gives Sign in and Create account a 44 px hit area', () => {
+    renderWithProviders(<Landing />);
+    const header = screen.getByRole('banner');
+    expect(within(header).getByRole('link', { name: 'Sign in' })).toHaveClass('touch-target');
+    expect(within(header).getByRole('link', { name: 'Create account' })).toHaveClass(
+      'touch-target',
+    );
+  });
+
+  it('has no kicker labels above the feature columns', () => {
+    renderWithProviders(<Landing />);
+    expect(screen.queryByText('With your people')).toBeNull();
+    expect(screen.queryByText('Between you only')).toBeNull();
+  });
+});
+
 describe('Landing in the saved look', () => {
   afterEach(() => {
     localStorage.clear();

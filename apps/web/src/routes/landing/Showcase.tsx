@@ -13,7 +13,7 @@ import { Avatar, GroupAvatar, type AvatarPerson } from '@/components/ui/Avatar';
 import { LogoMark } from '@/components/ui/Logo';
 import { cn } from '@/lib/cn';
 import { toneVars } from '@/lib/tones';
-import { Ambient } from './Ambient';
+import { Ambient } from '@/components/Ambient';
 import { EASE_OUT } from './motion';
 
 // Sample people for the illustration (ids picked so each lands on a different tone).

@@ -57,8 +57,8 @@ const FEATURES = [
 
 // Two columns: what people come for, then what keeps it private.
 const COLUMNS = [
-  { label: 'With your people', features: FEATURES.slice(0, 3) },
-  { label: 'Between you only', features: FEATURES.slice(3) },
+  { key: 'people', features: FEATURES.slice(0, 3) },
+  { key: 'private', features: FEATURES.slice(3) },
 ];
 
 const SERVER = {
@@ -104,10 +104,10 @@ export default function Landing() {
               >
                 Questions
               </a>
-              <ButtonLink to="/login" variant="ghost" size="sm">
+              <ButtonLink to="/login" variant="ghost" size="sm" className="touch-target">
                 Sign in
               </ButtonLink>
-              <ButtonLink to="/signup" size="sm" className="max-sm:hidden">
+              <ButtonLink to="/signup" size="sm" className="touch-target max-sm:hidden">
                 Create account
               </ButtonLink>
             </nav>
@@ -120,12 +120,8 @@ export default function Landing() {
           <section className="border-y border-line bg-surface" aria-label="Features">
             <div className="mx-auto grid max-w-6xl gap-x-20 gap-y-14 px-5 py-20 md:grid-cols-2 md:py-28">
               {COLUMNS.map((col) => (
-                <div key={col.label}>
-                  <p className="flex items-center gap-3 text-sm font-medium text-accent">
-                    <span className="h-px w-8 bg-accent" aria-hidden="true" />
-                    {col.label}
-                  </p>
-                  <ul className="mt-6">
+                <div key={col.key}>
+                  <ul>
                     {col.features.map((f) => (
                       <li
                         key={f.title}

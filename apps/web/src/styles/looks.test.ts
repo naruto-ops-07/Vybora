@@ -115,6 +115,18 @@ describe('looks.generated.css', () => {
     }
   });
 
+  it('muted text (the Journey step copy, captions) is ≥ 4.5:1 on every surface it sits on', () => {
+    for (const look of LOOKS)
+      for (const mode of ['light', 'dark'] as Mode[]) {
+        const t = looks[look].modes[mode];
+        for (const ground of ['bg', 'surface', 'surfaceMuted'] as const)
+          expect(
+            contrast(t.textMuted, t[ground]),
+            `${look} ${mode} on ${ground}`,
+          ).toBeGreaterThanOrEqual(4.5);
+      }
+  });
+
   it('popovers: solid where the look has no glass, a translucent surface where it has', () => {
     for (const look of LOOKS) {
       const def = looks[look];
