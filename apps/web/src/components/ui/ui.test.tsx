@@ -186,7 +186,8 @@ describe('primitives in the new looks', () => {
     const button = screen.getByRole('button', { name: 'Send request' });
     const style = getComputedStyle(button);
     expect(style.backgroundImage).toContain('linear-gradient');
-    expect(style.backgroundImage).toContain('var(--vy-primary-from)');
+    expect(style.backgroundImage).toContain('var(--vy-btn-from)');
+    expect(style.getPropertyValue('--vy-btn-from')).toBe('var(--vy-primary-from)');
     expect(style.color).toBe('var(--vy-on-primary)');
     expect(style.boxShadow).toContain('var(--vy-shadow-1)');
     // Velvet's 1 px inner top highlight (a no-op shadow in the other looks).
@@ -247,6 +248,41 @@ describe('primitives in the new looks', () => {
     const style = getComputedStyle(screen.getByRole('button', { name: 'Delete' }));
     expect(style.color).toBe('var(--vy-bg)');
     expect(style.backgroundColor).toBe('var(--vy-danger)');
+  });
+
+  it('a caller’s bg-* utility replaces the primary gradient (the override contract)', () => {
+    velvetDark();
+    renderWithProviders(
+      <>
+        <Button className="bg-[#2DD4BF] text-[#04201D] hover:bg-[#5EEAD4]">Get started</Button>
+        <Button className="hover:bg-[#5EEAD4]">Hover only</Button>
+      </>,
+    );
+    const overridden = getComputedStyle(screen.getByRole('button', { name: 'Get started' }));
+    expect(overridden.backgroundImage).toBe('none');
+    // A hover-only bg-* is not a fill override: the gradient stays.
+    const hoverOnly = getComputedStyle(screen.getByRole('button', { name: 'Hover only' }));
+    expect(hoverOnly.backgroundImage).toContain('linear-gradient');
+  });
+
+  it('primary and danger hover/pressed use the generated fills, not ad-hoc darkening', () => {
+    expect(primitiveRules).not.toMatch(/color-mix\(in oklab, var\(--vy-(?:primary|danger)/);
+    expect(ruleBody('.vy-btn-primary:active:not(:disabled)')).toContain(
+      '--vy-btn-from: var(--vy-primary-press-from);',
+    );
+    expect(ruleBody('.vy-btn-danger:active:not(:disabled)')).toContain(
+      'background-color: var(--vy-danger-press);',
+    );
+  });
+
+  it('an invalid field keeps its danger border on hover', () => {
+    const hoverRules = [
+      ...primitiveRules.matchAll(/([^{}]*\.vy-field[^{}]*:hover[^{}]*)\{([^}]*)\}/g),
+    ];
+    expect(hoverRules.length).toBeGreaterThan(0);
+    for (const [, selector, body] of hoverRules)
+      if (/border-color/.test(body!))
+        expect(selector, selector!.trim()).toContain(":not([aria-invalid='true'])");
   });
 
   it('the dialog is a raised popover at elevation 3', async () => {

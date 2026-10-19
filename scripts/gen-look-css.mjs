@@ -134,6 +134,33 @@ const NO_SHADOW = '0 0 #0000';
  * rim on top in dark. Without glass, the solid raised surface and a hairline edge of
  * 35 % accent over the border (Velvet's gold).
  */
+/** Relative luminance of a hex colour (WCAG). */
+const luminance = (hex) => {
+  const [r, g, b] = hexRgb(hex).map((c) => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+
+/**
+ * Hover and pressed fills for buttons that carry text: each moves away from its text
+ * colour (lighter under dark text, darker under light text), so contrast only rises
+ * from the resting fill. Hover 8 %, pressed 16 %.
+ */
+function stateLines(t) {
+  const away = (fill, text, amount) =>
+    mix(luminance(text) < 0.18 ? '#ffffff' : '#000000', fill, amount);
+  return [
+    line('primary-hover-from', away(t.primaryFrom, t.onPrimary, 0.08)),
+    line('primary-hover-to', away(t.primaryTo, t.onPrimary, 0.08)),
+    line('primary-press-from', away(t.primaryFrom, t.onPrimary, 0.16)),
+    line('primary-press-to', away(t.primaryTo, t.onPrimary, 0.16)),
+    line('danger-hover', away(t.danger, t.bg, 0.08)),
+    line('danger-press', away(t.danger, t.bg, 0.16)),
+  ];
+}
+
 function popoverLines(look, mode, t) {
   const glass = looks[look].glass;
   return [
@@ -163,6 +190,7 @@ function lookBlock(look, mode) {
       return line(`shadow-${level}`, `0 ${e.y}px ${e.blur}px ${rgba(t.shadowColor, e.alpha)}`);
     }),
     ...popoverLines(look, mode, t),
+    ...stateLines(t),
     ...toneLines(look, mode),
   ];
   if (mode === 'light') {
@@ -228,6 +256,7 @@ function highContrastBlock(mode) {
     line('primary-highlight', NO_SHADOW),
     line('popover', t.surface),
     line('edge', t.border),
+    ...stateLines(flat),
     line('panel-blur', '0px'),
     // Fills stay the look's; initials take the theme ink (≥ 7:1), names the text colour.
     ...Object.keys(personTonesByLook.aurora).flatMap((tone) => [

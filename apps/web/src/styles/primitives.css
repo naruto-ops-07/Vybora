@@ -32,34 +32,38 @@
   box-shadow: none;
 }
 
-/* Primary: the look's gradient, its own ink, elevation 1 (+ Velvet's top highlight). */
+/*
+ * Primary: the look's gradient, its own ink, elevation 1 (+ Velvet's top highlight).
+ * The gradient is drawn from --vy-btn-from/-to, which hover and press swap. Hover and
+ * pressed stops move away from the ink (generated; contrast only rises), and the
+ * pressed button settles into the page.
+ */
 .vy-btn-primary {
+  --vy-btn-from: var(--vy-primary-from);
+  --vy-btn-to: var(--vy-primary-to);
   color: var(--vy-on-primary);
-  background-color: var(--vy-primary-to);
-  background-image: linear-gradient(
-    var(--vy-primary-angle),
-    var(--vy-primary-from),
-    var(--vy-primary-to)
-  );
+  background-color: var(--vy-btn-to);
+  background-image: linear-gradient(var(--vy-primary-angle), var(--vy-btn-from), var(--vy-btn-to));
   box-shadow: var(--vy-primary-highlight), var(--vy-shadow-1);
 }
 @media (hover: hover) {
   .vy-btn-primary:hover:not(:disabled) {
-    background-image: linear-gradient(
-      var(--vy-primary-angle),
-      color-mix(in oklab, var(--vy-primary-from) 94%, #000),
-      color-mix(in oklab, var(--vy-primary-to) 94%, #000)
-    );
+    --vy-btn-from: var(--vy-primary-hover-from);
+    --vy-btn-to: var(--vy-primary-hover-to);
   }
 }
-/* Pressed: darker stops, and the button settles into the page. */
 .vy-btn-primary:active:not(:disabled) {
-  background-image: linear-gradient(
-    var(--vy-primary-angle),
-    color-mix(in oklab, var(--vy-primary-from) 86%, #000),
-    color-mix(in oklab, var(--vy-primary-to) 84%, #000)
-  );
+  --vy-btn-from: var(--vy-primary-press-from);
+  --vy-btn-to: var(--vy-primary-press-to);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.22);
+}
+/*
+ * The override contract: a caller's bg-* utility (which sets only background-color)
+ * replaces the variant's fill, so the gradient steps aside. Every Button's class list
+ * starts with vy-btn, so a caller's bg-* always follows a space.
+ */
+.vy-btn-primary[class*=' bg-'] {
+  background-image: none;
 }
 
 /* Secondary: a quiet raised chip in the look's surface colours. */
@@ -114,13 +118,14 @@
   background-color: var(--vy-danger);
   box-shadow: var(--vy-shadow-1);
 }
+/* Hover and pressed fills move away from the text (generated; contrast only rises). */
 @media (hover: hover) {
   .vy-btn-danger:hover:not(:disabled) {
-    background-color: color-mix(in oklab, var(--vy-danger) 92%, #000);
+    background-color: var(--vy-danger-hover);
   }
 }
 .vy-btn-danger:active:not(:disabled) {
-  background-color: color-mix(in oklab, var(--vy-danger) 84%, #000);
+  background-color: var(--vy-danger-press);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.22);
 }
 
@@ -138,7 +143,7 @@
   transition-duration: 150ms;
 }
 @media (hover: hover) {
-  .vy-field:hover:not(:disabled):not(:focus) {
+  .vy-field:hover:not(:disabled):not(:focus):not([aria-invalid='true']) {
     border-color: color-mix(in oklab, var(--vy-border-strong) 75%, var(--vy-text));
   }
 }
@@ -273,9 +278,11 @@
   background-color: var(--vy-accent);
   background-image: none;
 }
-:root[data-contrast='high'] .vy-btn-primary:hover:not(:disabled),
+:root[data-contrast='high'] .vy-btn-primary:hover:not(:disabled) {
+  background-color: var(--vy-primary-hover-from);
+}
 :root[data-contrast='high'] .vy-btn-primary:active:not(:disabled) {
-  background-color: var(--vy-accent-hover);
+  background-color: var(--vy-primary-press-from);
 }
 :root[data-contrast='high'] .vy-btn-secondary {
   border-color: var(--vy-border-strong);

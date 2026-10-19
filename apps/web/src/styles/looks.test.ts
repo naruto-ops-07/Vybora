@@ -142,6 +142,31 @@ describe('looks.generated.css', () => {
     }
   });
 
+  it('button hover and pressed fills keep their text ≥ 4.5:1 (≥ 7:1 in high contrast)', () => {
+    const sets = [
+      ...LOOKS.flatMap((look) =>
+        (['light', 'dark'] as Mode[]).map((mode) => ({
+          name: `${look} ${mode}`,
+          b: block(mode === 'light' ? lightSelector(look) : darkSelector(look)),
+          floor: 4.5,
+        })),
+      ),
+      { name: 'high contrast light', b: block(HC_LIGHT), floor: 7 },
+      { name: 'high contrast dark', b: block(HC_DARK), floor: 7 },
+    ];
+    for (const { name, b, floor } of sets) {
+      const onPrimary = decl(b, 'on-primary')!;
+      for (const v of ['from', 'to'])
+        for (const state of ['primary', 'primary-hover', 'primary-press']) {
+          const fill = decl(b, `${state}-${v}`)!;
+          expect(contrast(onPrimary, fill), `${name} ${state}-${v}`).toBeGreaterThanOrEqual(floor);
+        }
+      const bg = decl(b, 'bg')!;
+      for (const state of ['danger', 'danger-hover', 'danger-press'])
+        expect(contrast(bg, decl(b, state)!), `${name} ${state}`).toBeGreaterThanOrEqual(floor);
+    }
+  });
+
   it('danger and warning text stay ≥ 4.5:1 on their soft fills, in every look × mode', () => {
     for (const look of LOOKS)
       for (const mode of ['light', 'dark'] as Mode[]) {
