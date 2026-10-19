@@ -52,7 +52,15 @@ export function useCc() {
       warning: t.warning,
       /** Header / composer surface (the look's glass colour; no blur on mobile). */
       glass: t.panel,
+      /**
+       * Bars that content scrolls under (headers, composer, tab bars): the look's panel
+       * when it is solid, else the surface. Without blur a translucent panel would let
+       * the thread read through it.
+       */
+      bar: t.panel.startsWith('#') ? t.panel : t.surface,
       popover: t.popover,
+      /** Behind sheets and dialogs: the ink (or black in dark) at about half strength. */
+      scrim: tint(t.dark ? '#000000' : t.text, t.dark ? '99' : '73'),
       look: t.look,
       highContrast: t.highContrast,
       radii: t.radii,
@@ -114,7 +122,16 @@ export function useThemeDef(theme: ChatTheme): ResolvedTheme {
 }
 
 /** Chat background: app background + optional flat wallpaper (identical on every device). */
-export function ChatBackground({ theme, children }: { theme: ChatTheme; children: ReactNode }) {
+export function ChatBackground({
+  theme,
+  glow,
+  children,
+}: {
+  theme: ChatTheme;
+  /** The look's light (`ChatGlow`), drawn under the wallpaper. */
+  glow?: ReactNode;
+  children: ReactNode;
+}) {
   const def = useThemeDef(theme);
   // High contrast: plain background, no wallpaper pattern.
   const svg = useMemo(
@@ -122,7 +139,8 @@ export function ChatBackground({ theme, children }: { theme: ChatTheme; children
     [theme.wallpaper, def.accent, def.highContrast],
   );
   return (
-    <View style={{ flex: 1, backgroundColor: def.background }}>
+    <View style={{ flex: 1, backgroundColor: def.background, overflow: 'hidden' }}>
+      {glow}
       {svg && (
         <View testID="chat-wallpaper" style={StyleSheet.absoluteFill} pointerEvents="none">
           <SvgXml xml={svg} width="100%" height="100%" preserveAspectRatio="xMidYMid slice" />
@@ -460,6 +478,122 @@ export function PrimaryButton({
           </>
         );
       }}
+    </Pressable>
+  );
+}
+
+/**
+ * An unread or request count (web `.vy-count`): the primary gradient with on-primary
+ * digits; `quiet` (muted chats) is a strong surface. Flat under high contrast.
+ */
+export function CountPill({
+  label,
+  quiet,
+  ring,
+  small,
+}: {
+  label: string;
+  quiet?: boolean;
+  /** An edge in the colour behind, so the pill reads where it overlaps an icon. */
+  ring?: string;
+  small?: boolean;
+}) {
+  const t = useTheme();
+  const h = small ? 18 : 20;
+  const gradient = !quiet && !t.highContrast;
+  return (
+    <View
+      style={{
+        minWidth: h,
+        height: h,
+        borderRadius: h / 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: small ? 4 : 6,
+        backgroundColor: quiet ? t.surfaceStrong : t.highContrast ? t.accent : t.primaryTo,
+        borderWidth: ring ? 1.5 : 0,
+        borderColor: ring,
+        overflow: 'hidden',
+      }}
+    >
+      {gradient && <GradientFill from={t.primaryFrom} to={t.primaryTo} angle={t.gradientAngle} />}
+      <Text
+        mono
+        style={{
+          color: quiet ? t.text : t.highContrast ? t.onAccent : t.onPrimary,
+          fontSize: small ? 10 : 11,
+          fontWeight: '600',
+        }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+/** A round 44 px icon button in the primary gradient (New chat, Send). Flat under HC. */
+export function PrimaryIconButton({
+  icon,
+  label,
+  onPress,
+  disabled,
+  size = 40,
+  children,
+}: {
+  icon?: IconName;
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  size?: number;
+  /** Replaces the icon (the sealed-send glyph). */
+  children?: ReactNode;
+}) {
+  const t = useTheme();
+  const gradient = !t.highContrast;
+  const pad = Math.max(0, (44 - size) / 2);
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!disabled }}
+      hitSlop={pad}
+      style={({ pressed }) => [
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: t.highContrast
+            ? pressed
+              ? t.accentHover
+              : t.accent
+            : pressed
+              ? t.primaryPressTo
+              : t.primaryTo,
+          opacity: disabled ? 0.45 : 1,
+        },
+        !disabled && !pressed ? shadowStyle(1, t) : null,
+      ]}
+    >
+      {({ pressed }) => (
+        <>
+          {gradient && (
+            <GradientFill
+              from={pressed ? t.primaryPressFrom : t.primaryFrom}
+              to={pressed ? t.primaryPressTo : t.primaryTo}
+              angle={t.gradientAngle}
+              radius={size / 2}
+            />
+          )}
+          {children ??
+            (icon && (
+              <Icon name={icon} size={18} color={t.highContrast ? t.onAccent : t.onPrimary} />
+            ))}
+        </>
+      )}
     </Pressable>
   );
 }

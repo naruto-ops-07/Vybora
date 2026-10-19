@@ -9,10 +9,12 @@ import * as Sharing from 'expo-sharing';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { ActivityIndicator, Alert, Pressable, View } from 'react-native';
 import { Text } from '@/components/Text';
-import { radii } from '@/lib/theme';
+import { tint as tintOf, useTheme } from '@/lib/theme';
 import { mediaCacheDir } from '@/lib/connect/storage';
 import { useConnect } from '../ConnectProvider';
 import { useCc } from './primitives';
+
+const VIDEO_BG = '#000000';
 
 /** Decrypt an attachment once and cache the bytes in memory for this session. */
 function useDecrypted(ref: AttachmentRef) {
@@ -65,6 +67,7 @@ export function ImageAttachment({
   attachment: AttachmentRef;
   onOpen?: (uri: string) => void;
 }) {
+  const { radii } = useTheme();
   const cc = useCc();
   const { data, isError } = useDecrypted(attachment);
   const ratio = attachment.width && attachment.height ? attachment.width / attachment.height : 1;
@@ -99,6 +102,7 @@ export function ImageAttachment({
 }
 
 export function VideoAttachment({ attachment }: { attachment: AttachmentRef }) {
+  const { radii } = useTheme();
   const cc = useCc();
   const file = useDecryptedFile(attachment, extFor(attachment.mime, 'mp4'));
   const player = useVideoPlayer(file.data ?? null, (p) => {
@@ -111,7 +115,8 @@ export function VideoAttachment({ attachment }: { attachment: AttachmentRef }) {
         height: 300,
         borderRadius: radii.md,
         overflow: 'hidden',
-        backgroundColor: '#000',
+        // Letterboxing: black in every look, like the photo viewer.
+        backgroundColor: VIDEO_BG,
         alignItems: 'center',
         justifyContent: 'center',
       }}
@@ -152,7 +157,8 @@ export function VoiceAttachment({ attachment, tint }: { attachment: AttachmentRe
           width: 38,
           height: 38,
           borderRadius: 19,
-          backgroundColor: 'rgba(255,255,255,0.18)',
+          // A wash of the bubble's own text colour: reads on incoming and outgoing alike.
+          backgroundColor: tintOf(tint, '2E'),
           alignItems: 'center',
           justifyContent: 'center',
         }}
@@ -164,7 +170,7 @@ export function VoiceAttachment({ attachment, tint }: { attachment: AttachmentRe
         )}
       </Pressable>
       <View style={{ flex: 1, gap: 6 }}>
-        <View style={{ height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.22)' }}>
+        <View style={{ height: 4, borderRadius: 2, backgroundColor: tintOf(tint, '38') }}>
           <View
             style={{
               height: 4,
@@ -174,7 +180,7 @@ export function VoiceAttachment({ attachment, tint }: { attachment: AttachmentRe
             }}
           />
         </View>
-        <Text style={{ color: tint, opacity: 0.85, fontSize: 12 }}>
+        <Text mono style={{ color: tint, fontSize: 12 }}>
           {formatDuration(
             status.playing ? status.currentTime * 1000 : (attachment.durationMs ?? 0),
           )}
@@ -210,7 +216,7 @@ export function FileAttachment({ attachment, tint }: { attachment: AttachmentRef
           width: 40,
           height: 40,
           borderRadius: 12,
-          backgroundColor: 'rgba(255,255,255,0.16)',
+          backgroundColor: tintOf(tint, '29'),
           alignItems: 'center',
           justifyContent: 'center',
         }}
@@ -225,7 +231,7 @@ export function FileAttachment({ attachment, tint }: { attachment: AttachmentRef
         <Text style={{ color: tint, fontWeight: '600' }} numberOfLines={1}>
           {attachment.name ?? 'File'}
         </Text>
-        <Text style={{ color: tint, opacity: 0.7, fontSize: 12 }}>
+        <Text style={{ color: tint, fontSize: 12 }}>
           {kb > 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(kb))} KB`} · tap
           to open
         </Text>

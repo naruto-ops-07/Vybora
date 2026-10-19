@@ -3,7 +3,7 @@ import type { LocalMessage } from '@vybora/e2ee';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { Icon, type IconName } from '@/components/Icon';
 import { Text } from '@/components/Text';
-import { radii } from '@/lib/theme';
+import { shadowStyle, tint, useTheme } from '@/lib/theme';
 import { useCc } from './primitives';
 
 /** Reactions are message content (emoji), not interface icons. */
@@ -31,13 +31,15 @@ export function MessageActions({
   onReact: (emoji: string) => void;
   onAction: (a: MessageAction) => void;
 }) {
+  const t = useTheme();
+  const { radii } = t;
   const cc = useCc();
   return (
     <Modal visible={!!message} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable
         style={{
           flex: 1,
-          backgroundColor: cc.dark ? 'rgba(0,0,0,0.6)' : 'rgba(11,20,22,0.5)',
+          backgroundColor: cc.scrim,
           justifyContent: 'flex-end',
         }}
         onPress={onClose}
@@ -45,15 +47,31 @@ export function MessageActions({
       >
         <Pressable
           onPress={(e) => e.stopPropagation()}
-          style={{
-            backgroundColor: cc.panel,
-            borderTopLeftRadius: radii.lg,
-            borderTopRightRadius: radii.lg,
-            borderTopWidth: 1,
-            borderColor: cc.line,
-            paddingBottom: 24,
-          }}
+          style={[
+            {
+              backgroundColor: cc.popover,
+              borderTopLeftRadius: radii.lg + 6,
+              borderTopRightRadius: radii.lg + 6,
+              borderTopWidth: StyleSheet.hairlineWidth,
+              borderColor: t.highContrast ? cc.lineStrong : cc.line,
+              paddingTop: 8,
+              paddingBottom: 24,
+            },
+            shadowStyle(3, t),
+          ]}
         >
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={{
+              alignSelf: 'center',
+              width: 36,
+              height: 4,
+              borderRadius: 2,
+              backgroundColor: cc.lineStrong,
+              marginBottom: 4,
+            }}
+          />
           <View
             style={{
               flexDirection: 'row',
@@ -76,8 +94,10 @@ export function MessageActions({
                   height: 44,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  borderRadius: radii.md,
+                  borderRadius: 22,
                   backgroundColor: myReaction === emoji ? cc.accentSoft : 'transparent',
+                  borderWidth: myReaction === emoji ? 1 : 0,
+                  borderColor: cc.accent,
                 }}
               >
                 <Text style={{ fontSize: 24 }}>{emoji}</Text>
@@ -95,9 +115,11 @@ export function MessageActions({
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 14,
-                  paddingHorizontal: 20,
+                  marginHorizontal: 8,
+                  paddingHorizontal: 12,
                   minHeight: 52,
-                  backgroundColor: pressed ? cc.raised : 'transparent',
+                  borderRadius: radii.md,
+                  backgroundColor: pressed ? tint(cc.text, '12') : 'transparent',
                 })}
               >
                 <Icon name={def.icon} size={20} color={def.danger ? cc.danger : cc.textMuted} />

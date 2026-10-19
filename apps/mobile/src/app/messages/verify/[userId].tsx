@@ -5,13 +5,14 @@ import * as Clipboard from 'expo-clipboard';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { ScrollView, View } from 'react-native';
 import { Text } from '@/components/Text';
-import { radii } from '@/lib/theme';
+import { useTheme } from '@/lib/theme';
 import { useConnect } from '@/features/connect/ConnectProvider';
 import { ConnectGate } from '@/features/connect/ConnectGate';
 import { useConversation, useNicknames } from '@/features/connect/hooks';
 import { useCc, PrimaryButton, Row, SectionCard } from '@/features/connect/ui/primitives';
 
 function Verify() {
+  const { radii } = useTheme();
   const cc = useCc();
   const { userId = '', conversationId = '' } = useLocalSearchParams<{
     userId: string;

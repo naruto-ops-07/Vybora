@@ -9,7 +9,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { useCc } from '@/features/connect/ui/primitives';
 import { useOnboarding } from '@/features/onboarding/store';
 import { publicSiteUrl } from '@/lib/env';
-import { radii } from '@/lib/theme';
+import { useTheme } from '@/lib/theme';
 
 export interface HandlePerson {
   id: string;
@@ -42,6 +42,7 @@ export function HandleCardView({
   variant?: 'full' | 'compact';
   onShared?: () => void;
 }) {
+  const { radii } = useTheme();
   const cc = useCc();
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);

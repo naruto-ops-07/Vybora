@@ -26,11 +26,12 @@ import { Avatar, Button, Icon, Loading, Text } from '@/components/ui';
 import { useMe } from '@/features/auth/AuthProvider';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { supabase } from '@/lib/supabase';
-import { radii, useTheme } from '@/lib/theme';
+import { useTheme } from '@/lib/theme';
 
 type Pages = InfiniteData<Message[], { created_at: string; id: string } | null>;
 
 function Attachment({ path }: { path: string }) {
+  const { radii } = useTheme();
   // Short-lived signed URL; the `dm` bucket is private.
   const { data: uri } = useSignedUrl(path, 'dm');
   return (
@@ -49,6 +50,7 @@ function Attachment({ path }: { path: string }) {
  * can still unsend their old messages.
  */
 export default function LegacyConversation() {
+  const { radii } = useTheme();
   const { id = '' } = useLocalSearchParams<{ id: string }>();
   const { userId } = useMe();
   const t = useTheme();

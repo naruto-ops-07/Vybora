@@ -23,7 +23,7 @@ import {
 import { RequestsSection } from '@/features/friends/RequestsSection';
 import { FriendsEmpty } from '@/features/onboarding/EmptyStates';
 import { useA11y } from '@/lib/a11y';
-import { radii } from '@/lib/theme';
+import { useTheme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
 
 /** The friendship the joined card is for (or waiting to show). */
@@ -66,6 +66,7 @@ function SectionHeading({ title, count }: { title: string; count?: number }) {
 
 /** Static placeholders (no shimmer, so nothing to switch off for reduced motion). */
 function Skeleton() {
+  const { radii } = useTheme();
   const cc = useCc();
   return (
     <View accessibilityLabel="Loading friends" accessibilityState={{ busy: true }}>

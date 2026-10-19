@@ -57,6 +57,7 @@ import {
   useTyping,
 } from '@/features/connect/hooks';
 import { copyText } from '@/features/connect/copy';
+import { ChatGlow } from '@/features/connect/ui/ChatGlow';
 import { useToday } from '@/features/connect/useToday';
 import { Bubble } from '@/features/connect/ui/Bubble';
 import { Composer } from '@/features/connect/ui/Composer';
@@ -73,8 +74,11 @@ import { SwipeToReply } from '@/features/connect/ui/SwipeToReply';
 import { DateChip, JumpToLatest, UnreadDivider } from '@/features/connect/ui/ThreadParts';
 import { useA11y } from '@/lib/a11y';
 import { useHaptics } from '@/lib/haptics';
-import { radii } from '@/lib/theme';
+import { tint, useTheme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
+
+const VIEWER_BG = '#000000';
+const VIEWER_INK = '#FFFFFF';
 
 const TTL_LABEL = (s: number) =>
   s >= 86400 * 7
@@ -90,7 +94,10 @@ async function readBytes(uri: string): Promise<Uint8Array> {
 }
 
 function Chat() {
+  const { radii } = useTheme();
   const cc = useCc();
+  // Warning banners: a flat wash of the warning colour, with ink text (4.5:1 in every look).
+  const warnWash = tint(cc.warning, cc.dark ? '24' : '1A');
   const { id = '' } = useLocalSearchParams<{ id: string }>();
   const { userId } = useMe();
   const { engine } = useConnect();
@@ -458,12 +465,13 @@ function Chat() {
     >
       <Stack.Screen
         options={{
-          headerStyle: { backgroundColor: cc.panel },
+          headerStyle: { backgroundColor: cc.bar },
           headerTintColor: cc.text,
           ...(selection
             ? {
                 headerTitle: () => (
                   <Text
+                    display
                     style={{ color: cc.text, fontWeight: '600', fontSize: 17 }}
                     accessibilityLiveRegion="polite"
                   >
@@ -560,9 +568,9 @@ function Chat() {
                     {conv?.kind === 'group' ? (
                       <View
                         style={{
-                          width: 34,
-                          height: 34,
-                          borderRadius: 17,
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
                           alignItems: 'center',
                           justifyContent: 'center',
                           backgroundColor: cc.strong,
@@ -576,11 +584,12 @@ function Chat() {
                         name={peer?.username ?? '?'}
                         userId={peer?.id ?? ''}
                         displayName={peer?.display_name}
-                        size={34}
+                        size={36}
                       />
                     )}
                     <View>
                       <Text
+                        display
                         style={{ color: cc.text, fontWeight: '600', fontSize: 16 }}
                         numberOfLines={1}
                       >
@@ -612,7 +621,15 @@ function Chat() {
                 headerRight: () =>
                   conv?.disappearingSeconds ? (
                     <View
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                        minHeight: 28,
+                        paddingHorizontal: 10,
+                        borderRadius: 999,
+                        backgroundColor: cc.raised,
+                      }}
                       accessibilityLabel="Disappearing messages on"
                     >
                       <Icon name="timer" size={15} color={cc.textMuted} />
@@ -624,7 +641,7 @@ function Chat() {
               }),
         }}
       />
-      <ChatBackground theme={theme}>
+      <ChatBackground theme={theme} glow={<ChatGlow />}>
         {!live && (
           <View
             style={{
@@ -633,12 +650,12 @@ function Chat() {
               justifyContent: 'center',
               gap: 6,
               padding: 6,
-              backgroundColor: cc.dark ? '#2A2110' : '#FDF3E2',
+              backgroundColor: warnWash,
             }}
             accessibilityLiveRegion="polite"
           >
             <Icon name="wifi-off" size={12} color={cc.warning} />
-            <Text style={{ color: cc.warning, fontSize: 12 }}>
+            <Text style={{ color: cc.text, fontSize: 12 }}>
               Reconnecting — messages will sync automatically
             </Text>
           </View>
@@ -655,7 +672,7 @@ function Chat() {
               margin: 10,
               padding: 12,
               borderRadius: radii.md,
-              backgroundColor: cc.dark ? '#2A2110' : '#FDF3E2',
+              backgroundColor: warnWash,
               borderWidth: 1,
               borderColor: cc.warning,
               flexDirection: 'row',
@@ -863,7 +880,8 @@ function Chat() {
         onRequestClose={() => setViewer(null)}
       >
         <Pressable
-          style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center' }}
+          // The photo viewer is black in every look: photos read truest on it.
+          style={{ flex: 1, backgroundColor: VIEWER_BG, justifyContent: 'center' }}
           onPress={() => setViewer(null)}
           accessibilityLabel="Close photo"
         >
@@ -875,7 +893,7 @@ function Chat() {
             />
           )}
           <View style={{ position: 'absolute', top: insets.top + 12, right: 16 }}>
-            <Icon name="x" size={26} color="#fff" />
+            <Icon name="x" size={26} color={VIEWER_INK} />
           </View>
         </Pressable>
       </Modal>

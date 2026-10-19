@@ -45,7 +45,7 @@ import {
   useSecureInbox,
 } from '@/features/connect/hooks';
 import { ChatRow } from '@/features/connect/ui/ChatRowParts';
-import { ConnectEmpty, useCc } from '@/features/connect/ui/primitives';
+import { ConnectEmpty, PrimaryIconButton, useCc } from '@/features/connect/ui/primitives';
 import { UndoBar } from '@/features/connect/ui/UndoBar';
 import { FriendsButton } from '@/features/friends/FriendsButton';
 import { useShareMyHandle } from '@/features/friends/HandleCard';
@@ -58,7 +58,7 @@ import {
 } from '@/features/onboarding/EmptyStates';
 import { GetStarted } from '@/features/onboarding/GetStarted';
 import { useHaptics } from '@/lib/haptics';
-import { radii } from '@/lib/theme';
+import { useTheme } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
 
 type Filter = 'all' | 'unread' | 'groups' | 'pinned' | 'archived';
@@ -127,6 +127,7 @@ function InboxEmpty({
 }
 
 function Inbox() {
+  const { radii } = useTheme();
   const cc = useCc();
   const insets = useSafeAreaInsets();
   const { userId } = useMe();
@@ -234,30 +235,51 @@ function Inbox() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: cc.panel, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: cc.night }}>
       <View
         style={{
-          height: 56,
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingLeft: 16,
-          paddingRight: 6,
+          paddingTop: insets.top,
+          backgroundColor: cc.bar,
           borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: cc.line,
+          borderBottomColor: cc.highContrast ? cc.lineStrong : cc.line,
         }}
       >
-        <Text
-          accessibilityRole="header"
-          style={{ color: cc.text, fontSize: 22, fontWeight: '700', flex: 1 }}
+        <View
+          style={{
+            minHeight: 60,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 2,
+            paddingLeft: 20,
+            paddingRight: 10,
+          }}
         >
-          Chats
-        </Text>
-        <FriendsButton
-          count={requests.data?.incoming.length ?? 0}
-          onPress={() => router.push('/messages/friends')}
-        />
-        <IconButton name="settings" label="Settings" onPress={() => router.push('/settings')} />
-        <IconButton name="edit" label="New chat" onPress={() => router.push('/messages/new')} />
+          <Text
+            accessibilityRole="header"
+            display
+            style={{
+              color: cc.text,
+              fontSize: 28,
+              fontWeight: '600',
+              letterSpacing: -0.4,
+              flex: 1,
+            }}
+          >
+            Chats
+          </Text>
+          <FriendsButton
+            count={requests.data?.incoming.length ?? 0}
+            onPress={() => router.push('/messages/friends')}
+          />
+          <IconButton name="settings" label="Settings" onPress={() => router.push('/settings')} />
+          <View style={{ marginLeft: 4 }}>
+            <PrimaryIconButton
+              icon="edit"
+              label="New chat"
+              onPress={() => router.push('/messages/new')}
+            />
+          </View>
+        </View>
       </View>
       <FlatList
         data={shown}
@@ -286,11 +308,11 @@ function Inbox() {
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 8,
-                  backgroundColor: cc.night,
+                  backgroundColor: cc.raised,
                   borderRadius: radii.md,
-                  paddingHorizontal: 12,
-                  borderWidth: 1,
-                  borderColor: cc.lineStrong,
+                  paddingHorizontal: 14,
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderColor: cc.highContrast ? cc.lineStrong : cc.line,
                 }}
               >
                 <Icon name="search" size={16} color={cc.textSubtle} />
@@ -307,12 +329,8 @@ function Inbox() {
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                style={{
-                  marginTop: 8,
-                  borderBottomWidth: StyleSheet.hairlineWidth,
-                  borderBottomColor: cc.line,
-                }}
-                contentContainerStyle={{ gap: 18 }}
+                style={{ marginTop: 10, marginHorizontal: -16 }}
+                contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingBottom: 8 }}
                 accessibilityRole="tablist"
               >
                 {FILTERS.map((f) => (
@@ -321,22 +339,31 @@ function Inbox() {
                     onPress={() => setFilter(f)}
                     accessibilityRole="tab"
                     accessibilityState={{ selected: filter === f }}
-                    style={{
-                      minHeight: 44,
-                      justifyContent: 'center',
-                      borderBottomWidth: 2,
-                      borderBottomColor: filter === f ? cc.accent : 'transparent',
-                    }}
+                    // A 34 px pill inside a 44 px target (web `.vy-chip`).
+                    style={{ minHeight: 44, justifyContent: 'center' }}
                   >
-                    <Text
+                    <View
                       style={{
-                        color: filter === f ? cc.text : cc.textMuted,
-                        fontSize: 14,
-                        fontWeight: '500',
+                        minHeight: 34,
+                        justifyContent: 'center',
+                        paddingHorizontal: 14,
+                        borderRadius: 999,
+                        backgroundColor: filter === f ? cc.accent : cc.panel,
+                        borderWidth: StyleSheet.hairlineWidth,
+                        borderColor:
+                          filter === f ? cc.accent : cc.highContrast ? cc.lineStrong : cc.line,
                       }}
                     >
-                      {f[0]!.toUpperCase() + f.slice(1)}
-                    </Text>
+                      <Text
+                        style={{
+                          color: filter === f ? cc.onAccent : cc.textMuted,
+                          fontSize: 14,
+                          fontWeight: '500',
+                        }}
+                      >
+                        {f[0]!.toUpperCase() + f.slice(1)}
+                      </Text>
+                    </View>
                   </Pressable>
                 ))}
               </ScrollView>
@@ -442,7 +469,9 @@ function Inbox() {
         ListFooterComponent={
           legacy.data?.length && filter === 'all' ? (
             <View style={{ padding: 16, gap: 4 }}>
-              <Text style={{ color: cc.textMuted, fontSize: 13, fontWeight: '600' }}>
+              <Text
+                style={{ color: cc.textMuted, fontSize: 13, fontWeight: '600', paddingBottom: 4 }}
+              >
                 Older chats (read-only, not end-to-end encrypted)
               </Text>
               {legacy.data.map((l) => (

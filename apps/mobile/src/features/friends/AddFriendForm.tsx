@@ -12,7 +12,7 @@ import { Text, TextInput } from '@/components/Text';
 import { Button } from '@/components/ui';
 import { useCc } from '@/features/connect/ui/primitives';
 import { useHaptics } from '@/lib/haptics';
-import { radii } from '@/lib/theme';
+import { useTheme } from '@/lib/theme';
 
 const NOTICE_ICON: Record<AddFriendNotice['tone'], IconName> = {
   success: 'check-circle',
@@ -35,6 +35,7 @@ export function AddFriendForm({
   /** Bumped when the joined card takes over from the `accepted` message. */
   acceptedReplaced?: number;
 }) {
+  const { radii } = useTheme();
   const cc = useCc();
   const haptic = useHaptics();
   const [value, setValue] = useState('');

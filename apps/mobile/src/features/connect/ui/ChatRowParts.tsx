@@ -4,9 +4,9 @@ import { Pressable, View } from 'react-native';
 import { Icon } from '@/components/Icon';
 import { Text } from '@/components/Text';
 import { Avatar, GroupAvatar } from '@/components/ui';
-import { radii } from '@/lib/theme';
+import { tint, useTheme } from '@/lib/theme';
 import { Ticks } from './Bubble';
-import { useCc } from './primitives';
+import { CountPill, useCc } from './primitives';
 
 /** Chat-list preview: "typing…" in the accent colour, or `You: text` with delivery ticks. */
 export function RowPreviewLine({ preview, unread }: { preview: RowPreview; unread: boolean }) {
@@ -56,6 +56,7 @@ export function ChatRow({
   onToggleMute: () => void;
   onArchive: () => void;
 }) {
+  const { radii } = useTheme();
   const cc = useCc();
   const peer = peerOf(conv, myId);
   const unread = conv.unreadCount > 0;
@@ -80,13 +81,16 @@ export function ChatRow({
       accessibilityRole="button"
       accessibilityLabel={`${title}${unread ? `, ${conv.unreadCount} unread` : ''}${muted ? ', muted' : ''}${conv.pinned ? ', pinned' : ''}`}
       accessibilityHint="Long press for pin, archive and details"
+      // Inset and rounded (web `.vy-row`); pressed is an ink tint on the page.
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
-        paddingHorizontal: 16,
+        marginHorizontal: 8,
+        paddingHorizontal: 10,
         paddingVertical: 10,
-        backgroundColor: pressed ? cc.raised : 'transparent',
+        borderRadius: radii.md,
+        backgroundColor: pressed ? tint(cc.text, '12') : 'transparent',
       })}
     >
       <View>
@@ -94,7 +98,7 @@ export function ChatRow({
           <GroupAvatar
             members={conv.members.filter((m) => m.id !== myId)}
             size={48}
-            ring={cc.panel}
+            ring={cc.night}
           />
         ) : (
           <Avatar
@@ -117,7 +121,7 @@ export function ChatRow({
               borderRadius: 7,
               backgroundColor: cc.success,
               borderWidth: 2,
-              borderColor: cc.panel,
+              borderColor: cc.night,
             }}
             accessibilityLabel="Online"
           />
@@ -130,7 +134,7 @@ export function ChatRow({
             style={{
               color: cc.text,
               fontSize: 16,
-              fontWeight: unread ? '600' : '500',
+              fontWeight: unread ? '700' : '600',
               flexShrink: 1,
             }}
             numberOfLines={1}
@@ -148,26 +152,7 @@ export function ChatRow({
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <RowPreviewLine preview={preview} unread={unread} />
-          {unread && (
-            <View
-              style={{
-                minWidth: 20,
-                height: 20,
-                borderRadius: radii.sm,
-                alignItems: 'center',
-                justifyContent: 'center',
-                paddingHorizontal: 5,
-                backgroundColor: muted ? cc.strong : cc.accent,
-              }}
-            >
-              <Text
-                mono
-                style={{ color: muted ? cc.text : cc.onAccent, fontSize: 11, fontWeight: '500' }}
-              >
-                {formatUnread(conv.unreadCount)}
-              </Text>
-            </View>
-          )}
+          {unread && <CountPill label={formatUnread(conv.unreadCount)} quiet={muted} />}
         </View>
       </View>
     </Pressable>

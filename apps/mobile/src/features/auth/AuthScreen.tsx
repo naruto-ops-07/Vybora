@@ -1,34 +1,52 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Path, Rect } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { Icon } from '@/components/Icon';
 import { WelcomeIllustration } from '@/components/illustrations';
 import { Text as BaseText } from '@/components/Text';
 import { Text } from '@/components/ui';
-import { radii, useTheme } from '@/lib/theme';
+import { tint, useTheme } from '@/lib/theme';
 
-/** VYBORA mark (same geometry as the web logo): flat, two colours. */
+/**
+ * VYBORA mark (web `LogoMark`): a "V" of two strokes meeting at a sealed point, on a
+ * tile in the look's primary gradient (one colour under high contrast), in its ink.
+ */
 export function LogoMark({ size = 32 }: { size?: number }) {
+  const t = useTheme();
+  const id = `vy-mark-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   return (
-    <Svg width={size} height={size} viewBox="0 0 64 64" accessibilityElementsHidden>
-      <Rect width={64} height={64} rx={12} fill="#0F4C47" />
+    <Svg
+      width={size}
+      height={size}
+      viewBox="0 0 64 64"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <Defs>
+        <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor={t.primaryFrom} />
+          <Stop offset="1" stopColor={t.primaryTo} />
+        </LinearGradient>
+      </Defs>
+      <Rect width={64} height={64} rx={14} fill={`url(#${id})`} />
       <Path
         d="M18 20 L32 45 L46 20"
         fill="none"
-        stroke="#2DD4BF"
+        stroke={t.onPrimary}
         strokeWidth={6}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <Rect x={29} y={14} width={6} height={6} fill="#E6EEEE" />
+      <Rect x={29} y={14} width={6} height={6} rx={1} fill={t.onPrimary} />
     </Svg>
   );
 }
@@ -80,7 +98,7 @@ export function AuthScreen({
                 alignItems: 'center',
                 marginTop: 'auto',
                 paddingVertical: 16,
-                borderTopWidth: 1,
+                borderTopWidth: StyleSheet.hairlineWidth,
                 borderTopColor: t.border,
               }}
             >
@@ -100,13 +118,18 @@ export function FormError({ message }: { message: string | null }) {
     <View
       accessibilityRole="alert"
       style={{
+        flexDirection: 'row',
+        gap: 10,
+        alignItems: 'flex-start',
         borderWidth: 1,
         borderColor: t.danger,
-        borderRadius: radii.md,
+        borderRadius: t.radii.md,
+        backgroundColor: tint(t.danger, t.dark ? '1F' : '12'),
         padding: 12,
       }}
     >
-      <Text style={{ color: t.danger, fontWeight: '500' }}>{message}</Text>
+      <Icon name="alert-circle" size={18} color={t.danger} />
+      <Text style={{ color: t.text, fontWeight: '500', flex: 1 }}>{message}</Text>
     </View>
   );
 }

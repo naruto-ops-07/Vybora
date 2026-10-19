@@ -1,13 +1,13 @@
 import type { ReplyRef } from '@vybora/e2ee';
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { Icon, type IconName } from '@/components/Icon';
 import { Text, TextInput } from '@/components/Text';
 import { useA11y } from '@/lib/a11y';
 import { useHaptics } from '@/lib/haptics';
-import { radii } from '@/lib/theme';
-import { useCc } from './primitives';
+import { tint, useTheme } from '@/lib/theme';
+import { PrimaryIconButton, useCc } from './primitives';
 import { SendGlyph, useSealedSend } from './SealedSend';
 
 export interface ComposerProps {
@@ -39,7 +39,22 @@ function SquareButton({
   /** Replaces the icon (the send button's sealed-send glyph). */
   glyph?: ReactNode;
 }) {
+  const t = useTheme();
   const cc = useCc();
+  // Send: the look's round primary gradient (flat under high contrast).
+  if (filled)
+    return (
+      <PrimaryIconButton label={label} onPress={onPress} size={44}>
+        {glyph ?? (
+          <Icon
+            name={icon}
+            size={18}
+            color={t.highContrast ? t.onAccent : t.onPrimary}
+            weight="fill"
+          />
+        )}
+      </PrimaryIconButton>
+    );
   return (
     <Pressable
       onPress={onPress}
@@ -48,21 +63,13 @@ function SquareButton({
       style={({ pressed }) => ({
         width: 44,
         height: 44,
-        borderRadius: radii.md,
+        borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: filled ? cc.accent : pressed ? cc.raised : 'transparent',
-        opacity: filled && pressed ? 0.8 : 1,
+        backgroundColor: pressed ? tint(cc.text, '14') : 'transparent',
       })}
     >
-      {glyph ?? (
-        <Icon
-          name={icon}
-          size={filled ? 18 : 22}
-          color={filled ? cc.onAccent : (color ?? cc.textMuted)}
-          weight={filled ? 'fill' : 'regular'}
-        />
-      )}
+      {glyph ?? <Icon name={icon} size={22} color={color ?? cc.textMuted} />}
     </Pressable>
   );
 }
@@ -78,6 +85,9 @@ export function Composer({
   onVoice,
   onTyping,
 }: ComposerProps) {
+  const t = useTheme();
+  const { radii } = t;
+  const sendInk = t.highContrast ? t.onAccent : t.onPrimary;
   const cc = useCc();
   const [text, setText] = useState('');
   const [recording, setRecording] = useState(false);
@@ -181,9 +191,9 @@ export function Composer({
         paddingTop: 8,
         paddingBottom: 8,
         gap: 8,
-        backgroundColor: cc.panel,
-        borderTopWidth: 1,
-        borderTopColor: cc.line,
+        backgroundColor: cc.bar,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: cc.highContrast ? cc.lineStrong : cc.line,
       }}
     >
       {replyTo && (
@@ -193,10 +203,13 @@ export function Composer({
             alignItems: 'center',
             gap: 10,
             paddingVertical: 6,
-            paddingLeft: 10,
+            paddingLeft: 12,
+            marginHorizontal: 4,
+            borderRadius: radii.md,
             backgroundColor: cc.raised,
-            borderLeftWidth: 2,
+            borderLeftWidth: 3,
             borderLeftColor: accent,
+            overflow: 'hidden',
           }}
         >
           <View style={{ flex: 1 }}>
@@ -253,12 +266,13 @@ export function Composer({
               flex: 1,
               minHeight: 44,
               maxHeight: 130,
-              borderRadius: radii.md,
-              backgroundColor: cc.night,
-              borderWidth: 1,
-              borderColor: cc.lineStrong,
+              // The look's search-field treatment (web `.vy-search`): a muted, rounded well.
+              borderRadius: 22,
+              backgroundColor: cc.raised,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: cc.highContrast ? cc.lineStrong : cc.line,
               color: cc.text,
-              paddingHorizontal: 12,
+              paddingHorizontal: 16,
               paddingTop: 11,
               paddingBottom: 11,
               fontSize: 16,
@@ -270,7 +284,7 @@ export function Composer({
               label="Send"
               onPress={send}
               filled
-              glyph={<SendGlyph seal={seal} color={cc.onAccent} />}
+              glyph={<SendGlyph seal={seal} color={sendInk} />}
             />
           ) : (
             <SquareButton

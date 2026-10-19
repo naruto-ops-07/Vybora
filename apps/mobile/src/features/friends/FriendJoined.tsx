@@ -11,7 +11,7 @@ import { Avatar } from '@/components/Avatar';
 import { Text } from '@/components/Text';
 import { Button, IconButton } from '@/components/ui';
 import { useCc } from '@/features/connect/ui/primitives';
-import { radii } from '@/lib/theme';
+import { useTheme } from '@/lib/theme';
 import { nameOf } from './hooks';
 
 export type JoinedPerson = Pick<Friend, 'userId' | 'username' | 'displayName' | 'avatarPath'>;
@@ -47,6 +47,7 @@ export function FriendJoinedCard({
   onSayHi: () => void;
   onDismiss: () => void;
 }) {
+  const { radii } = useTheme();
   const cc = useCc();
   const apart = useSharedValue(animate ? 1 : 0);
   useEffect(() => {

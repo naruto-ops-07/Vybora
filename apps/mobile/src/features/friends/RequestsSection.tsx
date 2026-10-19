@@ -32,13 +32,15 @@ export function RequestsSection({
   const [tab, setTab] = useState<Tab>(() =>
     incoming.length || !outgoing.length ? 'received' : 'sent',
   );
-  const counts = { received: incoming.length, sent: outgoing.length };
-  const prev = useRef(counts);
+  const received = incoming.length;
+  const sent = outgoing.length;
+  const prev = useRef({ received, sent });
   useEffect(() => {
+    const counts = { received, sent };
     const other: Tab = tab === 'received' ? 'sent' : 'received';
     if (prev.current[tab] > 0 && counts[tab] === 0 && counts[other] > 0) setTab(other);
     prev.current = counts;
-  });
+  }, [received, sent, tab]);
 
   const list = tab === 'received' ? incoming : outgoing;
   return (

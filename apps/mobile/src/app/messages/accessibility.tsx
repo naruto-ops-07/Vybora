@@ -4,9 +4,10 @@ import { Text } from '@/components/Text';
 import { Row, SectionCard, useCc } from '@/features/connect/ui/primitives';
 import { Segmented } from '@/features/connect/ui/Segmented';
 import { useA11y } from '@/lib/a11y';
-import { radii } from '@/lib/theme';
+import { useTheme } from '@/lib/theme';
 
 export default function AccessibilityScreen() {
+  const { radii } = useTheme();
   const cc = useCc();
   const { prefs, setPrefs } = useA11y();
   const toggle = (label: string, value: boolean, onChange: (v: boolean) => void) => (

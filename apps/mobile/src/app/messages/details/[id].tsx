@@ -24,6 +24,8 @@ import {
   chatAccent,
   chatThemeDefs,
   DEFAULT_THEME_PRESET,
+  isDefaultChatTheme,
+  outgoingBubbleFill,
   THEME_ORDER,
   toneLabels,
   wallpaperLabels,
@@ -35,17 +37,18 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Linking from 'expo-linking';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useDeferredValue, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, Switch, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { Text, TextInput } from '@/components/Text';
 import { SvgXml } from 'react-native-svg';
-import { Avatar } from '@/components/ui';
+import { GradientFill } from '@/components/GradientFill';
+import { Avatar, Button } from '@/components/ui';
 import { useMe } from '@/features/auth/AuthProvider';
 import { useConnect } from '@/features/connect/ConnectProvider';
 import { ConnectGate } from '@/features/connect/ConnectGate';
 import { conversationTitle, useConversation, useNicknames } from '@/features/connect/hooks';
 import { ImageAttachment } from '@/features/connect/ui/Attachment';
 import { Row, SectionCard, useCc } from '@/features/connect/ui/primitives';
-import { radii } from '@/lib/theme';
+import { shadowStyle, tint, useTheme } from '@/lib/theme';
 import { playTone } from '@/lib/connect/tones';
 import { supabase } from '@/lib/supabase';
 
@@ -58,9 +61,14 @@ const DISAPPEARING: { label: string; seconds: number | null }[] = [
 ];
 
 function ThemePicker({ value, onPick }: { value: ChatTheme; onPick: (t: ChatTheme) => void }) {
+  const t = useTheme();
+  const { radii } = t;
   const cc = useCc();
   const preset = value.preset ?? DEFAULT_THEME_PRESET;
-  const accent = chatAccent(chatThemeDefs[preset] ?? chatThemeDefs[DEFAULT_THEME_PRESET]!, cc.dark);
+  // Default is the look's own bubble and accent; named themes keep theirs.
+  const accent = isDefaultChatTheme(value)
+    ? t.accent
+    : chatAccent(chatThemeDefs[preset] ?? chatThemeDefs[DEFAULT_THEME_PRESET]!, cc.dark);
   return (
     <View style={{ padding: 14, gap: 16 }}>
       <View style={{ gap: 8 }}>
@@ -78,26 +86,46 @@ function ThemePicker({ value, onPick }: { value: ChatTheme; onPick: (t: ChatThem
                 onPress={() => onPick({ ...value, preset: p as ThemePreset })}
                 accessibilityRole="radio"
                 accessibilityState={{ checked: active }}
-                accessibilityLabel={` theme`}
+                accessibilityLabel={`${d.label} theme`}
                 style={{
                   width: '23%',
                   alignItems: 'center',
                   gap: 6,
                   paddingVertical: 8,
                   borderRadius: radii.md,
-                  borderWidth: 1,
-                  borderColor: active ? cc.accent : cc.line,
+                  // Constant width: the checked edge never shifts the swatches.
+                  borderWidth: 2,
+                  borderColor: active ? cc.accent : 'transparent',
                   backgroundColor: active ? cc.accentSoft : 'transparent',
                 }}
               >
-                <View
-                  style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: radii.sm,
-                    backgroundColor: d.bubble,
-                  }}
-                />
+                {(() => {
+                  const fill = outgoingBubbleFill(
+                    { preset: p },
+                    t.look,
+                    t.dark ? 'dark' : 'light',
+                    {
+                      highContrast: t.highContrast,
+                    },
+                  );
+                  return (
+                    <View
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 14,
+                        backgroundColor: fill.to,
+                        borderWidth: StyleSheet.hairlineWidth,
+                        borderColor: tint(cc.text, '26'),
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {fill.gradient && (
+                        <GradientFill from={fill.from} to={fill.to} angle={t.gradientAngle} />
+                      )}
+                    </View>
+                  );
+                })()}
                 <Text style={{ color: cc.text, fontSize: 11 }}>{d.label}</Text>
               </Pressable>
             );
@@ -119,7 +147,7 @@ function ThemePicker({ value, onPick }: { value: ChatTheme; onPick: (t: ChatThem
                 onPress={() => onPick({ ...value, wallpaper: w })}
                 accessibilityRole="radio"
                 accessibilityState={{ checked: active }}
-                accessibilityLabel={` wallpaper`}
+                accessibilityLabel={`${wallpaperLabels[w]} wallpaper`}
                 style={{ width: '23%', alignItems: 'center', gap: 4 }}
               >
                 <View
@@ -129,7 +157,7 @@ function ThemePicker({ value, onPick }: { value: ChatTheme; onPick: (t: ChatThem
                     borderRadius: radii.md,
                     overflow: 'hidden',
                     backgroundColor: cc.night,
-                    borderWidth: active ? 2 : 1,
+                    borderWidth: 2,
                     borderColor: active ? cc.accent : cc.line,
                   }}
                 >
@@ -147,6 +175,8 @@ function ThemePicker({ value, onPick }: { value: ChatTheme; onPick: (t: ChatThem
   );
 }
 function Details() {
+  const t = useTheme();
+  const { radii } = t;
   const cc = useCc();
   const { id = '' } = useLocalSearchParams<{ id: string }>();
   const { userId } = useMe();
@@ -314,6 +344,7 @@ function Details() {
         options={{
           title: '',
           headerStyle: { backgroundColor: cc.night },
+          headerShadowVisible: false,
           headerTintColor: cc.text,
         }}
       />
@@ -340,7 +371,20 @@ function Details() {
             size={80}
           />
         )}
-        <Text style={{ color: cc.text, fontSize: 20, fontWeight: '600' }}>{title}</Text>
+        <Text
+          display
+          accessibilityRole="header"
+          style={{
+            color: cc.text,
+            fontSize: 26,
+            fontWeight: '600',
+            letterSpacing: -0.3,
+            textAlign: 'center',
+            marginTop: 4,
+          }}
+        >
+          {title}
+        </Text>
         {peer && (
           <Text style={{ color: cc.textMuted }}>
             @{peer.username}
@@ -349,7 +393,9 @@ function Details() {
         )}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Icon name="lock" size={12} color={cc.accent} />
-          <Text style={{ color: cc.accent, fontSize: 12 }}>End-to-end encrypted · MLS</Text>
+          <Text mono style={{ color: cc.accent, fontSize: 11 }}>
+            End-to-end encrypted · MLS
+          </Text>
         </View>
       </View>
 
@@ -433,32 +479,13 @@ function Details() {
         />
         {themeDraft && (
           <View style={{ flexDirection: 'row', gap: 10, padding: 14, paddingTop: 0 }}>
-            <Pressable
+            <Button
+              title="Cancel"
+              variant="secondary"
               onPress={() => setThemeDraft(null)}
-              style={{
-                flex: 1,
-                height: 44,
-                borderRadius: radii.md,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: cc.raised,
-              }}
-            >
-              <Text style={{ color: cc.text, fontWeight: '600' }}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              onPress={applySharedTheme}
-              style={{
-                flex: 2,
-                height: 44,
-                borderRadius: radii.md,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: cc.accent,
-              }}
-            >
-              <Text style={{ color: cc.onAccent, fontWeight: '600' }}>Apply for everyone</Text>
-            </Pressable>
+              style={{ flex: 1 }}
+            />
+            <Button title="Apply for everyone" onPress={applySharedTheme} style={{ flex: 2 }} />
           </View>
         )}
         <Row
@@ -483,22 +510,14 @@ function Details() {
               onPick={(t) => setLocalDraft(t)}
             />
             {localDraft && (
-              <Pressable
+              <Button
+                title="Save my theme"
+                variant="secondary"
                 onPress={() =>
                   void prefs({ local_theme: localDraft }).then(() => setLocalDraft(null))
                 }
-                style={{
-                  margin: 14,
-                  marginTop: 0,
-                  height: 44,
-                  borderRadius: radii.md,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: cc.raised,
-                }}
-              >
-                <Text style={{ color: cc.text, fontWeight: '600' }}>Save my theme</Text>
-              </Pressable>
+                style={{ margin: 14, marginTop: 0 }}
+              />
             )}
           </>
         )}
@@ -770,22 +789,31 @@ function Details() {
         <View
           style={{
             flex: 1,
-            backgroundColor: cc.dark ? 'rgba(0,0,0,0.6)' : 'rgba(11,20,22,0.5)',
+            backgroundColor: cc.scrim,
             justifyContent: 'center',
             padding: 24,
           }}
         >
           <View
-            style={{
-              backgroundColor: cc.raised,
-              borderRadius: radii.lg,
-              padding: 20,
-              gap: 14,
-              borderWidth: 1,
-              borderColor: cc.line,
-            }}
+            style={[
+              {
+                backgroundColor: cc.popover,
+                borderRadius: radii.lg,
+                padding: 20,
+                gap: 14,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: t.highContrast ? cc.lineStrong : cc.line,
+              },
+              shadowStyle(3, t),
+            ]}
           >
-            <Text style={{ color: cc.text, fontSize: 18, fontWeight: '600' }}>Nickname</Text>
+            <Text
+              display
+              accessibilityRole="header"
+              style={{ color: cc.text, fontSize: 20, fontWeight: '600' }}
+            >
+              Nickname
+            </Text>
             <Text style={{ color: cc.textMuted, fontSize: 13 }}>Only you will see this name.</Text>
             <TextInput
               value={nickDraft ?? ''}
@@ -797,46 +825,31 @@ function Details() {
               style={{
                 height: 46,
                 borderRadius: radii.md,
-                backgroundColor: cc.panel,
+                backgroundColor: cc.raised,
                 borderWidth: 1,
-                borderColor: cc.line,
+                borderColor: cc.lineStrong,
                 color: cc.text,
                 paddingHorizontal: 12,
               }}
               accessibilityLabel="Nickname"
             />
             <View style={{ flexDirection: 'row', gap: 10 }}>
-              <Pressable
+              <Button
+                title="Cancel"
+                variant="secondary"
                 onPress={() => setNickDraft(null)}
-                style={{
-                  flex: 1,
-                  height: 44,
-                  borderRadius: radii.md,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: cc.panel,
-                }}
-              >
-                <Text style={{ color: cc.text }}>Cancel</Text>
-              </Pressable>
-              <Pressable
+                style={{ flex: 1 }}
+              />
+              <Button
+                title="Save"
+                style={{ flex: 1 }}
                 onPress={() =>
                   void setNickname(supabase, userId, peer!.id, nickDraft).then(() => {
                     setNickDraft(null);
                     void qc.invalidateQueries({ queryKey: qk.connect.nicknames });
                   }, fail)
                 }
-                style={{
-                  flex: 1,
-                  height: 44,
-                  borderRadius: radii.md,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: cc.accent,
-                }}
-              >
-                <Text style={{ color: cc.onAccent, fontWeight: '600' }}>Save</Text>
-              </Pressable>
+              />
             </View>
           </View>
         </View>
@@ -850,10 +863,26 @@ function Details() {
       >
         <View style={{ flex: 1, backgroundColor: cc.night, padding: 16, gap: 12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ color: cc.text, fontSize: 18, fontWeight: '600', flex: 1 }}>
+            <Text
+              display
+              accessibilityRole="header"
+              style={{ color: cc.text, fontSize: 22, fontWeight: '600', flex: 1 }}
+            >
               Add members
             </Text>
-            <Pressable onPress={() => setAdding(false)} accessibilityLabel="Close">
+            <Pressable
+              onPress={() => setAdding(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              style={({ pressed }) => ({
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: pressed ? tint(cc.text, '1A') : 'transparent',
+              })}
+            >
               <Icon name="x" size={22} color={cc.text} />
             </Pressable>
           </View>
@@ -864,14 +893,15 @@ function Details() {
             autoCapitalize="none"
             placeholder="Search people"
             placeholderTextColor={cc.textSubtle}
+            accessibilityLabel="Search people"
             style={{
               height: 46,
               borderRadius: radii.md,
-              backgroundColor: cc.panel,
+              backgroundColor: cc.raised,
               borderWidth: 1,
-              borderColor: cc.line,
+              borderColor: cc.lineStrong,
               color: cc.text,
-              paddingHorizontal: 12,
+              paddingHorizontal: 14,
             }}
           />
           {(search.data ?? [])
@@ -887,7 +917,18 @@ function Details() {
                     setTerm('');
                   }, fail)
                 }
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Add ${u.username}`}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 12,
+                  minHeight: 52,
+                  paddingVertical: 6,
+                  paddingHorizontal: 8,
+                  borderRadius: radii.md,
+                  backgroundColor: pressed ? tint(cc.text, '12') : 'transparent',
+                })}
               >
                 <Avatar
                   path={u.avatar_path}

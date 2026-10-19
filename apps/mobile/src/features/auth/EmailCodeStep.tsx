@@ -19,7 +19,7 @@ import { useA11y } from '@/lib/a11y';
 import { logDevError } from '@/lib/devLog';
 import { useHaptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
-import { font, radii, useTheme } from '@/lib/theme';
+import { font, useTheme } from '@/lib/theme';
 import { AuthTextButton, FormError } from './AuthScreen';
 
 /** The boxes sit in two groups of three, the way people read a code aloud. */
@@ -84,6 +84,7 @@ type StepError = { message: string; kind: 'code' | 'send' };
  * then leaves for the inbox, so the step stays busy until it does.
  */
 export function EmailCodeStep({ email, purpose, onResend, onChangeEmail }: EmailCodeStepProps) {
+  const { radii } = useTheme();
   const t = useTheme();
   const { fontScale } = useWindowDimensions();
   const boxHeight = boxMinHeight(fontScale);

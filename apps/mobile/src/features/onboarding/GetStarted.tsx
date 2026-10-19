@@ -16,7 +16,7 @@ import { useSecureInbox } from '@/features/connect/hooks';
 import { useCc } from '@/features/connect/ui/primitives';
 import { HandleCard } from '@/features/friends/HandleCard';
 import { useFriendRequests, useFriends } from '@/features/friends/hooks';
-import { radii } from '@/lib/theme';
+import { useTheme } from '@/lib/theme';
 import { addFriend } from './EmptyStates';
 import { allSetThisSession, useOnboarding } from './store';
 
@@ -54,6 +54,7 @@ export function GetStartedView({
   onAddFriend,
   onDismiss,
 }: GetStartedViewProps) {
+  const { radii } = useTheme();
   const cc = useCc();
   const { steps, done, complete } = progress;
   const card = {

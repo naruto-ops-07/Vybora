@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { AccessibilityInfo, Pressable, View } from 'react-native';
+import { AccessibilityInfo, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/Text';
-import { radii } from '@/lib/theme';
+import { shadowStyle, useTheme } from '@/lib/theme';
 import { useCc } from './primitives';
 
 /** "Archived · Undo" bar above the bottom edge; disappears after 5 seconds. */
@@ -15,6 +15,7 @@ export function UndoBar({
   onUndo: () => void;
   onDone: () => void;
 }) {
+  const t = useTheme();
   const cc = useCc();
   const insets = useSafeAreaInsets();
   // Keep the latest callback without restarting the 5 s timer on re-render.
@@ -32,20 +33,24 @@ export function UndoBar({
     <View
       testID="undo-bar"
       accessibilityLiveRegion="polite"
-      style={{
-        position: 'absolute',
-        left: 16,
-        right: 16,
-        bottom: insets.bottom + 16,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        paddingLeft: 16,
-        borderRadius: radii.md,
-        borderWidth: 1,
-        borderColor: cc.lineStrong,
-        backgroundColor: cc.strong,
-      }}
+      // A toast: the popover surface at elevation 2 (flat, with a strong edge, under HC).
+      style={[
+        {
+          position: 'absolute',
+          left: 16,
+          right: 16,
+          bottom: insets.bottom + 16,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 12,
+          paddingLeft: 16,
+          borderRadius: t.radii.lg,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: t.highContrast ? cc.lineStrong : cc.line,
+          backgroundColor: cc.popover,
+        },
+        shadowStyle(2, t),
+      ]}
     >
       <Text style={{ color: cc.text, flex: 1, fontSize: 14 }}>{message}</Text>
       <Pressable

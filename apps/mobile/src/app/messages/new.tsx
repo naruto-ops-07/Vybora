@@ -16,9 +16,9 @@ import type { UserSummary } from '@vybora/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, Stack } from 'expo-router';
 import { useDeferredValue, useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, View } from 'react-native';
+import { Alert, FlatList, Pressable, View, StyleSheet } from 'react-native';
 import { Text, TextInput } from '@/components/Text';
-import { radii } from '@/lib/theme';
+import { tint, useTheme } from '@/lib/theme';
 import { Avatar, Button } from '@/components/ui';
 import { useMe } from '@/features/auth/AuthProvider';
 import { useSecureInbox } from '@/features/connect/hooks';
@@ -27,6 +27,7 @@ import { useCc, PrimaryButton } from '@/features/connect/ui/primitives';
 import { supabase } from '@/lib/supabase';
 
 export default function NewChat() {
+  const { radii } = useTheme();
   const cc = useCc();
   const qc = useQueryClient();
   const [term, setTerm] = useState('');
@@ -100,15 +101,17 @@ export default function NewChat() {
               <Pressable
                 key={u.id}
                 onPress={() => toggle(u)}
+                accessibilityRole="button"
                 accessibilityLabel={`Remove ${u.username}`}
+                hitSlop={6}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 6,
+                  minHeight: 34,
                   paddingLeft: 4,
-                  paddingRight: 10,
-                  paddingVertical: 4,
-                  borderRadius: radii.md,
+                  paddingRight: 12,
+                  borderRadius: 999,
                   backgroundColor: cc.accentSoft,
                   borderWidth: 1,
                   borderColor: cc.accent,
@@ -119,7 +122,8 @@ export default function NewChat() {
                   name={u.username}
                   userId={u.id}
                   displayName={u.display_name}
-                  size={22}
+                  size={26}
+                  decorative
                 />
                 <Text style={{ color: cc.text, fontWeight: '600' }}>{u.username}</Text>
                 <Icon name="x" size={13} color={cc.textMuted} />
@@ -138,9 +142,9 @@ export default function NewChat() {
             style={{
               height: 46,
               borderRadius: radii.md,
-              backgroundColor: cc.panel,
+              backgroundColor: cc.raised,
               borderWidth: 1,
-              borderColor: cc.line,
+              borderColor: cc.lineStrong,
               color: cc.text,
               paddingHorizontal: 14,
             }}
@@ -151,11 +155,11 @@ export default function NewChat() {
             flexDirection: 'row',
             alignItems: 'center',
             gap: 8,
-            backgroundColor: cc.panel,
+            backgroundColor: cc.raised,
             borderRadius: radii.md,
-            paddingHorizontal: 12,
-            borderWidth: 1,
-            borderColor: cc.line,
+            paddingHorizontal: 14,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: cc.highContrast ? cc.lineStrong : cc.line,
           }}
         >
           <Icon name="search" size={16} color={cc.textSubtle} />
@@ -202,9 +206,12 @@ export default function NewChat() {
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 12,
-                paddingHorizontal: 16,
-                paddingVertical: 10,
-                backgroundColor: pressed ? cc.panel : 'transparent',
+                marginHorizontal: 8,
+                paddingHorizontal: 8,
+                paddingVertical: 8,
+                minHeight: 60,
+                borderRadius: radii.md,
+                backgroundColor: on ? cc.accentSoft : pressed ? tint(cc.text, '12') : 'transparent',
               })}
             >
               <Avatar
@@ -215,7 +222,9 @@ export default function NewChat() {
                 size={44}
               />
               <View style={{ flex: 1 }}>
-                <Text style={{ color: cc.text, fontWeight: '600' }}>{item.username}</Text>
+                <Text scale style={{ color: cc.text, fontSize: 16, fontWeight: '600' }}>
+                  {item.username}
+                </Text>
                 {!!item.display_name && (
                   <Text style={{ color: cc.textMuted, fontSize: 13 }}>{item.display_name}</Text>
                 )}
@@ -268,7 +277,14 @@ export default function NewChat() {
         }
       />
       {picked.length > 0 && (
-        <View style={{ padding: 16 }}>
+        <View
+          style={{
+            padding: 16,
+            backgroundColor: cc.bar,
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: cc.highContrast ? cc.lineStrong : cc.line,
+          }}
+        >
           <PrimaryButton
             title={
               isGroup ? `Create group (${picked.length + 1})` : `Message ${picked[0]!.username}`
