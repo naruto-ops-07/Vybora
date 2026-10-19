@@ -3,9 +3,13 @@
  * platform. Preset keys and wallpaper keys are validated by the database
  * (`set_conversation_theme`), so they must not be renamed; labels may change.
  *
- * Each theme is a flat colour for outgoing bubbles (white text, ≥ 4.5:1) plus
- * an accent tuned separately for dark and light surfaces. No gradients.
+ * `aurora` is the Default theme: outgoing bubbles take the app look's own gradient
+ * bubble (outgoingBubbleFill). Every other theme is a flat colour for outgoing bubbles
+ * (white text, ≥ 4.5:1), drawn with the look's depth and radius, plus an accent tuned
+ * separately for dark and light surfaces.
  */
+
+import { highContrastThemes, looks, type Look, type Mode } from './looks';
 
 export interface ChatThemeDef {
   label: string;
@@ -22,7 +26,7 @@ export const DEFAULT_THEME_PRESET = 'aurora';
 
 export const chatThemeDefs: Record<string, ChatThemeDef> = {
   aurora: {
-    label: 'Teal',
+    label: 'Default',
     bubble: '#0F766E',
     bubbleText: '#FFFFFF',
     accentDark: '#2DD4BF',
@@ -97,6 +101,54 @@ export function resolveChatTheme(
   return (
     chatThemeDefs[theme?.preset ?? DEFAULT_THEME_PRESET] ?? chatThemeDefs[DEFAULT_THEME_PRESET]!
   );
+}
+
+/** The Default chat theme (none chosen, `aurora`, or a preset this build doesn't know). */
+export function isDefaultChatTheme(theme: { preset?: string | null } | null | undefined): boolean {
+  const preset = theme?.preset;
+  return !preset || preset === DEFAULT_THEME_PRESET || !(preset in chatThemeDefs);
+}
+
+/** What an outgoing bubble is filled with. A flat fill has `from === to`. */
+export interface OutgoingBubbleFill {
+  gradient: boolean;
+  from: string;
+  /** The end stop: also the tail's fill. */
+  to: string;
+  text: string;
+  /** Gradient direction in degrees (CSS convention): Velvet runs top → bottom (180). */
+  angle: number;
+}
+
+/**
+ * The outgoing bubble for a chat theme in a look and mode, shared by web and mobile.
+ * - Default theme: the look's bubble gradient and its text colour.
+ * - A named theme: its own colour, flat (the look still supplies depth and radius).
+ * - High contrast: flat, the high-contrast accent with its own ink, whatever the theme.
+ */
+export function outgoingBubbleFill(
+  theme: { preset?: string | null } | null | undefined,
+  look: Look,
+  mode: Mode,
+  { highContrast = false }: { highContrast?: boolean } = {},
+): OutgoingBubbleFill {
+  const angle = look === 'velvet' ? 180 : 135;
+  if (highContrast) {
+    const hc = highContrastThemes[mode];
+    return { gradient: false, from: hc.accent, to: hc.accent, text: hc.onAccent, angle };
+  }
+  if (isDefaultChatTheme(theme)) {
+    const t = looks[look].modes[mode];
+    return {
+      gradient: true,
+      from: t.bubbleOutFrom,
+      to: t.bubbleOutTo,
+      text: t.bubbleOutText,
+      angle,
+    };
+  }
+  const def = chatThemeDefs[theme!.preset!]!;
+  return { gradient: false, from: def.bubble, to: def.bubble, text: def.bubbleText, angle };
 }
 
 export function chatAccent(def: ChatThemeDef, dark: boolean) {
