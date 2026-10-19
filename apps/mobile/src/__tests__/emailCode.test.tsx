@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { themes } from '@vybora/config';
+import { looks } from '@vybora/config';
 import { resetCodeCooldowns } from '@vybora/core';
 import * as Haptics from 'expo-haptics';
 import { StyleSheet, TextInput } from 'react-native';
@@ -207,7 +207,8 @@ describe('code step at sign-up', () => {
   });
 
   it('draws the focus, filled, error and success states on the boxes', async () => {
-    const ui = themes.light;
+    // The default look (Velvet), light mode.
+    const ui = looks.velvet.modes.light;
     const box = (i: number) => screen.getByTestId(`code-box-${i}`, { includeHiddenElements: true });
     let fail!: (reason: unknown) => void;
     mockVerifyEmailCode.mockReturnValueOnce(new Promise((_, reject) => (fail = reject)));

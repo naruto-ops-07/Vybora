@@ -6,7 +6,7 @@ import { Button, Empty, TextField } from '@/components/ui';
 import { AuthScreen } from '@/features/auth/AuthScreen';
 import { siteUrl } from '@/lib/env';
 import { supabase } from '@/lib/supabase';
-import { font, useTheme } from '@/lib/theme';
+import { useTheme } from '@/lib/theme';
 
 export default function ForgotPassword() {
   const t = useTheme();
@@ -32,7 +32,7 @@ export default function ForgotPassword() {
     <AuthScreen
       title="Reset your password"
       footer={
-        <Link href="/login" style={{ color: t.accent, fontFamily: font.semibold }}>
+        <Link href="/login" style={{ color: t.accent, fontFamily: t.fonts.semibold }}>
           Back to sign in
         </Link>
       }

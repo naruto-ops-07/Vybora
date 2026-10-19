@@ -13,7 +13,7 @@ import { Icon } from '@/components/Icon';
 import { WelcomeIllustration } from '@/components/illustrations';
 import { Text as BaseText } from '@/components/Text';
 import { Text } from '@/components/ui';
-import { font, radii, useTheme } from '@/lib/theme';
+import { radii, useTheme } from '@/lib/theme';
 
 /** VYBORA mark (same geometry as the web logo): flat, two colours. */
 export function LogoMark({ size = 32 }: { size?: number }) {
@@ -114,7 +114,7 @@ export function FormError({ message }: { message: string | null }) {
 /** The part of a sentence to read first, such as the email a code went to. */
 export function Strong({ children }: { children: ReactNode }) {
   const t = useTheme();
-  return <BaseText style={{ color: t.text, fontFamily: font.semibold }}>{children}</BaseText>;
+  return <BaseText style={{ color: t.text, fontFamily: t.fonts.semibold }}>{children}</BaseText>;
 }
 
 /**
@@ -158,7 +158,7 @@ export function AuthTextButton({
       })}
     >
       {busy && <ActivityIndicator size="small" color={t.accent} />}
-      <BaseText style={{ color, fontFamily: font.semibold, fontSize: 15, textAlign: 'center' }}>
+      <BaseText style={{ color, fontFamily: t.fonts.semibold, fontSize: 15, textAlign: 'center' }}>
         {children ?? label}
       </BaseText>
     </Pressable>

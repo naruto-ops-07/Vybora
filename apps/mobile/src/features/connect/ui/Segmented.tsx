@@ -1,11 +1,13 @@
 import { Pressable, View } from 'react-native';
 import { Text } from '@/components/Text';
-import { radii } from '@/lib/theme';
+import { shadowStyle, tint, useTheme } from '@/lib/theme';
 import { useCc } from './primitives';
 
 /**
- * A rectangular radio group (not a pill): one option is always on. Sits inside
- * a `SectionCard`, so it carries its own horizontal and vertical margin.
+ * A radio group drawn as an inset track (muted, with a control edge) and an accent
+ * thumb with soft depth on the checked option. One option is always on, and the label
+ * weight never changes, so nothing reflows. High contrast: flat, no shadow. Sits inside
+ * a `SectionCard`, so it carries its own margins.
  */
 export function Segmented<T extends string>({
   label,
@@ -20,23 +22,28 @@ export function Segmented<T extends string>({
   onChange: (v: T) => void;
   disabled?: boolean;
 }) {
+  const t = useTheme();
   const cc = useCc();
+  const outer = t.radii.md;
+  const inner = Math.max(outer - 3, 2);
   return (
     <View
       accessibilityRole="radiogroup"
       accessibilityLabel={label}
       style={{
         flexDirection: 'row',
+        gap: 3,
+        padding: 3,
         borderWidth: 1,
         borderColor: cc.lineStrong,
-        borderRadius: radii.md,
-        overflow: 'hidden',
+        borderRadius: outer,
+        backgroundColor: cc.raised,
         marginHorizontal: 16,
         marginVertical: 12,
         opacity: disabled ? 0.5 : 1,
       }}
     >
-      {options.map((o, i) => {
+      {options.map((o) => {
         const on = o.value === value;
         return (
           <Pressable
@@ -46,17 +53,30 @@ export function Segmented<T extends string>({
             accessibilityState={disabled ? { checked: on, disabled: true } : { checked: on }}
             disabled={disabled}
             onPress={() => onChange(o.value)}
-            style={{
-              flex: 1,
-              minHeight: 44,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderLeftWidth: i ? 1 : 0,
-              borderLeftColor: cc.lineStrong,
-              backgroundColor: on ? cc.accent : 'transparent',
-            }}
+            // The track's 3 px inset plus this keeps every touch target at 44 px or more.
+            hitSlop={{ top: 4, bottom: 4 }}
+            style={({ pressed }) => [
+              {
+                flex: 1,
+                minHeight: 40,
+                paddingHorizontal: 6,
+                paddingVertical: 8,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: inner,
+                backgroundColor: on ? cc.accent : pressed ? tint(cc.text, '14') : undefined,
+              },
+              on ? shadowStyle(1, t) : null,
+            ]}
           >
-            <Text style={{ color: on ? cc.onAccent : cc.text, fontWeight: '500', fontSize: 14 }}>
+            <Text
+              style={{
+                color: on ? cc.onAccent : cc.text,
+                fontWeight: '500',
+                fontSize: 14,
+                textAlign: 'center',
+              }}
+            >
               {o.label}
             </Text>
           </Pressable>

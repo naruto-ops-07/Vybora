@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { personTone } from '@vybora/core';
 
 jest.mock('@/lib/supabase', () => ({
@@ -8,7 +8,24 @@ jest.mock('@/lib/supabase', () => ({
   signedDm: () => new Promise(() => undefined),
 }));
 
+const mockStore = new Map<string, string>();
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: (k: string) => Promise.resolve(mockStore.get(k) ?? null),
+  setItemAsync: () => Promise.resolve(),
+}));
+
+import { A11Y_STORAGE_KEY } from '@vybora/core';
+import { A11yProvider } from '@/lib/a11y';
 import { Avatar, Button, Empty, ErrorView, GroupAvatar, TextField } from '@/components/ui';
+
+/** Every host node type in the rendered tree (react-native-svg renders named hosts). */
+type Node = { type: string; children?: unknown[] | null };
+function hostTypes(node: unknown): string[] {
+  if (!node || typeof node !== 'object') return [];
+  if (Array.isArray(node)) return node.flatMap(hostTypes);
+  const n = node as Node;
+  return [n.type, ...(n.children ?? []).flatMap(hostTypes)];
+}
 
 describe('mobile UI primitives', () => {
   it('Button exposes an accessible role, label and busy state', async () => {
@@ -16,6 +33,26 @@ describe('mobile UI primitives', () => {
     await render(<Button title="Share post" onPress={onPress} />);
     await fireEvent.press(screen.getByRole('button', { name: 'Share post' }));
     expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('the primary Button draws the look gradient in Velvet', async () => {
+    await render(<Button title="Continue" />);
+    expect(screen.getByTestId('gradient-fill', { includeHiddenElements: true })).toBeTruthy();
+    expect(hostTypes(screen.toJSON()).some((t) => /LinearGradient/.test(t))).toBe(true);
+  });
+
+  it('the primary Button is flat under high contrast', async () => {
+    mockStore.set(A11Y_STORAGE_KEY, JSON.stringify({ highContrast: true }));
+    await render(
+      <A11yProvider>
+        <Button title="Continue" />
+      </A11yProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.queryByTestId('gradient-fill', { includeHiddenElements: true })).toBeNull(),
+    );
+    expect(hostTypes(screen.toJSON()).some((t) => /LinearGradient/.test(t))).toBe(false);
+    mockStore.clear();
   });
 
   it('Button does not fire while loading', async () => {

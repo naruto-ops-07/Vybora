@@ -10,7 +10,7 @@ import { EmailCodeStep } from '@/features/auth/EmailCodeStep';
 import { handOffToLogin } from '@/features/auth/loginHandoff';
 import { logDevError } from '@/lib/devLog';
 import { supabase } from '@/lib/supabase';
-import { font, useTheme } from '@/lib/theme';
+import { useTheme } from '@/lib/theme';
 
 type Stage =
   { step: 'form' } | { step: 'code'; email: string } | { step: 'registered'; email: string };
@@ -164,7 +164,7 @@ export default function Signup() {
       footer={
         <Text variant="muted">
           Already have an account?{' '}
-          <Link href="/login" style={{ color: t.accent, fontFamily: font.semibold }}>
+          <Link href="/login" style={{ color: t.accent, fontFamily: t.fonts.semibold }}>
             Sign in
           </Link>
         </Text>

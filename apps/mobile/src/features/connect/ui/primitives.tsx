@@ -14,7 +14,8 @@ import { SvgXml } from 'react-native-svg';
 import { Icon, type IconName } from '@/components/Icon';
 import { Text } from '@/components/Text';
 import { useA11y } from '@/lib/a11y';
-import { radii, useTheme } from '@/lib/theme';
+import { GradientFill } from '@/components/GradientFill';
+import { shadowStyle, tint, useTheme } from '@/lib/theme';
 
 /**
  * Connect palette, derived from the app theme so messaging follows light/dark
@@ -41,6 +42,12 @@ export function useCc() {
       success: t.success,
       danger: t.danger,
       warning: t.warning,
+      /** Header / composer surface (the look's glass colour; no blur on mobile). */
+      glass: t.panel,
+      popover: t.popover,
+      look: t.look,
+      highContrast: t.highContrast,
+      radii: t.radii,
     }),
     [t],
   );
@@ -161,7 +168,7 @@ export function Pill({
         gap: 6,
         paddingHorizontal: 12,
         minHeight: 36,
-        borderRadius: radii.md,
+        borderRadius: cc.radii.sm + 2,
         backgroundColor: active ? cc.accent : pressed ? cc.raised : cc.panel,
         borderWidth: 1,
         borderColor: active ? cc.accent : cc.lineStrong,
@@ -184,6 +191,7 @@ export function SectionCard({
   children: ReactNode;
   footer?: string;
 }) {
+  const t = useTheme();
   const cc = useCc();
   return (
     <View style={{ gap: 8 }}>
@@ -195,16 +203,19 @@ export function SectionCard({
           {title}
         </Text>
       )}
-      <View
-        style={{
-          backgroundColor: cc.panel,
-          borderRadius: radii.lg,
-          borderWidth: 1,
-          borderColor: cc.line,
-          overflow: 'hidden',
-        }}
-      >
-        {children}
+      {/* Depth on the outer view; the inner one clips rows to the radius. */}
+      <View style={[{ borderRadius: t.radii.lg, backgroundColor: cc.panel }, shadowStyle(1, t)]}>
+        <View
+          style={{
+            backgroundColor: cc.panel,
+            borderRadius: t.radii.lg,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: t.highContrast ? cc.lineStrong : cc.line,
+            overflow: 'hidden',
+          }}
+        >
+          {children}
+        </View>
       </View>
       {footer && (
         <Text style={{ color: cc.textMuted, fontSize: 12, lineHeight: 17, paddingHorizontal: 4 }}>
@@ -245,7 +256,7 @@ export function Row({
         paddingHorizontal: 16,
         minHeight: 52,
         paddingVertical: 12,
-        backgroundColor: pressed ? cc.raised : 'transparent',
+        backgroundColor: pressed ? tint(cc.text, '12') : 'transparent',
         borderBottomWidth: StyleSheet.hairlineWidth,
         borderBottomColor: cc.line,
       })}
@@ -327,7 +338,7 @@ export function ConnectEmpty({
         style={{
           width: 48,
           height: 48,
-          borderRadius: radii.lg,
+          borderRadius: cc.radii.lg,
           borderWidth: 1,
           borderColor: cc.line,
           alignItems: 'center',
@@ -337,7 +348,10 @@ export function ConnectEmpty({
       >
         <Icon name={icon} size={22} color={cc.accent} />
       </View>
-      <Text style={{ color: cc.text, fontSize: 17, fontWeight: '600', textAlign: 'center' }}>
+      <Text
+        display
+        style={{ color: cc.text, fontSize: 17, fontWeight: '600', textAlign: 'center' }}
+      >
         {title}
       </Text>
       {body && (
@@ -350,6 +364,7 @@ export function ConnectEmpty({
   );
 }
 
+/** The screen's main action: the look's primary gradient (danger: flat), as `Button`. */
 export function PrimaryButton({
   title,
   onPress,
@@ -365,34 +380,64 @@ export function PrimaryButton({
   disabled?: boolean;
   danger?: boolean;
 }) {
-  const cc = useCc();
-  const bg = danger ? cc.danger : cc.accent;
-  const fg = danger ? '#FFFFFF' : cc.onAccent;
+  const t = useTheme();
+  const off = !!(disabled || loading);
+  const gradient = !danger && !t.highContrast;
+  const radius = t.radii.md;
+  const fg = danger ? t.onDanger : t.onPrimary;
   return (
     <Pressable
       onPress={onPress}
-      disabled={disabled || loading}
+      disabled={off}
       accessibilityRole="button"
       accessibilityLabel={title}
-      accessibilityState={{ disabled: disabled || loading, busy: loading }}
-      style={({ pressed }) => ({
-        height: 48,
-        borderRadius: radii.md,
-        backgroundColor: bg,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        paddingHorizontal: 20,
-        opacity: disabled ? 0.45 : pressed ? 0.8 : 1,
-      })}
+      accessibilityState={{ disabled: off, busy: loading }}
+      style={({ pressed }) => [
+        {
+          minHeight: 48,
+          borderRadius: radius,
+          backgroundColor: danger
+            ? pressed && !off
+              ? t.dangerPress
+              : t.danger
+            : t.highContrast
+              ? pressed && !off
+                ? t.accentHover
+                : t.accent
+              : t.primaryTo,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          paddingHorizontal: 20,
+          opacity: disabled ? 0.45 : 1,
+        },
+        !off && !pressed ? shadowStyle(1, t) : null,
+      ]}
     >
-      {loading ? (
-        <ActivityIndicator color={fg} />
-      ) : (
-        icon && <Icon name={icon} size={17} color={fg} />
-      )}
-      <Text style={{ color: fg, fontWeight: '600', fontSize: 15 }}>{title}</Text>
+      {({ pressed }) => {
+        const down = pressed && !off;
+        return (
+          <>
+            {gradient && (
+              <GradientFill
+                from={down ? t.primaryPressFrom : t.primaryFrom}
+                to={down ? t.primaryPressTo : t.primaryTo}
+                angle={t.gradientAngle}
+                radius={radius}
+              />
+            )}
+            {loading ? (
+              <ActivityIndicator color={fg} />
+            ) : (
+              icon && <Icon name={icon} size={17} color={fg} />
+            )}
+            <Text style={{ color: fg, fontWeight: '600', fontSize: 15, letterSpacing: 0.1 }}>
+              {title}
+            </Text>
+          </>
+        );
+      }}
     </Pressable>
   );
 }

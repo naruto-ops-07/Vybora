@@ -1,6 +1,5 @@
-import { personToneHighContrastInk, personTones } from '@vybora/config';
+import { personToneHighContrastInk, personTonesByLook, type Look } from '@vybora/config';
 import { personTone, type ToneName } from '@vybora/core';
-import { useA11y } from './a11y';
 import { useTheme } from './theme';
 
 export interface PersonToneStyle {
@@ -16,13 +15,12 @@ export interface PersonToneStyle {
 }
 
 /**
- * A person's tone for the current theme. Tones are identity, never status: avatar
+ * A person's tone for the current look and theme. Tones are identity, never status: avatar
  * fallbacks, group sender names and mentions only. Mirrors web `--vy-tone-*`.
  */
 export function usePersonTone(userId: string): PersonToneStyle {
   const t = useTheme();
-  const { prefs } = useA11y();
-  return personToneStyle(userId, t.dark, prefs.highContrast, t.text);
+  return personToneStyle(userId, t.dark, t.highContrast, t.text, t.look);
 }
 
 export function personToneStyle(
@@ -30,9 +28,10 @@ export function personToneStyle(
   dark: boolean,
   highContrast: boolean,
   themeText: string,
+  look: Look,
 ): PersonToneStyle {
   const name = personTone(userId);
-  const c = personTones[name][dark ? 'dark' : 'light'];
+  const c = personTonesByLook[look][name][dark ? 'dark' : 'light'];
   return highContrast
     ? {
         name,

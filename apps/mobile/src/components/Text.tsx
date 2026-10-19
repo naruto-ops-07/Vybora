@@ -7,32 +7,46 @@ import {
   type TextProps,
 } from 'react-native';
 import { useA11y } from '@/lib/a11y';
-import { font } from '@/lib/theme';
+import type { LookFonts } from '@/lib/fonts';
+import { useFonts } from '@/lib/theme';
 
-const WEIGHT_FAMILY: Record<string, string> = {
-  '100': font.regular,
-  '200': font.regular,
-  '300': font.regular,
-  '400': font.regular,
-  normal: font.regular,
-  '500': font.medium,
-  '600': font.semibold,
-  '700': font.bold,
-  '800': font.bold,
-  '900': font.bold,
-  bold: font.bold,
+const WEIGHT_ROLE: Record<string, keyof LookFonts> = {
+  '100': 'regular',
+  '200': 'regular',
+  '300': 'regular',
+  '400': 'regular',
+  normal: 'regular',
+  '500': 'medium',
+  '600': 'semibold',
+  '700': 'bold',
+  '800': 'bold',
+  '900': 'bold',
+  bold: 'bold',
 };
 
-/** Map fontWeight → the matching bundled font file (custom fonts ignore fontWeight). */
-function withFamily(style: TextProps['style'], mono?: boolean) {
+/**
+ * Map fontWeight → the active look's file for that weight (custom fonts ignore
+ * fontWeight). `display` picks the look's display face (Fraunces, Sora or Jakarta).
+ */
+function withFamily(
+  style: TextProps['style'],
+  fonts: LookFonts,
+  mono?: boolean,
+  display?: boolean,
+) {
   const flat = StyleSheet.flatten(style) ?? {};
   if (flat.fontFamily) return flat;
   const weight = String(flat.fontWeight ?? '400');
+  const heavy = Number(weight) >= 700 || weight === 'bold';
   const fontFamily = mono
     ? Number(weight) >= 500
-      ? font.monoMedium
-      : font.mono
-    : (WEIGHT_FAMILY[weight] ?? font.regular);
+      ? fonts.monoMedium
+      : fonts.mono
+    : display
+      ? heavy
+        ? fonts.displayBold
+        : fonts.display
+      : fonts[WEIGHT_ROLE[weight] ?? 'regular'];
   return { ...flat, fontFamily, fontWeight: undefined };
 }
 
@@ -50,22 +64,33 @@ function withScale(
   };
 }
 
-/** Drop-in replacement for React Native's Text that uses Archivo (or IBM Plex Mono). */
-export const Text = forwardRef<RNText, TextProps & { mono?: boolean; scale?: boolean }>(
-  function Text({ style, mono, scale, ...rest }, ref) {
-    const { textScale } = useA11y();
-    return (
-      <RNText ref={ref} {...rest} style={withScale(withFamily(style, mono), scale, textScale)} />
-    );
-  },
-);
+/** Drop-in Text in the active look's text face (`display`: its display face; `mono`: Plex Mono). */
+export const Text = forwardRef<
+  RNText,
+  TextProps & { mono?: boolean; display?: boolean; scale?: boolean }
+>(function Text({ style, mono, display, scale, ...rest }, ref) {
+  const { textScale } = useA11y();
+  const fonts = useFonts();
+  return (
+    <RNText
+      ref={ref}
+      {...rest}
+      style={withScale(withFamily(style, fonts, mono, display), scale, textScale)}
+    />
+  );
+});
 
-/** Drop-in TextInput that uses Archivo. */
+/** Drop-in TextInput in the active look's text face. */
 export const TextInput = forwardRef<RNTextInput, TextInputProps & { scale?: boolean }>(
   function TextInput({ style, scale, ...rest }, ref) {
     const { textScale } = useA11y();
+    const fonts = useFonts();
     return (
-      <RNTextInput ref={ref} {...rest} style={withScale(withFamily(style), scale, textScale)} />
+      <RNTextInput
+        ref={ref}
+        {...rest}
+        style={withScale(withFamily(style, fonts), scale, textScale)}
+      />
     );
   },
 );

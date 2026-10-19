@@ -2,14 +2,13 @@
  * The four empty-state illustrations (spec "Your circle, in colour" §2), drawn
  * in the web's grammar (apps/web/src/components/illustrations): graphite line
  * (muted text) at 1.5 px with round caps and joins, flat fills from the
- * personal tones and the accent for the current theme, radii 8–12, no
- * gradients or shadows. All decorative: the heading beside each carries the meaning.
+ * personal tones of the current look, its accent and its outgoing bubble (flat),
+ * radii 8–12, no gradients or shadows. All decorative: the heading beside each carries the meaning.
  */
-import { personToneHighContrastInk, personTones, type PersonToneName } from '@vybora/config';
+import { personToneHighContrastInk, personTonesByLook, type PersonToneName } from '@vybora/config';
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { View } from 'react-native';
 import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
-import { useA11y } from '@/lib/a11y';
 import { useTheme } from '@/lib/theme';
 
 interface Paint {
@@ -18,6 +17,9 @@ interface Paint {
   onAccent: string;
   surface: string;
   bubble: string;
+  /** "Mine": the look's outgoing bubble, flat, and the bars on it. */
+  mine: string;
+  mineText: string;
   text: string;
   tone: (name: PersonToneName) => string;
   toneInk: (name: PersonToneName) => string;
@@ -28,21 +30,22 @@ const usePaint = () => useContext(PaintCtx)!;
 
 function usePaintFor(): Paint {
   const t = useTheme();
-  const { prefs } = useA11y();
   return useMemo(() => {
     const mode = t.dark ? 'dark' : 'light';
+    const tones = personTonesByLook[t.look];
     return {
       line: t.textMuted,
       accent: t.accent,
       onAccent: t.onAccent,
       surface: t.surface,
       bubble: t.bubbleIn,
+      mine: t.bubbleOutFrom,
+      mineText: t.bubbleOutText,
       text: t.borderStrong,
-      tone: (n) => personTones[n][mode].fill,
-      toneInk: (n) =>
-        prefs.highContrast ? personToneHighContrastInk[mode] : personTones[n][mode].ink,
+      tone: (n) => tones[n][mode].fill,
+      toneInk: (n) => (t.highContrast ? personToneHighContrastInk[mode] : tones[n][mode].ink),
     };
-  }, [t, prefs.highContrast]);
+  }, [t]);
 }
 
 /** The one stroke: 1.5 px, round, unscaled by the viewBox. */
@@ -187,8 +190,8 @@ function WelcomeArt() {
     <>
       <Path d={bubblePath(22, 18, 100, 54, 'left')} fill={p.tone('glacier')} {...line} />
       <TextLines x={36} y={36} widths={[58, 34]} color={p.toneInk('glacier')} />
-      <Path d={bubblePath(68, 56, 108, 54, 'right')} fill={p.bubble} {...line} />
-      <TextLines x={82} y={74} widths={[66, 42]} />
+      <Path d={bubblePath(68, 56, 108, 54, 'right')} fill={p.mine} {...line} />
+      <TextLines x={82} y={74} widths={[66, 42]} color={p.mineText} />
       <LockSeal cx={170} cy={58} />
       <G {...line}>
         <Circle cx={30} cy={118} r={9} fill={p.tone('emerald')} />

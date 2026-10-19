@@ -17,7 +17,7 @@ import { EmailCodeStep } from '@/features/auth/EmailCodeStep';
 import { takeLoginHandoff } from '@/features/auth/loginHandoff';
 import { logDevError } from '@/lib/devLog';
 import { supabase } from '@/lib/supabase';
-import { font, useTheme } from '@/lib/theme';
+import { useTheme } from '@/lib/theme';
 
 type Mode = 'password' | 'code';
 
@@ -103,7 +103,7 @@ export default function Login() {
   const footer = (
     <Text variant="muted">
       New to VYBORA?{' '}
-      <Link href="/signup" style={{ color: t.accent, fontFamily: font.semibold }}>
+      <Link href="/signup" style={{ color: t.accent, fontFamily: t.fonts.semibold }}>
         Create an account
       </Link>
     </Text>
@@ -174,7 +174,7 @@ export default function Login() {
           />
           <Link
             href="/forgot-password"
-            style={{ color: t.accent, fontFamily: font.semibold, alignSelf: 'flex-end' }}
+            style={{ color: t.accent, fontFamily: t.fonts.semibold, alignSelf: 'flex-end' }}
           >
             Forgot password?
           </Link>

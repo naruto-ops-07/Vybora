@@ -227,6 +227,15 @@ export default function Settings() {
           />
         </SectionCard>
 
+        <SectionCard title="Appearance">
+          <Row
+            icon="palette"
+            label="Appearance"
+            description="Look and light or dark mode"
+            onPress={() => router.push('/messages/appearance')}
+          />
+        </SectionCard>
+
         <SectionCard title="Accessibility">
           <Row
             icon="eye"

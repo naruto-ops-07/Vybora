@@ -2,7 +2,7 @@ import { avatarUrl } from '@vybora/api';
 import { initialsFor } from '@vybora/core';
 import { Image } from 'expo-image';
 import { useState } from 'react';
-import { View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { usePersonTone } from '@/lib/personTones';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/theme';
@@ -29,7 +29,7 @@ export interface AvatarProps {
 
 /**
  * A person's photo, or a flat circle in their tone with one or two initials
- * (Archivo semibold, sized to the circle). Mirrors the web Avatar.
+ * in the look's display face, sized to the circle. Mirrors the web Avatar.
  */
 export function Avatar({
   path,
@@ -42,6 +42,7 @@ export function Avatar({
   style,
 }: AvatarProps) {
   const tone = usePersonTone(userId);
+  const t = useTheme();
   const [failed, setFailed] = useState(false);
   const uri = failed ? null : avatarUrl(supabase, path);
   const initials = initialsFor(displayName, username ?? name, size < TWO_INITIALS_MIN ? 1 : 2);
@@ -68,10 +69,18 @@ export function Avatar({
         <View
           style={[
             circle,
-            { backgroundColor: tone.fill, alignItems: 'center', justifyContent: 'center' },
+            {
+              backgroundColor: tone.fill,
+              alignItems: 'center',
+              justifyContent: 'center',
+              // A faint inner edge of the ink keeps pale fills off pale surfaces (not in HC).
+              borderWidth: t.highContrast ? 0 : StyleSheet.hairlineWidth,
+              borderColor: `${tone.ink}1A`,
+            },
           ]}
         >
           <Text
+            display
             allowFontScaling={false}
             style={{
               color: tone.ink,

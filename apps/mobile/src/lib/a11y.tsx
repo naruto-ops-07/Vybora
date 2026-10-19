@@ -25,6 +25,8 @@ export interface A11yState {
   reduceMotion: boolean;
   /** Message/row/composer text multiplier (1 = 15 px base). */
   textScale: number;
+  /** Stored settings are loaded (the splash screen waits, so contrast never flashes). */
+  ready: boolean;
 }
 
 const FALLBACK: A11yState = {
@@ -32,6 +34,7 @@ const FALLBACK: A11yState = {
   setPrefs: () => undefined,
   reduceMotion: false,
   textScale: 1,
+  ready: true,
 };
 const Ctx = createContext<A11yState | null>(null);
 export const useA11y = () => useContext(Ctx) ?? FALLBACK;
@@ -40,6 +43,7 @@ export const useA11y = () => useContext(Ctx) ?? FALLBACK;
 export function A11yProvider({ children }: { children: ReactNode }) {
   const [prefs, setState] = useState<A11yPrefs>(DEFAULT_A11Y_PREFS);
   const [systemReduced, setSystemReduced] = useState(false);
+  const [ready, setReady] = useState(false);
   const loaded = useRef(false);
 
   useEffect(() => {
@@ -49,9 +53,11 @@ export function A11yProvider({ children }: { children: ReactNode }) {
         if (!alive) return;
         loaded.current = true;
         setState(parseA11yPrefs(raw));
+        setReady(true);
       })
       .catch(() => {
         loaded.current = true;
+        if (alive) setReady(true);
       });
     return () => {
       alive = false;
@@ -82,8 +88,9 @@ export function A11yProvider({ children }: { children: ReactNode }) {
       setPrefs,
       reduceMotion: resolveReduceMotion(prefs.reduceMotion, systemReduced),
       textScale: TEXT_SIZE_PX[prefs.textSize] / TEXT_SIZE_PX.md,
+      ready,
     }),
-    [prefs, setPrefs, systemReduced],
+    [prefs, setPrefs, systemReduced, ready],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

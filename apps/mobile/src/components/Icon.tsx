@@ -44,6 +44,7 @@ import { MagnifyingGlassIcon } from 'phosphor-react-native/src/icons/MagnifyingG
 import { MicrophoneIcon } from 'phosphor-react-native/src/icons/Microphone';
 import { MusicNoteIcon } from 'phosphor-react-native/src/icons/MusicNote';
 import { NotePencilIcon } from 'phosphor-react-native/src/icons/NotePencil';
+import { PaletteIcon } from 'phosphor-react-native/src/icons/Palette';
 import { PaperclipIcon } from 'phosphor-react-native/src/icons/Paperclip';
 import { PaperPlaneRightIcon } from 'phosphor-react-native/src/icons/PaperPlaneRight';
 import { PauseIcon } from 'phosphor-react-native/src/icons/Pause';
@@ -117,6 +118,7 @@ const ICONS = {
   monitor: DesktopIcon,
   'more-horizontal': DotsThreeIcon,
   music: MusicNoteIcon,
+  palette: PaletteIcon,
   paperclip: PaperclipIcon,
   pause: PauseIcon,
   phone: PhoneIcon,
