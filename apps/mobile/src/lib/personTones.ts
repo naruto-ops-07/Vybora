@@ -1,4 +1,4 @@
-import { personToneHighContrastInk, personTonesByLook, type Look } from '@vybora/config';
+import { personTonesByLook, type Look } from '@vybora/config';
 import { personTone, type ToneName } from '@vybora/core';
 import { useTheme } from './theme';
 
@@ -36,7 +36,7 @@ export function personToneStyle(
     ? {
         name,
         fill: c.fill,
-        ink: personToneHighContrastInk[dark ? 'dark' : 'light'],
+        ink: c.hcInk,
         text: themeText,
         bold: true,
       }

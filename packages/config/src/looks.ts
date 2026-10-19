@@ -199,6 +199,11 @@ export interface LookDef {
   name: string;
   /** Family names; each app maps them to its loaded font files. */
   fonts: { display: string; text: string };
+  /**
+   * Weight of the display face for titles (web `--vy-display-weight`; mobile picks the
+   * nearest static cut it bundles). Fraunces is already heavy at 600; Bloom shouts.
+   */
+  displayWeight: number;
   radii: { sm: number; md: number; lg: number };
   /** 1: bubbles, buttons, cards. 2: menus, popovers, toasts. 3: dialogs, sheets. */
   elevation: Record<1 | 2 | 3, Elevation>;
@@ -212,6 +217,7 @@ export interface LookDef {
 const velvet: LookDef = {
   name: 'Velvet',
   fonts: { display: 'Fraunces', text: 'DM Sans' },
+  displayWeight: 600,
   radii: { sm: 6, md: 12, lg: 18 },
   elevation: {
     1: { y: 4, blur: 14, alpha: 0.4 },
@@ -287,6 +293,7 @@ const velvet: LookDef = {
 const aurora: LookDef = {
   name: 'Aurora',
   fonts: { display: 'Sora', text: 'Manrope' },
+  displayWeight: 650,
   radii: { sm: 8, md: 14, lg: 20 },
   elevation: {
     1: { y: 4, blur: 16, alpha: 0.32 },
@@ -330,6 +337,7 @@ const aurora: LookDef = {
 const bloom: LookDef = {
   name: 'Bloom',
   fonts: { display: 'Plus Jakarta Sans', text: 'Plus Jakarta Sans' },
+  displayWeight: 800,
   radii: { sm: 10, md: 16, lg: 24 },
   elevation: {
     1: { y: 6, blur: 18, alpha: 0.3 },
@@ -412,6 +420,8 @@ export interface PersonToneColors {
   fill: string;
   ink: string;
   name: string;
+  /** Initials on the same fill under high contrast (≥ 7:1). */
+  hcInk: string;
 }
 
 type ToneSet = Record<PersonToneName, { dark: PersonToneColors; light: PersonToneColors }>;
@@ -420,12 +430,26 @@ type ToneSet = Record<PersonToneName, { dark: PersonToneColors; light: PersonTon
 const toneIn =
   (darkInk: string) =>
   (dark: string, lightFill: string, lightName: string, lightInk = lightName) => ({
-    dark: { fill: dark, ink: darkInk, name: dark },
-    light: { fill: lightFill, ink: lightInk, name: lightName },
+    dark: { fill: dark, ink: darkInk, name: dark, hcInk: palette.graphite950 },
+    light: { fill: lightFill, ink: lightInk, name: lightName, hcInk: palette.ink },
   });
 
+/**
+ * Velvet dark is the other way round: a deep jewel fill with ivory initials, and a
+ * softer, warmer name tint (gold, sage, rose) for text on the dark surfaces.
+ */
+const velvetJewel = (
+  fill: string,
+  name: string,
+  lightFill: string,
+  lightName: string,
+  lightInk = lightName,
+) => ({
+  dark: { fill, ink: '#F3EDE4', name, hcInk: '#FFFBF3' },
+  light: { fill: lightFill, ink: lightInk, name: lightName, hcInk: palette.ink },
+});
+
 const auroraTone = toneIn(palette.graphite950);
-const velvetTone = toneIn('#0F0D0B');
 const bloomTone = toneIn('#17121F');
 
 /**
@@ -438,20 +462,21 @@ const bloomTone = toneIn('#17121F');
  *   contrast test failed: lime light name #4D7C0F → #3F6212 (4.42:1 on #EDF2F2); light
  *   ink for turquoise, emerald, aqua and sky is one step darker than the name (the
  *   name colour was 4.28–4.47:1 on its fill).
- * - Velvet: jewel tones spread round the wheel (turquoise, emerald, citrine,
- *   aquamarine, topaz, garnet, sapphire, amethyst) so friends stay distinct.
+ * - Velvet: true jewel tones round the wheel (teal, emerald, topaz, aquamarine,
+ *   copper, garnet, sapphire, amethyst). Dark: deep fills with ivory initials (and
+ *   ivory under high contrast); names in a warm gold/sage/rose tint of each hue.
  * - Bloom: vivid tones (teal, green, pink, sky, tangerine, sunflower, blue, orchid).
  */
 export const personTonesByLook: Record<Look, ToneSet> = {
   velvet: {
-    turquoise: velvetTone('#6FCDBF', '#CDEDE6', '#0E6B5E', '#0B5A4F'),
-    emerald: velvetTone('#63C792', '#CFEBDB', '#12704A', '#0D5E3E'),
-    lime: velvetTone('#D9C26E', '#F1E6BE', '#6E5A12', '#5E4C0E'),
-    aqua: velvetTone('#7FC8E2', '#D2EAF3', '#146A85', '#105A71'),
-    sky: velvetTone('#E8A66C', '#F6DEC6', '#94501A', '#7D4415'),
-    mint: velvetTone('#E8949C', '#F5D9DC', '#A13347', '#8A2B3C'),
-    ocean: velvetTone('#8EA8F3', '#DAE2F8', '#2F50B0', '#284497'),
-    glacier: velvetTone('#BF9DEA', '#E8DCF6', '#6C3FA6', '#5C358F'),
+    turquoise: velvetJewel('#0F5C57', '#8FCFC2', '#CDEDE6', '#0E6B5E', '#0B5A4F'),
+    emerald: velvetJewel('#105A41', '#A9D2A2', '#CFEBDB', '#12704A', '#0D5E3E'),
+    lime: velvetJewel('#6B440C', '#E0C07C', '#F1E6BE', '#6E5A12', '#5E4C0E'),
+    aqua: velvetJewel('#12557A', '#96C5D6', '#D2EAF3', '#146A85', '#105A71'),
+    sky: velvetJewel('#7E3518', '#E3AD84', '#F6DEC6', '#94501A', '#7D4415'),
+    mint: velvetJewel('#7E1C33', '#E3A2A8', '#F5D9DC', '#A13347', '#8A2B3C'),
+    ocean: velvetJewel('#223F96', '#AAB8E8', '#DAE2F8', '#2F50B0', '#284497'),
+    glacier: velvetJewel('#562B88', '#C8AEE3', '#E8DCF6', '#6C3FA6', '#5C358F'),
   },
   aurora: {
     turquoise: auroraTone('#2DD4BF', '#99F6E4', '#0F766E', '#115E59'),

@@ -189,10 +189,11 @@
   /* The look's display face (Fraunces, Sora or Plus Jakarta Sans): titles and names. */
   .type-wide {
     font-family: var(--vy-font-display);
+    font-weight: var(--vy-display-weight, 600);
   }
   .type-display {
     font-family: var(--vy-font-display);
-    font-weight: 600;
+    font-weight: var(--vy-display-weight, 600);
     letter-spacing: -0.02em;
     line-height: 1.05;
   }

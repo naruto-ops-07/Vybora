@@ -5,7 +5,7 @@
  * personal tones of the current look, its accent and its outgoing bubble (flat),
  * radii 8–12, no gradients or shadows. All decorative: the heading beside each carries the meaning.
  */
-import { personToneHighContrastInk, personTonesByLook, type PersonToneName } from '@vybora/config';
+import { personTonesByLook, type PersonToneName } from '@vybora/config';
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { View } from 'react-native';
 import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
@@ -43,7 +43,7 @@ function usePaintFor(): Paint {
       mineText: t.bubbleOutText,
       text: t.borderStrong,
       tone: (n) => tones[n][mode].fill,
-      toneInk: (n) => (t.highContrast ? personToneHighContrastInk[mode] : tones[n][mode].ink),
+      toneInk: (n) => (t.highContrast ? tones[n][mode].hcInk : tones[n][mode].ink),
     };
   }, [t]);
 }

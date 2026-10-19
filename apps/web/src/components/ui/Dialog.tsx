@@ -146,7 +146,7 @@ export const DialogSurface = forwardRef<HTMLDivElement, DialogSurfaceProps>(func
         )}
       >
         <div className="min-w-0">
-          <h2 id={titleId} className="type-wide text-lg font-semibold tracking-[-0.01em]">
+          <h2 id={titleId} className="type-wide text-lg tracking-[-0.01em]">
             {title}
           </h2>
           {description && (

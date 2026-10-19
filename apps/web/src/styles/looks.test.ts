@@ -5,7 +5,6 @@ import {
   highContrastThemes,
   LOOKS,
   looks,
-  personToneHighContrastInk,
   personTonesByLook,
   type LookTokens,
   type Mode,
@@ -100,6 +99,7 @@ describe('looks.generated.css', () => {
           expect(decl(b, `tone-${tone}-fill`)).toBe(c.fill.toLowerCase());
           expect(decl(b, `tone-${tone}-ink`)).toBe(c.ink.toLowerCase());
           expect(decl(b, `tone-${tone}-name`)).toBe(c.name.toLowerCase());
+          expect(decl(b, `tone-${tone}-hc-ink`)).toBe(c.hcInk.toLowerCase());
         }
         expect(b).toContain(`color-scheme: ${mode};`);
         for (const soft of ['danger-soft', 'warning-soft', 'scrim'])
@@ -112,6 +112,7 @@ describe('looks.generated.css', () => {
       expect(decl(shared, 'radius-lg')).toBe(`${def.radii.lg}px`);
       expect(decl(shared, 'font-display')).toContain(`'${def.fonts.display} Variable'`);
       expect(decl(shared, 'font-text')).toContain(`'${def.fonts.text} Variable'`);
+      expect(decl(shared, 'display-weight')).toBe(String(def.displayWeight));
     }
   });
 
@@ -234,7 +235,7 @@ describe('looks.generated.css', () => {
       expect(decl(b, 'panel-blur')).toBe('0px');
       expect(decl(b, 'text')).toBe(t.text.toLowerCase());
       for (const tone of PERSON_TONES) {
-        expect(decl(b, `tone-${tone}-ink`)).toBe(personToneHighContrastInk[mode].toLowerCase());
+        expect(decl(b, `tone-${tone}-ink`)).toBe(`var(--vy-tone-${tone}-hc-ink)`);
         expect(decl(b, `tone-${tone}-name`)).toBe('var(--vy-text)');
       }
     }

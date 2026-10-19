@@ -87,6 +87,7 @@ export const lookFonts: Record<Look, LookFonts> = {
     medium: 'Manrope_500Medium',
     semibold: 'Manrope_600SemiBold',
     bold: 'Manrope_700Bold',
+    // displayWeight 650: Sora ships 600 and 700 cuts; 600 keeps titles calm, 700 is the bold.
     display: 'Sora_600SemiBold',
     displayBold: 'Sora_700Bold',
     ...MONO,
@@ -96,7 +97,8 @@ export const lookFonts: Record<Look, LookFonts> = {
     medium: 'PlusJakartaSans_500Medium',
     semibold: 'PlusJakartaSans_600SemiBold',
     bold: 'PlusJakartaSans_700Bold',
-    display: 'PlusJakartaSans_700Bold',
+    // displayWeight 800: Bloom's titles are the ExtraBold cut.
+    display: 'PlusJakartaSans_800ExtraBold',
     displayBold: 'PlusJakartaSans_800ExtraBold',
     ...MONO,
   },

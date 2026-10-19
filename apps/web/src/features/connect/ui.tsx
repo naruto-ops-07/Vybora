@@ -142,7 +142,7 @@ export function TypingDots({ color }: { color: string }) {
 export function PaneHeader({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <header className="flex h-16 shrink-0 items-center justify-between gap-2 pr-3 pl-5">
-      <h1 className="type-wide text-[23px] leading-8 font-semibold tracking-[-0.01em]">{title}</h1>
+      <h1 className="type-wide text-[23px] leading-8 tracking-[-0.01em]">{title}</h1>
       {children}
     </header>
   );

@@ -76,7 +76,7 @@ export function GetStartedView({
           aria-hidden="true"
         />
         <div className="min-w-0 flex-1" role="status">
-          <h2 id={titleId} className="type-wide text-[15px] font-semibold">
+          <h2 id={titleId} className="type-wide text-[15px]">
             You’re all set
           </h2>
           <p className="mt-0.5 text-[13px] leading-snug text-muted">
@@ -116,7 +116,7 @@ export function GetStartedView({
       data-get-started="steps"
     >
       <div className="flex items-start gap-3">
-        <h2 id={titleId} className="type-wide flex-1 text-[15px] font-semibold">
+        <h2 id={titleId} className="type-wide flex-1 text-[15px]">
           Get started
         </h2>
         <span className="mt-0.5 font-mono text-xs text-muted" aria-live="polite">

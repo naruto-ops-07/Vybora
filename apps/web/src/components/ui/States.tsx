@@ -48,7 +48,7 @@ export function EmptyState({
           </div>
         )
       )}
-      <Heading className="type-wide text-[17px] font-semibold text-balance">{title}</Heading>
+      <Heading className="type-wide text-[17px] text-balance">{title}</Heading>
       {body && <p className="mt-1.5 max-w-xs text-sm leading-relaxed text-muted">{body}</p>}
       {(action || secondaryAction) && (
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
@@ -72,7 +72,7 @@ export function ErrorState({
 }) {
   return (
     <div role="alert" className="flex flex-col items-center px-6 py-12 text-center">
-      <h3 className="type-wide text-[17px] font-semibold text-balance">{title}</h3>
+      <h3 className="type-wide text-[17px] text-balance">{title}</h3>
       <p className="mt-1 max-w-sm text-sm text-muted">
         {friendlyError(error, 'We couldn’t load this right now.')}
       </p>

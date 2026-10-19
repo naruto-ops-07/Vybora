@@ -130,7 +130,7 @@ function LookColumn({ look }: { look: Look }) {
       data-look={look}
       className="min-w-0 space-y-4 rounded-lg border border-line bg-bg p-4 font-sans text-ink"
     >
-      <p className="type-wide text-[17px] font-semibold">{looks[look].name}</p>
+      <p className="type-wide text-[17px]">{looks[look].name}</p>
       <div className="flex flex-wrap gap-2">
         <Button leftIcon={<UserPlusIcon size={16} weight="bold" />}>Add friend</Button>
         <Button variant="secondary">Later</Button>

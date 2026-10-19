@@ -202,7 +202,7 @@ export function HandleCardView({
           decorative
         />
         <span className="min-w-0 flex-1">
-          <span className="type-wide block truncate text-[16px] leading-6 font-semibold">
+          <span className="type-wide block truncate text-[16px] leading-6">
             {name}
           </span>
           <span className="block truncate font-mono text-[13px] text-muted">{handle}</span>

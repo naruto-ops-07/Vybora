@@ -121,7 +121,7 @@ export function SettingsPage({
         >
           <CaretRightIcon size={18} className="rotate-180" aria-hidden="true" />
         </NavLink>
-        <h1 className="type-wide text-[19px] font-semibold">{title}</h1>
+        <h1 className="type-wide text-[19px]">{title}</h1>
       </header>
       <div className="mx-auto w-full max-w-2xl space-y-8 px-4 py-6 md:px-6 md:py-8">{children}</div>
     </div>

@@ -206,7 +206,7 @@ export default function Gallery() {
       <header className="sticky top-0 z-30 border-b border-line bg-surface">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 md:px-8">
           <div className="flex min-w-0 flex-auto items-center gap-3">
-            <h1 className="type-wide truncate text-lg font-semibold">Design gallery</h1>
+            <h1 className="type-wide truncate text-lg">Design gallery</h1>
             <span className="shrink-0 rounded-sm border border-line-strong px-1.5 py-0.5 font-mono text-[11px] font-medium text-muted">
               Sample data
             </span>
@@ -270,7 +270,7 @@ export default function Gallery() {
             aria-labelledby={`${id}-title`}
             className="mt-10 scroll-mt-24 border-t border-line pt-8"
           >
-            <h2 id={`${id}-title`} className="type-wide text-lg font-semibold">
+            <h2 id={`${id}-title`} className="type-wide text-lg">
               {title}
             </h2>
             <p className="mt-1 max-w-prose text-sm text-muted">{description}</p>

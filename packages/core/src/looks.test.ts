@@ -60,8 +60,8 @@ const TODAY_THEMES = {
 };
 
 const tone = (dark: string, lightFill: string, lightName: string, lightInk = lightName) => ({
-  dark: { fill: dark, ink: '#0A0E0F', name: dark },
-  light: { fill: lightFill, ink: lightInk, name: lightName },
+  dark: { fill: dark, ink: '#0A0E0F', name: dark, hcInk: '#0A0E0F' },
+  light: { fill: lightFill, ink: lightInk, name: lightName, hcInk: '#0B1416' },
 });
 const TODAY_TONES = {
   turquoise: tone('#2DD4BF', '#99F6E4', '#0F766E', '#115E59'),
@@ -247,6 +247,24 @@ describe('person tones per look', () => {
     }
   });
 
+  it('velvet dark: deep jewel fills under ivory initials, names a lighter tint', () => {
+    const t = looks.velvet.modes.dark;
+    for (const name of PERSON_TONES) {
+      const c = personTonesByLook.velvet[name].dark;
+      expect(c.ink).toBe(t.text);
+      expect(contrastRatio(c.fill, t.bg)).toBeLessThan(3); // a jewel, not a lamp
+      expect(contrastRatio(c.hcInk, c.fill)).toBeGreaterThanOrEqual(7);
+      expect(c.name).not.toBe(c.fill);
+    }
+  });
+
+  it('aurora and bloom keep the theme ink under high contrast', () => {
+    for (const look of ['aurora', 'bloom'] as Look[])
+      for (const name of PERSON_TONES)
+        for (const mode of MODES)
+          expect(personTonesByLook[look][name][mode].hcInk).toBe(personToneHighContrastInk[mode]);
+  });
+
   for (const look of LOOKS) {
     for (const name of PERSON_TONES) {
       it(`${look} ${name}: names ≥ 4.5:1 on surface and bubble-in, initials ≥ 4.5:1 (7:1 in high contrast)`, () => {
@@ -256,7 +274,7 @@ describe('person tones per look', () => {
           expect(contrastRatio(c.name, t.surface)).toBeGreaterThanOrEqual(4.5);
           expect(contrastRatio(c.name, t.bubbleIn)).toBeGreaterThanOrEqual(4.5);
           expect(contrastRatio(c.ink, c.fill)).toBeGreaterThanOrEqual(4.5);
-          expect(contrastRatio(personToneHighContrastInk[mode], c.fill)).toBeGreaterThanOrEqual(7);
+          expect(contrastRatio(c.hcInk, c.fill)).toBeGreaterThanOrEqual(7);
         }
       });
     }

@@ -101,7 +101,7 @@ function Centered({
         >
           {icon}
         </div>
-        <h2 className="type-wide text-[17px] font-semibold text-balance">{title}</h2>
+        <h2 className="type-wide text-[17px] text-balance">{title}</h2>
         <p className="mt-1.5 text-sm leading-relaxed text-muted">{body}</p>
         {children && <div className="mt-5">{children}</div>}
       </div>

@@ -52,7 +52,7 @@ export function ChatHeaderView({
       >
         {avatar}
         <span className="min-w-0">
-          <span className="type-wide block truncate text-[17px] leading-6 font-semibold">
+          <span className="type-wide block truncate text-[17px] leading-6">
             {title || ' '}
           </span>
           <span

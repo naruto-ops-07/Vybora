@@ -33,7 +33,7 @@ registerHooks({
 const config = await import(
   pathToFileURL(join(root, 'packages', 'config', 'src', 'index.ts')).href
 );
-const { LOOKS, looks, personTonesByLook, highContrastThemes, personToneHighContrastInk } = config;
+const { LOOKS, looks, personTonesByLook, highContrastThemes } = config;
 
 const MODES = ['light', 'dark'];
 
@@ -121,6 +121,7 @@ function toneLines(look, mode) {
       line(`tone-${tone}-fill`, c.fill),
       line(`tone-${tone}-ink`, c.ink),
       line(`tone-${tone}-name`, c.name),
+      line(`tone-${tone}-hc-ink`, c.hcInk),
     ];
   });
 }
@@ -201,6 +202,7 @@ function lookBlock(look, mode) {
       line('radius-lg', `${def.radii.lg}px`),
       line('font-display', fontStack(def.fonts.display)),
       line('font-text', fontStack(def.fonts.text)),
+      line('display-weight', def.displayWeight),
       // Velvet's bubble runs top → bottom; the others corner to corner.
       line('bubble-out-angle', look === 'velvet' ? '180deg' : '135deg'),
       line('primary-angle', look === 'velvet' ? '180deg' : '135deg'),
@@ -229,7 +231,6 @@ function lookBlock(look, mode) {
 function highContrastBlock(mode) {
   const t = highContrastThemes[mode];
   const x = TODAY_AURORA[mode];
-  const ink = personToneHighContrastInk[mode];
   // Flat everywhere: gradient stops collapse to one colour, no glow, no blur, and every
   // shadow is the no-op `0 0 #0000` (not `none`, which would void a ring composed with it).
   const flat = {
@@ -258,9 +259,10 @@ function highContrastBlock(mode) {
     line('edge', t.border),
     ...stateLines(flat),
     line('panel-blur', '0px'),
-    // Fills stay the look's; initials take the theme ink (≥ 7:1), names the text colour.
+    // Fills stay the look's; initials take the look's high-contrast ink (≥ 7:1, declared
+    // on the same element by the look block), names the text colour.
     ...Object.keys(personTonesByLook.aurora).flatMap((tone) => [
-      line(`tone-${tone}-ink`, ink),
+      line(`tone-${tone}-ink`, `var(--vy-tone-${tone}-hc-ink)`),
       line(`tone-${tone}-name`, 'var(--vy-text)'),
     ]),
   ];
