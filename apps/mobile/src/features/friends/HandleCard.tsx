@@ -160,6 +160,26 @@ export function HandleCardView({
   );
 }
 
+/**
+ * Opens the share sheet with my @handle and add-me link (the chat list's "Share your
+ * username"). A completed share counts toward Get started, as on the card.
+ */
+export function useShareMyHandle() {
+  const { profile } = useAuth();
+  const [, update] = useOnboarding(profile?.id);
+  return async () => {
+    const username = profile?.username;
+    if (!username) return;
+    const link = publicSiteUrl ? friendInviteLink(publicSiteUrl, username) : null;
+    try {
+      const r = await Share.share({ message: shareMessage(username, link) });
+      if (r.action === Share.sharedAction) update({ shared: true });
+    } catch {
+      Alert.alert('Couldn’t share', `Your username is @${username}.`);
+    }
+  };
+}
+
 /** HandleCard for the signed-in user. Renders nothing until the profile has loaded. */
 export function HandleCard({ variant = 'full' }: { variant?: 'full' | 'compact' }) {
   const { profile } = useAuth();

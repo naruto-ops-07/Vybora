@@ -1,5 +1,13 @@
 import type { ChatTheme } from '@vybora/api';
-import { chatAccent, resolveChatTheme, wallpaperSvg, type ChatThemeDef } from '@vybora/config';
+import {
+  chatAccent,
+  isDefaultChatTheme,
+  outgoingBubbleFill,
+  resolveChatTheme,
+  wallpaperSvg,
+  type ChatThemeDef,
+  type OutgoingBubbleFill,
+} from '@vybora/config';
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -67,33 +75,42 @@ export function effectiveTheme(
 export interface ResolvedTheme extends ChatThemeDef {
   accent: string;
   background: string;
+  /** The outgoing bubble's flat colour: the fill's end stop (also the tail's fill). */
   outgoing: string;
   outgoingText: string;
+  /** What outgoing bubbles are filled with (shared with web: `outgoingBubbleFill`). */
+  fill: OutgoingBubbleFill;
   incoming: string;
   incomingText: string;
   /** Accessibility → High contrast: chat colours follow the high-contrast accent. */
   highContrast?: boolean;
 }
 
-/** A shared chat theme resolved against the current light/dark mode. */
+/**
+ * A shared chat theme resolved against the look, mode and contrast in effect. The
+ * Default theme is the look's own gradient bubble and accent; a named theme keeps its
+ * colour (flat); high contrast is flat in the high-contrast accent.
+ */
 export function useThemeDef(theme: ChatTheme): ResolvedTheme {
-  const cc = useCc();
-  const { highContrast } = useA11y().prefs;
+  const t = useTheme();
+  const highContrast = t.highContrast;
   return useMemo(() => {
     const def = resolveChatTheme(theme);
-    // In high contrast `cc` already carries the high-contrast tokens.
-    const accent = highContrast ? cc.accent : chatAccent(def, cc.dark);
+    const fill = outgoingBubbleFill(theme, t.look, t.dark ? 'dark' : 'light', { highContrast });
+    // In high contrast `t` already carries the high-contrast tokens.
+    const accent = highContrast || isDefaultChatTheme(theme) ? t.accent : chatAccent(def, t.dark);
     return {
       ...def,
       accent,
-      background: cc.night,
-      outgoing: highContrast ? cc.accent : def.bubble,
-      outgoingText: highContrast ? cc.onAccent : def.bubbleText,
-      incoming: cc.bubbleIn,
-      incomingText: cc.text,
+      background: t.bg,
+      outgoing: fill.to,
+      outgoingText: fill.text,
+      fill,
+      incoming: t.bubbleIn,
+      incomingText: t.text,
       highContrast,
     };
-  }, [theme, cc, highContrast]);
+  }, [theme, t, highContrast]);
 }
 
 /** Chat background: app background + optional flat wallpaper (identical on every device). */
@@ -285,8 +302,13 @@ export function Row({
 /** Three pulsing dots for "typing…" (opacity only; stays static with reduced motion). */
 export function TypingDots({ color }: { color?: string }) {
   const cc = useCc();
+  const { reduceMotion } = useA11y();
   const values = useRef([0, 1, 2].map(() => new Animated.Value(0.3))).current;
   useEffect(() => {
+    if (reduceMotion) {
+      values.forEach((v) => v.setValue(0.75));
+      return;
+    }
     const loops = values.map((v, i) =>
       Animated.loop(
         Animated.sequence([
@@ -298,7 +320,7 @@ export function TypingDots({ color }: { color?: string }) {
     );
     loops.forEach((l) => l.start());
     return () => loops.forEach((l) => l.stop());
-  }, [values]);
+  }, [values, reduceMotion]);
   return (
     <View
       style={{ flexDirection: 'row', gap: 3, alignItems: 'center' }}

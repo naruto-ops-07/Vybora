@@ -20,7 +20,7 @@ import {
   useFriends,
   useMessageFriend,
 } from '@/features/friends/hooks';
-import { RequestRow } from '@/features/friends/RequestRow';
+import { RequestsSection } from '@/features/friends/RequestsSection';
 import { FriendsEmpty } from '@/features/onboarding/EmptyStates';
 import { useA11y } from '@/lib/a11y';
 import { radii } from '@/lib/theme';
@@ -228,39 +228,29 @@ export default function FriendsScreen() {
       {hasRequests && (
         <View>
           <SectionHeading title="Requests" count={incoming.length + outgoing.length} />
-          {incoming.map((r) => (
-            <RequestRow
-              key={`in-${r.userId}`}
-              direction="incoming"
-              request={r}
-              when={when(r)}
-              onAccept={() => {
-                join({ person: r, username: r.username, via: 'accept' });
-                respond.mutate(
-                  { request: r, accept: true },
-                  { onSuccess: () => say(`You and ${nameOf(r)} are now friends`) },
-                );
-              }}
-              onDecline={() => {
-                respond.mutate(
-                  { request: r, accept: false },
-                  { onSuccess: () => say(`Declined ${nameOf(r)}’s request`) },
-                );
-              }}
-            />
-          ))}
-          {outgoing.map((r) => (
-            <RequestRow
-              key={`out-${r.userId}`}
-              direction="outgoing"
-              request={r}
-              onCancel={() => {
-                cancel.mutate(r, {
-                  onSuccess: () => say(`Cancelled your request to ${nameOf(r)}`),
-                });
-              }}
-            />
-          ))}
+          <RequestsSection
+            incoming={incoming}
+            outgoing={outgoing}
+            when={when}
+            onAccept={(r) => {
+              join({ person: r, username: r.username, via: 'accept' });
+              respond.mutate(
+                { request: r, accept: true },
+                { onSuccess: () => say(`You and ${nameOf(r)} are now friends`) },
+              );
+            }}
+            onDecline={(r) => {
+              respond.mutate(
+                { request: r, accept: false },
+                { onSuccess: () => say(`Declined ${nameOf(r)}’s request`) },
+              );
+            }}
+            onCancel={(r) => {
+              cancel.mutate(r, {
+                onSuccess: () => say(`Cancelled your request to ${nameOf(r)}`),
+              });
+            }}
+          />
         </View>
       )}
       <SectionHeading title="Friends" count={friends.isSuccess ? list.length : undefined} />

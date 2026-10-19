@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { resolveChatTheme } from '@vybora/config';
 import type { LocalMessage } from '@vybora/e2ee';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 
 const mockTrust = jest.fn();
@@ -53,6 +53,8 @@ jest.mock('@/features/connect/ui/Attachment', () => ({
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 
 import { Bubble } from '@/features/connect/ui/Bubble';
+import { useThemeDef } from '@/features/connect/ui/primitives';
+import { themeFor } from '@/lib/theme';
 import Verify from '@/app/messages/verify/[userId]';
 
 function wrap(ui: ReactNode) {
@@ -88,6 +90,13 @@ const bubble = (
       background: '#FFFFFF',
       outgoing: '#0F766E',
       outgoingText: '#FFFFFF',
+      fill: {
+        gradient: false,
+        from: '#0F766E',
+        to: '#0F766E',
+        text: '#FFFFFF',
+        angle: 135,
+      },
       incoming: '#EDF2F2',
       incomingText: '#0B1416',
     }}
@@ -123,6 +132,21 @@ describe('Secure message bubble', () => {
     await render(bubble({ status: 'failed' }, { receipt: 'failed', onRetry: retry }));
     await fireEvent.press(screen.getByText('Not sent · Tap to retry'));
     expect(retry).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }));
+  });
+});
+
+describe('chat themes in the looks', () => {
+  it('Default takes the look bubble and accent; a named theme keeps its own', async () => {
+    const { result: def } = await renderHook(() => useThemeDef({}));
+    const light = themeFor('velvet', 'light', false);
+    expect(def.current.fill).toEqual(
+      expect.objectContaining({ gradient: true, from: light.bubbleOutFrom, to: light.bubbleOutTo }),
+    );
+    expect(def.current.accent).toBe(light.accent);
+    const { result: ocean } = await renderHook(() => useThemeDef({ preset: 'ocean' }));
+    expect(ocean.current.fill.gradient).toBe(false);
+    expect(ocean.current.outgoing).toBe(resolveChatTheme({ preset: 'ocean' }).bubble);
+    expect(ocean.current.accent).toBe(resolveChatTheme({ preset: 'ocean' }).accentLight);
   });
 });
 

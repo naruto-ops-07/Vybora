@@ -31,6 +31,11 @@ jest.mock('@vybora/api', () => ({
     return { send: jest.fn(), leave: () => mockTypingLeaves.push(conv) };
   },
 }));
+const mockStore = new Map<string, string>();
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: (k: string) => Promise.resolve(mockStore.get(k) ?? null),
+  setItemAsync: () => Promise.resolve(),
+}));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 34, left: 0, right: 0 }),
 }));
@@ -43,7 +48,13 @@ jest.mock('@/features/connect/ui/Attachment', () => ({
   FileAttachment: () => null,
 }));
 
+import { A11Y_STORAGE_KEY } from '@vybora/core';
+import { chatThemeDefs } from '@vybora/config';
+import type { ReactNode } from 'react';
 import { useInboxTyping } from '@/features/connect/hooks';
+import { ChatGlow, glowMotion } from '@/features/connect/ui/ChatGlow';
+import { A11yProvider } from '@/lib/a11y';
+import { LookScope, themeFor } from '@/lib/theme';
 import { Bubble } from '@/features/connect/ui/Bubble';
 import { ChatRow, RowPreviewLine } from '@/features/connect/ui/ChatRowParts';
 import { MessageActions } from '@/features/connect/ui/MessageActions';
@@ -512,5 +523,120 @@ describe('chat row accessibility actions', () => {
       .getByRole('button', { name: /Maya/ })
       .props.accessibilityActions.map((a: { label: string }) => a.label);
     expect(labels).toEqual(['Unpin', 'Unmute', 'Unarchive', 'More actions']);
+  });
+});
+
+/** Every host node in the rendered tree (react-native-svg renders named hosts). */
+type HostNode = { type: string; props: Record<string, unknown>; children?: unknown[] | null };
+function hosts(node: unknown): HostNode[] {
+  if (!node || typeof node !== 'object') return [];
+  if (Array.isArray(node)) return node.flatMap(hosts);
+  const n = node as HostNode;
+  return [n, ...(n.children ?? []).flatMap(hosts)];
+}
+const hasGradient = () => hosts(screen.toJSON()).some((n) => /LinearGradient/.test(n.type));
+
+function Mine({ preset }: { preset?: 'ocean' }) {
+  const theme = useThemeDef(preset ? { preset } : {});
+  return (
+    <Bubble
+      message={{ ...msg, senderId: 'me', status: 'sent' }}
+      mine
+      theme={theme}
+      showSender={false}
+      runStart
+      runEnd
+      onLongPress={jest.fn()}
+      onRetry={jest.fn()}
+      onOpenImage={jest.fn()}
+      nameOf={() => 'You'}
+    />
+  );
+}
+
+const withHc = (children: ReactNode) => {
+  mockStore.set(A11Y_STORAGE_KEY, JSON.stringify({ highContrast: true }));
+  return <A11yProvider>{children}</A11yProvider>;
+};
+
+describe('outgoing bubbles in the looks', () => {
+  afterEach(() => mockStore.clear());
+
+  it('the Default theme draws the look gradient, and the tail takes its end stop', async () => {
+    const { result } = await renderHook(() => useThemeDef({}));
+    expect(result.current.fill.gradient).toBe(true);
+    await render(<Mine />);
+    expect(screen.getByTestId('gradient-fill', { includeHiddenElements: true })).toBeTruthy();
+    expect(hasGradient()).toBe(true);
+    // react-native-svg hands colours to native as ARGB integers.
+    const argb = (hex: string) => (0xff000000 | parseInt(hex.slice(1, 7), 16)) >>> 0;
+    const tailPath = hosts(screen.getByTestId('bubble-tail', { includeHiddenElements: true })).find(
+      (n) => n.type === 'RNSVGPath',
+    );
+    expect((tailPath?.props.fill as { payload: number }).payload).toBe(
+      argb(result.current.fill.to),
+    );
+    expect(result.current.outgoing).toBe(result.current.fill.to);
+    expect(result.current.outgoingText).toBe(result.current.fill.text);
+  });
+
+  it('a named chat theme keeps its own colour, flat', async () => {
+    await render(<Mine preset="ocean" />);
+    expect(screen.queryByTestId('gradient-fill', { includeHiddenElements: true })).toBeNull();
+    const flat = StyleSheet.flatten(screen.getByTestId('bubble').props.style);
+    expect(flat.backgroundColor).toBe(chatThemeDefs.ocean!.bubble);
+  });
+
+  it('is flat under high contrast, whatever the theme', async () => {
+    await render(withHc(<Mine />));
+    await rtlAct(async () => undefined);
+    expect(screen.queryByTestId('gradient-fill', { includeHiddenElements: true })).toBeNull();
+    expect(hasGradient()).toBe(false);
+    const flat = StyleSheet.flatten(screen.getByTestId('bubble').props.style);
+    expect(flat.shadowOpacity ?? 0).toBe(0);
+  });
+});
+
+describe('the chat glow', () => {
+  afterEach(() => mockStore.clear());
+
+  it('drifts in Aurora, pulses in Bloom and holds still in Velvet', () => {
+    expect(glowMotion(themeFor('aurora', 'dark', false), false)).toBe('drift');
+    expect(glowMotion(themeFor('bloom', 'light', false), false)).toBe('pulse');
+    expect(glowMotion(themeFor('velvet', 'dark', false), false)).toBe('none');
+  });
+
+  it('holds still under reduced motion and is absent under high contrast', async () => {
+    expect(glowMotion(themeFor('aurora', 'dark', false), true)).toBe('none');
+    expect(glowMotion(themeFor('bloom', 'dark', false), true)).toBe('none');
+    await render(
+      <LookScope look="aurora">
+        <ChatGlow />
+      </LookScope>,
+    );
+    expect(screen.getByTestId('chat-glow', { includeHiddenElements: true })).toBeTruthy();
+    await render(
+      withHc(
+        <LookScope look="aurora">
+          <ChatGlow />
+        </LookScope>,
+      ),
+    );
+    await rtlAct(async () => undefined);
+    expect(screen.queryByTestId('chat-glow', { includeHiddenElements: true })).toBeNull();
+  });
+
+  it('gives each glow its own gradient ids', async () => {
+    await render(
+      <LookScope look="bloom">
+        <ChatGlow />
+        <ChatGlow />
+      </LookScope>,
+    );
+    const ids = hosts(screen.toJSON())
+      .filter((n) => /RadialGradient/.test(n.type))
+      .map((n) => n.props.name ?? n.props.id);
+    expect(ids.length).toBeGreaterThan(1);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

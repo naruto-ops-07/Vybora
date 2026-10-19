@@ -1,13 +1,14 @@
 import type { LocalMessage } from '@vybora/e2ee';
 import { memo, useMemo } from 'react';
 import { formatClock, messageSummary, type Receipt } from '@vybora/core';
-import { Pressable, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Icon } from '@/components/Icon';
 import { Text } from '@/components/Text';
 import { Avatar } from '@/components/ui';
 import { usePersonTone } from '@/lib/personTones';
-import { radii } from '@/lib/theme';
+import { GradientFill } from '@/components/GradientFill';
+import { shadowStyle, useTheme } from '@/lib/theme';
 import { FileAttachment, ImageAttachment, VideoAttachment, VoiceAttachment } from './Attachment';
 import { useCc, type ResolvedTheme } from './primitives';
 
@@ -43,7 +44,7 @@ export function Ticks({ receipt, color }: { receipt: Receipt; color: string }) {
   );
 }
 
-/** Flat notch on the last bubble of a run, in the bubble's own colour. */
+/** Notch on the last bubble of a run: the bubble's own colour (a gradient's end stop). */
 function Tail({ mine, fill, stroke }: { mine: boolean; fill: string; stroke?: string }) {
   return (
     <Svg
@@ -108,6 +109,8 @@ export const Bubble = memo(function Bubble({
   nameOf,
 }: BubbleProps) {
   const cc = useCc();
+  const t = useTheme();
+  const radii = t.radii;
   const senderTone = usePersonTone(m.senderId);
   const senderLabel = mine ? 'You' : nameOf(m.senderId);
   const time = useMemo(() => formatClock(m.createdAt), [m.createdAt]);
@@ -120,12 +123,9 @@ export const Bubble = memo(function Bubble({
   );
   const filled = mine && !m.deleted && m.kind !== 'undecryptable';
   const textColor = filled ? theme.outgoingText : theme.incomingText;
-  // High contrast: meta text keeps the bubble's own (on-accent) colour at full strength.
-  const meta = filled
-    ? theme.highContrast
-      ? theme.outgoingText
-      : 'rgba(255,255,255,0.75)'
-    : cc.textSubtle;
+  // Meta on a filled bubble keeps the bubble's own text colour at full strength: a dimmed
+  // tint falls under 4.5:1 on the lighter gradient stops (Bloom).
+  const meta = filled ? theme.outgoingText : cc.textMuted;
   const media =
     m.kind === 'attachment' && m.attachment?.kind !== 'voice' && m.attachment?.kind !== 'file';
 
@@ -175,16 +175,21 @@ export const Bubble = memo(function Bubble({
   }
 
   const reactions = Object.entries(m.reactions).filter(([, users]) => users.length);
+  const corners = {
+    borderRadius: radii.lg,
+    borderBottomRightRadius: mine && runEnd ? radii.sm : radii.lg,
+    borderBottomLeftRadius: !mine && runEnd ? radii.sm : radii.lg,
+  };
   const bubbleStyle = {
     maxWidth: '82%' as const,
     flexShrink: 1,
     minWidth: 0,
     paddingHorizontal: media ? 4 : 12,
     paddingVertical: media ? 4 : 8,
-    borderRadius: radii.lg,
-    borderBottomRightRadius: mine && runEnd ? radii.sm : radii.lg,
-    borderBottomLeftRadius: !mine && runEnd ? radii.sm : radii.lg,
+    ...corners,
   };
+  // Incoming edge: a 10 % ink hairline (web `.vy-bubble-in`).
+  const inkLine = `${cc.text.slice(0, 7)}1A`;
 
   const inner = (
     <>
@@ -192,18 +197,14 @@ export const Bubble = memo(function Bubble({
         <View
           style={{
             borderLeftWidth: 2,
-            borderLeftColor: filled
-              ? theme.highContrast
-                ? meta
-                : 'rgba(255,255,255,0.7)'
-              : theme.accent,
+            borderLeftColor: filled ? theme.outgoingText : theme.accent,
             paddingLeft: 8,
             marginBottom: 6,
           }}
         >
           <Text
             style={{
-              color: filled ? '#FFFFFF' : theme.accent,
+              color: filled ? theme.outgoingText : theme.accent,
               fontSize: 12,
               fontWeight: '600',
             }}
@@ -332,6 +333,7 @@ export const Bubble = memo(function Bubble({
             <View style={{ width: 28 }} />
           ))}
         <Pressable
+          testID="bubble"
           onLongPress={
             selecting ? undefined : () => !m.deleted && m.kind !== 'undecryptable' && onLongPress(m)
           }
@@ -341,9 +343,23 @@ export const Bubble = memo(function Bubble({
             bubbleStyle,
             filled
               ? { backgroundColor: theme.outgoing }
-              : { backgroundColor: theme.incoming, borderWidth: 1, borderColor: cc.line },
+              : {
+                  backgroundColor: theme.incoming,
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderColor: t.highContrast ? cc.lineStrong : inkLine,
+                },
+            shadowStyle(1, t),
           ]}
         >
+          {filled && theme.fill.gradient && (
+            // Clipped by its own corners, so the run-end corner stays tight.
+            <GradientFill
+              from={theme.fill.from}
+              to={theme.fill.to}
+              angle={theme.fill.angle === 180 ? 180 : 135}
+              style={corners}
+            />
+          )}
           {/* While selecting, taps on photos, voice, files fall through to the bubble. */}
           <View testID="bubble-content" pointerEvents={selecting ? 'none' : 'auto'}>
             {inner}
@@ -352,7 +368,7 @@ export const Bubble = memo(function Bubble({
             <Tail
               mine={mine}
               fill={filled ? theme.outgoing : theme.incoming}
-              stroke={filled ? undefined : cc.line}
+              stroke={filled ? undefined : t.highContrast ? cc.lineStrong : inkLine}
             />
           )}
         </Pressable>
@@ -387,10 +403,10 @@ export const Bubble = memo(function Bubble({
                 gap: 3,
                 paddingHorizontal: 6,
                 height: 24,
-                borderRadius: radii.sm,
-                backgroundColor: cc.panel,
-                borderWidth: 1,
-                borderColor: cc.line,
+                borderRadius: 999,
+                backgroundColor: cc.popover,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: t.highContrast ? cc.lineStrong : cc.line,
               }}
             >
               <Text style={{ fontSize: 13 }}>{emoji}</Text>

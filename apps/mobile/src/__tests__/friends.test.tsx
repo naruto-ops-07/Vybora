@@ -20,6 +20,7 @@ import { FriendsButton } from '@/features/friends/FriendsButton';
 import { useOnlinePeers } from '@/features/connect/hooks';
 import { useFriendActions, useFriendRequests, useMessageFriend } from '@/features/friends/hooks';
 import { RequestRow } from '@/features/friends/RequestRow';
+import { ChatListEmptyView } from '@/features/onboarding/EmptyStates';
 
 jest.mock('react-native-worklets', () => require('react-native-worklets/src/mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
@@ -556,14 +557,39 @@ describe('Friends screen', () => {
     await renderScreen();
 
     await waitFor(() => expect(screen.getByText('@sam')).toBeTruthy());
+    // Received opens first; Sent is one tap away.
+    expect(screen.getByRole('radio', { name: 'Received (1)' }).props.accessibilityState).toEqual(
+      expect.objectContaining({ checked: true }),
+    );
     expect(screen.getByRole('button', { name: 'Accept request from Maya Rose' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Cancel request to zed' })).toBeNull();
+    await fireEvent.press(screen.getByRole('radio', { name: 'Sent (1)' }));
     expect(screen.getByRole('button', { name: 'Cancel request to zed' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Accept request from Maya Rose' })).toBeNull();
+    expect(screen.getByLabelText('Sent requests')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Message Maya Rose' })).toBeTruthy();
     expect(screen.getByLabelText('Requests, 2')).toBeTruthy();
     expect(screen.getByLabelText('Friends, 2')).toBeTruthy();
     await waitFor(() => expect(mockWatch).toHaveBeenCalled());
     // Maya has no direct chat with me yet: presence is not allowed for her.
     expect(mockWatch.mock.calls[0]![1]).toEqual(['u-sam']);
+  });
+
+  it('opens on Sent when nothing has been received', async () => {
+    mockFetchRequests.mockResolvedValue({
+      incoming: [],
+      outgoing: [{ ...askMaya, userId: 'u-out', username: 'zed', displayName: null }],
+    });
+    mockFetchFriends.mockResolvedValue([sam]);
+    mockFetchInbox.mockResolvedValue([]);
+    await renderScreen();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Cancel request to zed' })).toBeTruthy(),
+    );
+    expect(screen.getByRole('radio', { name: 'Received (0)' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Sent (1)' }).props.accessibilityState).toEqual(
+      expect.objectContaining({ checked: true }),
+    );
   });
 
   it('shows a friendly empty state', async () => {
@@ -768,5 +794,74 @@ describe('friendship joined', () => {
     await waitFor(() => expect(mockFetchFriends).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.getByText('You and @sam are now friends')).toBeTruthy());
     expect(screen.queryByRole('button', { name: /^Say hi/ })).toBeNull();
+  });
+});
+
+describe('chat list empty state', () => {
+  const handlers = () => ({
+    onFindFriends: jest.fn(),
+    onShare: jest.fn(),
+    onSayHi: jest.fn(),
+    onNewMessage: jest.fn(),
+  });
+
+  it('shows nothing while friends are loading', async () => {
+    await render(
+      <ChatListEmptyView state="loading" outgoingCount={0} friends={[]} {...handlers()} />,
+    );
+    expect(screen.queryByText('No friends yet')).toBeNull();
+    expect(screen.queryByText('No chats yet')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('a fresh account: find friends or share your username', async () => {
+    const h = handlers();
+    await render(<ChatListEmptyView state="no-friends" outgoingCount={0} friends={[]} {...h} />);
+    expect(screen.getByRole('header', { name: 'No friends yet' })).toBeTruthy();
+    expect(
+      screen.getByText('Find your friends by their username and start chatting.'),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Find friends' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Share your username' }));
+    expect(h.onFindFriends).toHaveBeenCalledTimes(1);
+    expect(h.onShare).toHaveBeenCalledTimes(1);
+  });
+
+  it('waiting on sent requests', async () => {
+    const h = handlers();
+    await render(<ChatListEmptyView state="waiting" outgoingCount={2} friends={[]} {...h} />);
+    expect(screen.getByRole('header', { name: 'No friends yet' })).toBeTruthy();
+    expect(
+      screen.getByText('Waiting on 2 requests. Find more friends while you wait.'),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Find friends' }));
+    expect(h.onFindFriends).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Share your username' })).toBeNull();
+  });
+
+  it('friends but no chats: say hi to one, or start a new message', async () => {
+    const h = handlers();
+    await render(
+      <ChatListEmptyView state="say-hi" outgoingCount={0} friends={[maya, sam]} {...h} />,
+    );
+    expect(screen.getByRole('header', { name: 'No chats yet' })).toBeTruthy();
+    expect(screen.getByText('Say hi to a friend.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Say hi to Maya Rose' }));
+    expect(h.onSayHi).toHaveBeenCalledWith(maya);
+    expect(screen.getByRole('button', { name: 'Say hi to sam' })).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'New message' }));
+    expect(h.onNewMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows at most five friends to say hi to', async () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({
+      ...maya,
+      userId: `u-${i}`,
+      displayName: `Pal ${i}`,
+    }));
+    await render(
+      <ChatListEmptyView state="say-hi" outgoingCount={0} friends={many} {...handlers()} />,
+    );
+    expect(screen.getAllByRole('button', { name: /^Say hi to / })).toHaveLength(5);
   });
 });

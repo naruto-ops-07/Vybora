@@ -7,7 +7,13 @@ import {
   updateConversationPreferences,
   type SecureConversation,
 } from '@vybora/api';
-import { chatRowPreview, formatRowTime, receiptOf, usernameFromAddParam } from '@vybora/core';
+import {
+  chatListEmptyState,
+  chatRowPreview,
+  formatRowTime,
+  receiptOf,
+  usernameFromAddParam,
+} from '@vybora/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useIsFocused } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -42,8 +48,14 @@ import { ChatRow } from '@/features/connect/ui/ChatRowParts';
 import { ConnectEmpty, useCc } from '@/features/connect/ui/primitives';
 import { UndoBar } from '@/features/connect/ui/UndoBar';
 import { FriendsButton } from '@/features/friends/FriendsButton';
-import { useFriendRequests } from '@/features/friends/hooks';
-import { AddFriendButton, NoChatsEmpty, NoResultsEmpty } from '@/features/onboarding/EmptyStates';
+import { useShareMyHandle } from '@/features/friends/HandleCard';
+import { useFriendRequests, useFriends, useMessageFriend } from '@/features/friends/hooks';
+import {
+  AddFriendButton,
+  addFriend,
+  ChatListEmptyView,
+  NoResultsEmpty,
+} from '@/features/onboarding/EmptyStates';
 import { GetStarted } from '@/features/onboarding/GetStarted';
 import { useHaptics } from '@/lib/haptics';
 import { radii } from '@/lib/theme';
@@ -52,7 +64,36 @@ import { supabase } from '@/lib/supabase';
 type Filter = 'all' | 'unread' | 'groups' | 'pinned' | 'archived';
 const FILTERS: Filter[] = ['all', 'unread', 'groups', 'pinned', 'archived'];
 
-/** "No chats yet", "No one by that name", or a plain line for an empty filter. */
+/** The chat list before the first chat: which state comes from the shared rule. */
+function ChatListEmpty() {
+  const friends = useFriends();
+  const focused = useIsFocused();
+  const requests = useFriendRequests(focused);
+  const message = useMessageFriend();
+  const share = useShareMyHandle();
+  const outgoingCount = requests.data?.outgoing.length ?? 0;
+  // A failed friends query still shows "say hi" (without avatars), not "no friends".
+  const state = friends.isError
+    ? 'say-hi'
+    : chatListEmptyState({
+        friendsLoaded: friends.isSuccess && !requests.isPending,
+        friendCount: friends.data?.length ?? 0,
+        outgoingCount,
+      });
+  return (
+    <ChatListEmptyView
+      state={state}
+      outgoingCount={outgoingCount}
+      friends={friends.data ?? []}
+      onFindFriends={() => addFriend()}
+      onShare={() => void share()}
+      onSayHi={message.open}
+      onNewMessage={() => router.push('/messages/new')}
+    />
+  );
+}
+
+/** The empty state for the chat list, a search that found no one, or an empty filter. */
 function InboxEmpty({
   term,
   filter,
@@ -69,7 +110,7 @@ function InboxEmpty({
         action={<AddFriendButton username={usernameFromAddParam(term)} variant="outline" />}
       />
     );
-  if (filter === 'all' && !hasChats) return <NoChatsEmpty />;
+  if (filter === 'all' && !hasChats) return <ChatListEmpty />;
   return (
     <Text
       style={{
