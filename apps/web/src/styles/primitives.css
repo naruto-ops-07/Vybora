@@ -1,0 +1,300 @@
+/*
+ * Primitive skins: buttons, fields, segmented control, popovers (menus, dialogs, toasts,
+ * tooltips), the empty-state tile and the avatar edge. Every value is a look token
+ * (looks.generated.css), so each look restyles them and screens follow.
+ *
+ * Imported into Tailwind's components layer (index.css), so a utility on the same
+ * element still wins. Plain CSS on purpose (no nesting, layers or Tailwind directives,
+ * and longhands where a value is a var()), so the unit tests can cascade it in jsdom.
+ *
+ * Rules: colour, border and shadow change on hover and press, never position or size.
+ * High contrast is flat (no gradient, shadow or blur): its overrides sit at the end of
+ * the file, after every rule they override.
+ */
+
+/* ── Buttons ─────────────────────────────────────────────────────────── */
+
+.vy-btn {
+  border-width: 1px;
+  border-style: solid;
+  border-color: transparent;
+  transition-property: color, background-color, border-color, box-shadow;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+.vy-btn:focus-visible {
+  outline-width: 2px;
+  outline-style: solid;
+  outline-color: var(--vy-accent);
+  outline-offset: 2px;
+}
+.vy-btn:disabled {
+  box-shadow: none;
+}
+
+/* Primary: the look's gradient, its own ink, elevation 1 (+ Velvet's top highlight). */
+.vy-btn-primary {
+  color: var(--vy-on-primary);
+  background-color: var(--vy-primary-to);
+  background-image: linear-gradient(
+    var(--vy-primary-angle),
+    var(--vy-primary-from),
+    var(--vy-primary-to)
+  );
+  box-shadow: var(--vy-primary-highlight), var(--vy-shadow-1);
+}
+@media (hover: hover) {
+  .vy-btn-primary:hover:not(:disabled) {
+    background-image: linear-gradient(
+      var(--vy-primary-angle),
+      color-mix(in oklab, var(--vy-primary-from) 94%, #000),
+      color-mix(in oklab, var(--vy-primary-to) 94%, #000)
+    );
+  }
+}
+/* Pressed: darker stops, and the button settles into the page. */
+.vy-btn-primary:active:not(:disabled) {
+  background-image: linear-gradient(
+    var(--vy-primary-angle),
+    color-mix(in oklab, var(--vy-primary-from) 86%, #000),
+    color-mix(in oklab, var(--vy-primary-to) 84%, #000)
+  );
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.22);
+}
+
+/* Secondary: a quiet raised chip in the look's surface colours. */
+.vy-btn-secondary {
+  color: var(--vy-text);
+  background-color: var(--vy-surface-muted);
+  border-color: var(--vy-border);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 5%, transparent);
+}
+@media (hover: hover) {
+  .vy-btn-secondary:hover:not(:disabled) {
+    background-color: var(--vy-surface-strong);
+  }
+}
+.vy-btn-secondary:active:not(:disabled) {
+  background-color: color-mix(in oklab, var(--vy-surface-strong) 90%, var(--vy-text));
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+/* Outline: a control edge (border-strong), the surface showing through. */
+.vy-btn-outline {
+  color: var(--vy-text);
+  background-color: transparent;
+  border-color: var(--vy-border-strong);
+}
+@media (hover: hover) {
+  .vy-btn-outline:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--vy-text) 6%, transparent);
+  }
+}
+.vy-btn-outline:active:not(:disabled) {
+  background-color: color-mix(in srgb, var(--vy-text) 11%, transparent);
+}
+
+/* Ghost: a tint of the ink, so it reads on any surface (solid, muted or glass). */
+.vy-btn-ghost {
+  color: var(--vy-text);
+  background-color: transparent;
+}
+@media (hover: hover) {
+  .vy-btn-ghost:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--vy-text) 7%, transparent);
+  }
+}
+.vy-btn-ghost:active:not(:disabled) {
+  background-color: color-mix(in srgb, var(--vy-text) 12%, transparent);
+}
+
+/* Danger: the page colour on the danger fill (≥ 4.5:1 in every look, mode and contrast). */
+.vy-btn-danger {
+  color: var(--vy-bg);
+  background-color: var(--vy-danger);
+  box-shadow: var(--vy-shadow-1);
+}
+@media (hover: hover) {
+  .vy-btn-danger:hover:not(:disabled) {
+    background-color: color-mix(in oklab, var(--vy-danger) 92%, #000);
+  }
+}
+.vy-btn-danger:active:not(:disabled) {
+  background-color: color-mix(in oklab, var(--vy-danger) 84%, #000);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.22);
+}
+
+/* ── Fields ──────────────────────────────────────────────────────────── */
+
+/* The control edge (border-strong), a faint inset shade, an accent edge and ring on focus. */
+.vy-field {
+  color: var(--vy-text);
+  background-color: var(--vy-surface);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--vy-border-strong);
+  box-shadow: inset 0 1px 2px color-mix(in srgb, #000 7%, transparent);
+  transition-property: border-color, box-shadow, background-color;
+  transition-duration: 150ms;
+}
+@media (hover: hover) {
+  .vy-field:hover:not(:disabled):not(:focus) {
+    border-color: color-mix(in oklab, var(--vy-border-strong) 75%, var(--vy-text));
+  }
+}
+.vy-field:focus {
+  border-color: var(--vy-accent);
+  outline-width: 2px;
+  outline-style: solid;
+  outline-color: var(--vy-accent);
+  outline-offset: 1px;
+}
+.vy-field[aria-invalid='true'] {
+  border-color: var(--vy-danger);
+}
+.vy-field[aria-invalid='true']:focus {
+  outline-color: var(--vy-danger);
+}
+
+/* ── Segmented control ───────────────────────────────────────────────── */
+
+/* An inset track; the checked option is a raised accent thumb. */
+.vy-seg {
+  background-color: var(--vy-surface-muted);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--vy-border-strong);
+  box-shadow: inset 0 1px 2px color-mix(in srgb, #000 10%, transparent);
+}
+.vy-seg-item {
+  color: var(--vy-text-muted);
+  transition-property: color, background-color, box-shadow;
+  transition-duration: 150ms;
+}
+@media (hover: hover) {
+  .vy-seg-item:hover:not(:disabled) {
+    color: var(--vy-text);
+    background-color: color-mix(in srgb, var(--vy-text) 6%, transparent);
+  }
+}
+.vy-seg-item:focus-visible {
+  outline-width: 2px;
+  outline-style: solid;
+  outline-color: var(--vy-accent);
+  outline-offset: 1px;
+}
+.vy-seg-item[aria-checked='true'] {
+  color: var(--vy-on-accent);
+  background-color: var(--vy-accent);
+  box-shadow: var(--vy-primary-highlight), var(--vy-shadow-1);
+}
+
+/* ── Popovers: menus, dialogs, toasts, tooltips ──────────────────────── */
+
+/*
+ * Solid and raised, with a hairline edge on top (gold in Velvet). Where the look has
+ * glass (Aurora, Bloom) the surface is translucent behind the look's blur.
+ */
+.vy-popover {
+  color: var(--vy-text);
+  background-color: var(--vy-popover);
+  -webkit-backdrop-filter: blur(var(--vy-panel-blur)) saturate(1.2);
+  backdrop-filter: blur(var(--vy-panel-blur)) saturate(1.2);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--vy-border);
+  border-top-color: var(--vy-edge);
+  box-shadow: var(--vy-shadow-2);
+}
+.vy-popover-3 {
+  box-shadow: var(--vy-shadow-3);
+}
+
+.vy-menu-item {
+  color: var(--vy-text);
+}
+.vy-menu-item[data-highlighted] {
+  background-color: color-mix(in srgb, var(--vy-accent) 14%, transparent);
+}
+.vy-menu-item[data-disabled] {
+  opacity: 0.45;
+}
+.vy-menu-item-danger {
+  color: var(--vy-danger);
+}
+.vy-menu-item-danger[data-highlighted] {
+  background-color: var(--vy-danger-soft);
+}
+.vy-menu-separator {
+  background-color: var(--vy-border);
+}
+
+/* ── Empty-state tile, avatar edge ───────────────────────────────────── */
+
+.vy-tile {
+  color: var(--vy-accent);
+  background-color: var(--vy-surface);
+  background-image: linear-gradient(180deg, var(--vy-surface), var(--vy-surface-muted));
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--vy-border);
+  border-top-color: var(--vy-edge);
+  box-shadow: var(--vy-shadow-1);
+}
+
+/* A hairline inside every avatar, so photos and pale tones keep their edge on any surface. */
+.vy-avatar-face {
+  position: relative;
+}
+.vy-avatar-face::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vy-text) 10%, transparent);
+  pointer-events: none;
+}
+
+/* ── High contrast: flat. Kept last, after every rule it overrides. ──── */
+
+:root[data-contrast='high'] .vy-btn,
+:root[data-contrast='high'] .vy-btn:active:not(:disabled),
+:root[data-contrast='high'] .vy-field,
+:root[data-contrast='high'] .vy-seg,
+:root[data-contrast='high'] .vy-seg-item[aria-checked='true'],
+:root[data-contrast='high'] .vy-popover,
+:root[data-contrast='high'] .vy-tile {
+  box-shadow: none;
+}
+:root[data-contrast='high'] .vy-btn-primary,
+:root[data-contrast='high'] .vy-btn-primary:hover:not(:disabled),
+:root[data-contrast='high'] .vy-btn-primary:active:not(:disabled) {
+  color: var(--vy-on-accent);
+  background-color: var(--vy-accent);
+  background-image: none;
+}
+:root[data-contrast='high'] .vy-btn-primary:hover:not(:disabled),
+:root[data-contrast='high'] .vy-btn-primary:active:not(:disabled) {
+  background-color: var(--vy-accent-hover);
+}
+:root[data-contrast='high'] .vy-btn-secondary {
+  border-color: var(--vy-border-strong);
+}
+:root[data-contrast='high'] .vy-popover {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+:root[data-contrast='high'] .vy-menu-item[data-highlighted] {
+  color: var(--vy-on-accent);
+  background-color: var(--vy-accent);
+}
+:root[data-contrast='high'] .vy-menu-item-danger[data-highlighted] {
+  color: var(--vy-bg);
+  background-color: var(--vy-danger);
+}
+:root[data-contrast='high'] .vy-tile {
+  background-image: none;
+}
+:root[data-contrast='high'] .vy-avatar-face::after {
+  display: none;
+}

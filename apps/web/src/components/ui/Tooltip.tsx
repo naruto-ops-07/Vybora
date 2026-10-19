@@ -1,6 +1,10 @@
 import * as RadixTooltip from '@radix-ui/react-tooltip';
 import type { ReactElement, ReactNode } from 'react';
 
+/** The shared popover surface at elevation 2, small (styles/primitives.css). */
+export const tooltipContentClass =
+  'tip vy-popover z-50 flex items-center gap-2 rounded-sm px-2 py-1 text-xs font-medium';
+
 export const TooltipProvider = ({ children }: { children: ReactNode }) => (
   <RadixTooltip.Provider delayDuration={400} skipDelayDuration={200}>
     {children}
@@ -30,7 +34,7 @@ export function Tip({
           side={side}
           sideOffset={6}
           collisionPadding={8}
-          className="tip z-50 flex items-center gap-2 rounded-sm border border-line-strong bg-surface-strong px-2 py-1 text-xs text-ink"
+          className={tooltipContentClass}
         >
           {label}
           {shortcut && <kbd className="font-mono text-[11px] text-subtle">{shortcut}</kbd>}

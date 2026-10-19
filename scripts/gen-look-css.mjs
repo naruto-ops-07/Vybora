@@ -125,6 +125,30 @@ function toneLines(look, mode) {
   });
 }
 
+/** Visually none, yet still a valid item in a box-shadow list (rings compose with it). */
+const NO_SHADOW = '0 0 #0000';
+
+/**
+ * Popovers (menus, dialogs, toasts, tooltips). With glass, the surface at 84 % behind a
+ * blur (the look's `panel` is a header tint, too thin to read a menu over), and a light
+ * rim on top in dark. Without glass, the solid raised surface and a hairline edge of
+ * 35 % accent over the border (Velvet's gold).
+ */
+function popoverLines(look, mode, t) {
+  const glass = looks[look].glass;
+  return [
+    line('popover', glass ? rgba(t.surface, 0.84) : t.surface),
+    line(
+      'edge',
+      glass
+        ? mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.12)'
+          : t.border
+        : mix(t.accent, t.border, 0.35),
+    ),
+  ];
+}
+
 function lookBlock(look, mode) {
   const def = looks[look];
   const t = def.modes[mode];
@@ -138,6 +162,7 @@ function lookBlock(look, mode) {
       const e = def.elevation[level];
       return line(`shadow-${level}`, `0 ${e.y}px ${e.blur}px ${rgba(t.shadowColor, e.alpha)}`);
     }),
+    ...popoverLines(look, mode, t),
     ...toneLines(look, mode),
   ];
   if (mode === 'light') {
@@ -150,6 +175,12 @@ function lookBlock(look, mode) {
       line('font-text', fontStack(def.fonts.text)),
       // Velvet's bubble runs top → bottom; the others corner to corner.
       line('bubble-out-angle', look === 'velvet' ? '180deg' : '135deg'),
+      line('primary-angle', look === 'velvet' ? '180deg' : '135deg'),
+      // Velvet's primary button: a 1 px inner top highlight. Elsewhere a no-op shadow.
+      line(
+        'primary-highlight',
+        look === 'velvet' ? 'inset 0 1px 0 rgba(255, 255, 255, 0.45)' : NO_SHADOW,
+      ),
       line('panel-blur', def.glass ? '20px' : '0px'),
     );
   }
@@ -171,7 +202,8 @@ function highContrastBlock(mode) {
   const t = highContrastThemes[mode];
   const x = TODAY_AURORA[mode];
   const ink = personToneHighContrastInk[mode];
-  // Flat everywhere: gradient stops collapse to one colour, no glow, no shadow, no blur.
+  // Flat everywhere: gradient stops collapse to one colour, no glow, no blur, and every
+  // shadow is the no-op `0 0 #0000` (not `none`, which would void a ring composed with it).
   const flat = {
     ...t,
     bubbleOutFrom: t.accent,
@@ -190,9 +222,12 @@ function highContrastBlock(mode) {
     line('danger-soft', x.dangerSoft),
     line('warning-soft', x.warningSoft),
     line('scrim', x.scrim),
-    line('shadow-1', 'none'),
-    line('shadow-2', 'none'),
-    line('shadow-3', 'none'),
+    line('shadow-1', NO_SHADOW),
+    line('shadow-2', NO_SHADOW),
+    line('shadow-3', NO_SHADOW),
+    line('primary-highlight', NO_SHADOW),
+    line('popover', t.surface),
+    line('edge', t.border),
     line('panel-blur', '0px'),
     // Fills stay the look's; initials take the theme ink (≥ 7:1), names the text colour.
     ...Object.keys(personTonesByLook.aurora).flatMap((tone) => [

@@ -84,7 +84,7 @@ export function CommandPalette({
       onOpenChange={onOpenChange}
       label="Command menu"
       overlayClassName="fixed inset-0 z-50 bg-scrim"
-      contentClassName="fixed left-1/2 top-[12vh] z-50 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-lg border border-line-strong bg-surface"
+      contentClassName="fixed left-1/2 top-[12vh] z-50 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-lg vy-popover vy-popover-3"
     >
       <Command.Input
         autoFocus

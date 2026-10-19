@@ -44,7 +44,8 @@ export function Segmented<T extends string>({
       aria-label={label}
       aria-disabled={disabled || undefined}
       onKeyDown={onKeyDown}
-      className="grid overflow-hidden rounded-md border border-line-strong"
+      // An inset track with a raised accent thumb (styles/primitives.css).
+      className="vy-seg grid gap-[3px] rounded-md p-[3px]"
       style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
     >
       {options.map((o, i) => (
@@ -57,9 +58,7 @@ export function Segmented<T extends string>({
           disabled={disabled}
           onClick={() => onChange(o.value)}
           className={cn(
-            'touch-target flex h-10 items-center justify-center px-2 text-sm font-medium transition-colors duration-150 disabled:opacity-45',
-            i > 0 && 'border-l border-line-strong',
-            value === o.value ? 'bg-accent text-on-accent' : 'hover:bg-surface-muted',
+            'vy-seg-item touch-target flex min-h-[34px] min-w-0 items-center justify-center rounded-[calc(var(--vy-radius-md)-4px)] px-2 py-1 text-center text-sm leading-tight font-medium disabled:opacity-45',
           )}
         >
           {o.label}

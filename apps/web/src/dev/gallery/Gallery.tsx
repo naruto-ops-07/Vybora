@@ -4,8 +4,8 @@
  * Registered only when `import.meta.env.DEV`; never in production bundles.
  * No network, no auth, no encryption engine.
  *
- * URL state: `?look=velvet|aurora|bloom`, `?theme=light|dark` and `?contrast=high`, so
- * screenshots are repeatable.
+ * URL state: `?look=velvet|aurora|bloom`, `?theme=light|dark` (the mode) and
+ * `?contrast=high`, so screenshots are repeatable. The header switches look × mode.
  */
 import { LOOKS, looks, type Look } from '@vybora/config';
 import { useEffect, useLayoutEffect, useRef, type ComponentType } from 'react';
@@ -19,6 +19,7 @@ import { FriendsSection, SealedSendSection } from './sections/Delight';
 import { EmptyStatesSection, GetStartedSection, HandleCardSection } from './sections/FirstRun';
 import { GroupAvatarsSection } from './sections/GroupAvatars';
 import { IllustrationsSection } from './sections/Illustrations';
+import { PrimitivesSection } from './sections/Primitives';
 import { ThreadSection } from './sections/Thread';
 import { TonesSection } from './sections/Tones';
 
@@ -62,6 +63,13 @@ const SECTIONS: GallerySection[] = [
     description:
       'Settings → Appearance: each card is its own data-look scope, drawn in that look’s tokens, type and shape, in the current mode.',
     Component: LooksSection,
+  },
+  {
+    id: 'primitives',
+    title: 'Primitives',
+    description:
+      'Buttons, fields, segmented, popovers, the dialog panel, the empty-state tile, avatars and the logo, in the look’s tokens. Flat under high contrast.',
+    Component: PrimitivesSection,
   },
   {
     id: 'tones',
@@ -206,7 +214,7 @@ export default function Gallery() {
             </div>
             <div className="w-40">
               <Segmented
-                label="Theme"
+                label="Mode"
                 value={theme}
                 options={[
                   { value: 'light', label: 'Light' },

@@ -7,9 +7,10 @@ import {
 } from 'react';
 import { cn } from '@/lib/cn';
 
-// Focus: the global 2px :focus-visible outline (index.css) plus an accent border.
+// Skin in styles/primitives.css: the control edge, a faint inset, an accent edge and
+// 2 px ring on focus (danger when invalid). The look's radius.
 const fieldBase =
-  'w-full rounded-md border border-line-strong bg-surface px-3 text-[15px] text-ink placeholder:text-subtle transition-colors duration-150 focus:border-accent disabled:opacity-60 aria-[invalid=true]:border-danger';
+  'vy-field w-full rounded-md px-3 text-[15px] placeholder:text-subtle disabled:opacity-60';
 
 interface FieldShellProps {
   label?: string;

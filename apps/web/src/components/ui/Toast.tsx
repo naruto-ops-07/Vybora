@@ -1,5 +1,6 @@
 import { CheckCircleIcon, InfoIcon, WarningIcon } from '@phosphor-icons/react';
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { cn } from '@/lib/cn';
 
 type Tone = 'success' | 'error' | 'info';
 interface ToastItem {
@@ -37,19 +38,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         className="pointer-events-none fixed inset-x-0 top-3 z-[60] flex flex-col items-center gap-2 px-4"
       >
         {items.map((t) => (
-          <div
+          <ToastCard
             key={t.id}
-            role={t.tone === 'error' ? 'alert' : 'status'}
-            className="pointer-events-auto flex max-w-md items-center gap-3 rounded-md border border-line-strong bg-surface px-4 py-3 text-sm font-medium"
-          >
-            {icon[t.tone]}
-            <span>{t.message}</span>
-            {t.action && (
-              <button className="ml-2 font-semibold text-accent" onClick={t.action.onClick}>
-                {t.action.label}
-              </button>
-            )}
-          </div>
+            tone={t.tone}
+            message={t.message}
+            action={t.action}
+            className="pointer-events-auto"
+          />
         ))}
       </div>
     </Ctx.Provider>
@@ -60,4 +55,40 @@ export function useToast() {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error('useToast must be used within ToastProvider');
   return ctx;
+}
+
+/** One toast: the popover surface at elevation 2, a tone icon, the message, an action. */
+export function ToastCard({
+  tone,
+  message,
+  action,
+  className,
+}: {
+  tone: Tone;
+  message: string;
+  action?: ToastItem['action'];
+  className?: string;
+}) {
+  return (
+    <div
+      role={tone === 'error' ? 'alert' : 'status'}
+      className={cn(
+        'vy-popover flex min-h-12 max-w-md items-center gap-3 rounded-md py-2 pl-4 pr-2 text-sm font-medium',
+        !action && 'pr-4',
+        className,
+      )}
+    >
+      {icon[tone]}
+      <span className="min-w-0 flex-1 py-1">{message}</span>
+      {action && (
+        <button
+          type="button"
+          className="touch-target -my-1 shrink-0 rounded-sm px-2.5 py-1.5 font-semibold text-accent transition-colors duration-150 hover:bg-accent-soft"
+          onClick={action.onClick}
+        >
+          {action.label}
+        </button>
+      )}
+    </div>
+  );
 }

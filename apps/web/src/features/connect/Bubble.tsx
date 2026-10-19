@@ -435,12 +435,12 @@ export const Bubble = memo(function Bubble({
                         // when it doesn't, it stops at the row's edge and overlaps only the
                         // bubble's own gutter-side end. `100cqw` is the row; `--bar-off` is
                         // the avatar column before an incoming bubble.
-                        'hover-actions absolute top-1/2 z-10 -translate-y-1/2 rounded-md border border-line-strong bg-surface',
+                        'hover-actions vy-popover absolute top-1/2 z-10 -translate-y-1/2 rounded-md',
                         mine
                           ? 'right-[max(4px,min(calc(100%_+_4px),calc(100cqw_-_var(--bar-w))))]'
                           : 'left-[max(4px,min(calc(100%_+_4px),calc(100cqw_-_var(--bar-off)_-_var(--bar-w))))]',
                         // Wide rows always have room: a plain row of icons beside the bubble.
-                        '@min-[820px]:border-transparent @min-[820px]:bg-transparent',
+                        '@min-[820px]:border-transparent @min-[820px]:bg-transparent @min-[820px]:shadow-none @min-[820px]:backdrop-blur-none',
                         // Invisible means untouchable too: no stray clicks on the bubble.
                         'focus-within:pointer-events-auto focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100',
                         picker ? 'opacity-100' : 'pointer-events-none opacity-0',
@@ -484,7 +484,7 @@ export const Bubble = memo(function Bubble({
                 role="menu"
                 aria-label="Reactions"
                 className={cn(
-                  'absolute z-20 flex gap-0.5 rounded-md border border-line-strong bg-surface p-1',
+                  'vy-popover absolute z-20 flex gap-0.5 rounded-md p-1',
                   // Opened on purpose, so it may sit above the bubble like any menu.
                   '-top-11',
                   mine ? 'right-0' : 'left-0',

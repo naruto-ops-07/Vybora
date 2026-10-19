@@ -10,6 +10,7 @@ import * as ContextMenu from '@radix-ui/react-context-menu';
 import { isMuted, muteUntil, type PreferencePatch, type SecureConversation } from '@vybora/api';
 import type { RowPreview } from '@vybora/core';
 import type { ReactElement, ReactNode } from 'react';
+import { menuContentClass, menuItemClass } from '@/components/ui/Menu';
 import { Tip } from '@/components/ui/Tooltip';
 import { cn } from '@/lib/cn';
 import { Ticks } from './Bubble';
@@ -37,10 +38,7 @@ export function RowPreviewText({ preview, unread }: { preview: RowPreview; unrea
 
 function Item({ children, onSelect }: { children: ReactNode; onSelect: () => void }) {
   return (
-    <ContextMenu.Item
-      onSelect={onSelect}
-      className="touch-target flex h-9 cursor-pointer items-center gap-3 rounded-sm px-2 text-sm outline-none data-[highlighted]:bg-surface-muted"
-    >
+    <ContextMenu.Item onSelect={onSelect} className={menuItemClass}>
       {children}
     </ContextMenu.Item>
   );
@@ -74,7 +72,7 @@ export function ChatRowMenu({
         <ContextMenu.Content
           aria-label={`Actions for ${title}`}
           collisionPadding={8}
-          className="menu z-50 min-w-48 rounded-md border border-line-strong bg-surface p-1"
+          className={menuContentClass}
         >
           <Item onSelect={() => onPrefs({ pinned: !conv.pinned })}>
             {conv.pinned ? (
@@ -91,12 +89,12 @@ export function ChatRowMenu({
             </Item>
           ) : (
             <ContextMenu.Sub>
-              <ContextMenu.SubTrigger className="touch-target flex h-9 cursor-pointer items-center gap-3 rounded-sm px-2 text-sm outline-none data-[highlighted]:bg-surface-muted">
+              <ContextMenu.SubTrigger className={menuItemClass}>
                 <BellSlashIcon size={16} aria-hidden="true" />
                 Mute
               </ContextMenu.SubTrigger>
               <ContextMenu.Portal>
-                <ContextMenu.SubContent className="menu z-50 min-w-48 rounded-md border border-line-strong bg-surface p-1">
+                <ContextMenu.SubContent className={menuContentClass}>
                   {MUTE.map((m) => (
                     <Item
                       key={m.value}

@@ -22,9 +22,9 @@ export function WelcomeIllustration({ width = 184, className }: IllustrationProp
       {/* Back bubble: someone else, in a tone. */}
       <path d={bubblePath(22, 18, 100, 54, 'left')} fill={FILL.tone('glacier')} {...LINE} />
       <TextLines x={36} y={36} widths={[58, 34]} color={FILL.toneInk('glacier')} />
-      {/* Front bubble: mine, sealed before it's sent. */}
-      <path d={bubblePath(68, 56, 108, 54, 'right')} fill={FILL.bubble} {...LINE} />
-      <TextLines x={82} y={74} widths={[66, 42]} />
+      {/* Front bubble: mine, in the look's own bubble colour, sealed before it's sent. */}
+      <path d={bubblePath(68, 56, 108, 54, 'right')} fill={FILL.mine} {...LINE} />
+      <TextLines x={82} y={74} widths={[66, 42]} color={FILL.mineText} />
       <LockSeal cx={170} cy={58} />
       {/* Three people, as their tone dots. */}
       <g {...LINE}>

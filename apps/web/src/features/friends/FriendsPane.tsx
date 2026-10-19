@@ -29,6 +29,7 @@ import { useLocation, useSearchParams } from 'react-router';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/Dialog';
+import { menuContentClass, menuDangerItemClass, menuItemClass } from '@/components/ui/Menu';
 import { useToast } from '@/components/ui/Toast';
 import { Tip } from '@/components/ui/Tooltip';
 import { useA11y } from '@/features/a11y/A11yProvider';
@@ -271,10 +272,7 @@ function MenuItem({
   return (
     <ContextMenu.Item
       onSelect={onSelect}
-      className={cn(
-        'touch-target flex h-9 cursor-pointer items-center gap-3 rounded-sm px-2 text-sm outline-none data-[highlighted]:bg-surface-muted',
-        danger && 'text-danger',
-      )}
+      className={cn(menuItemClass, danger && menuDangerItemClass)}
     >
       {children}
     </ContextMenu.Item>
@@ -300,7 +298,7 @@ function FriendMenu({
         <ContextMenu.Content
           aria-label={`Actions for ${name}`}
           collisionPadding={8}
-          className="menu z-50 min-w-48 rounded-md border border-line-strong bg-surface p-1"
+          className={menuContentClass}
         >
           <MenuItem onSelect={onMessage}>
             <ChatCircleIcon size={16} aria-hidden="true" />

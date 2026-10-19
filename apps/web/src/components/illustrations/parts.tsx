@@ -1,9 +1,9 @@
 /**
  * Shared drawing parts for the empty-state illustrations. One grammar:
  * graphite line (`currentColor`, the muted text colour) at 1.5 px with round
- * caps and joins; flat fills from the personal tones and the accent, via CSS
- * variables so every drawing follows light, dark and high contrast; corner
- * radii 8–12; no gradients, no shadows.
+ * caps and joins; flat fills from the personal tones, the accent and the look's
+ * own bubble, via CSS variables only, so every drawing recolours with the look and
+ * follows light, dark and high contrast; corner radii 8–12; no gradients, no shadows.
  *
  * Every stroke is 1.5 px on screen at any drawing size (non-scaling), whatever
  * its colour; "text" bars are flat fills, not strokes.
@@ -30,6 +30,9 @@ export const FILL = {
   onAccent: 'var(--vy-on-accent)',
   surface: 'var(--vy-surface)',
   bubble: 'var(--vy-bubble-in)',
+  /** My bubble: the look's outgoing colour, flat (its first stop; the accent in high contrast). */
+  mine: 'var(--vy-bubble-out-from)',
+  mineText: 'var(--vy-bubble-out-text)',
   text: 'var(--vy-border-strong)',
   tone: (name: string) => `var(--vy-tone-${name}-fill)`,
   toneInk: (name: string) => `var(--vy-tone-${name}-ink)`,

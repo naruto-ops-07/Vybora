@@ -1,5 +1,5 @@
 import { XIcon } from '@phosphor-icons/react';
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { forwardRef, useEffect, useId, useRef, type HTMLAttributes, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
 import { Button } from './Button';
@@ -77,53 +77,103 @@ export function Dialog({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-scrim" onClick={onClose} aria-hidden="true" />
-      <div
+      <DialogSurface
         ref={panel}
+        titleId={titleId}
+        descId={descId}
+        title={title}
+        description={description}
+        footer={footer}
+        size={size}
+        hideTitle={hideTitle}
+        onClose={onClose}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
-        className={cn(
-          'relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-lg border border-line bg-surface outline-none sm:rounded-lg',
-          { sm: 'sm:max-w-sm', md: 'sm:max-w-md', lg: 'sm:max-w-2xl' }[size],
-        )}
       >
-        <div
-          className={cn(
-            'flex items-start justify-between gap-4 border-b border-line px-5 py-4',
-            hideTitle && 'sr-only',
-          )}
-        >
-          <div className="min-w-0">
-            <h2 id={titleId} className="text-[17px] font-semibold">
-              {title}
-            </h2>
-            {description && (
-              <p id={descId} className="mt-1 text-sm text-muted">
-                {description}
-              </p>
-            )}
-          </div>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onClose}
-            aria-label="Close"
-            className="-mr-1.5"
-          >
-            <XIcon size={18} />
-          </Button>
-        </div>
-        <div className="scroll-thin min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
-        {footer && (
-          <div className="flex justify-end gap-2 border-t border-line px-5 py-3">{footer}</div>
-        )}
-      </div>
+        {children}
+      </DialogSurface>
     </div>,
     document.body,
   );
 }
+
+export interface DialogSurfaceProps
+  extends
+    Omit<HTMLAttributes<HTMLDivElement>, 'title'>,
+    Pick<DialogProps, 'title' | 'description' | 'footer' | 'size' | 'hideTitle' | 'onClose'> {
+  titleId?: string;
+  descId?: string;
+}
+
+/**
+ * The dialog panel itself: a raised popover at elevation 3 (glass where the look has
+ * it), the title in the look's display face. `Dialog` wraps it in the modal layer;
+ * the design gallery shows it in place.
+ */
+export const DialogSurface = forwardRef<HTMLDivElement, DialogSurfaceProps>(function DialogSurface(
+  {
+    titleId,
+    descId,
+    title,
+    description,
+    footer,
+    size = 'md',
+    hideTitle,
+    onClose,
+    className,
+    children,
+    ...rest
+  },
+  ref,
+) {
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        'vy-popover vy-popover-3 relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-lg outline-none sm:rounded-lg',
+        { sm: 'sm:max-w-sm', md: 'sm:max-w-md', lg: 'sm:max-w-2xl' }[size],
+        className,
+      )}
+      {...rest}
+    >
+      <div
+        className={cn(
+          'flex items-start justify-between gap-4 border-b border-line px-5 pb-3.5 pt-4',
+          hideTitle && 'sr-only',
+        )}
+      >
+        <div className="min-w-0">
+          <h2 id={titleId} className="type-wide text-lg font-semibold tracking-[-0.01em]">
+            {title}
+          </h2>
+          {description && (
+            <p id={descId} className="mt-1 text-sm leading-relaxed text-muted">
+              {description}
+            </p>
+          )}
+        </div>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={onClose}
+          aria-label="Close"
+          className="touch-target -mr-1.5 text-muted"
+        >
+          <XIcon size={18} />
+        </Button>
+      </div>
+      <div className="scroll-thin min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+      {footer && (
+        <div className="flex justify-end gap-2 border-t border-line bg-surface-muted/40 px-5 py-3">
+          {footer}
+        </div>
+      )}
+    </div>
+  );
+});
 
 export function ConfirmDialog({
   open,

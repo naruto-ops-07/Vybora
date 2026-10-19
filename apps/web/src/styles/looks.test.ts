@@ -115,6 +115,33 @@ describe('looks.generated.css', () => {
     }
   });
 
+  it('popovers: solid where the look has no glass, a translucent surface where it has', () => {
+    for (const look of LOOKS) {
+      const def = looks[look];
+      const shared = block(lightSelector(look));
+      expect(decl(shared, 'primary-angle')).toBe(look === 'velvet' ? '180deg' : '135deg');
+      // Velvet's 1 px inner top highlight on the primary button; a no-op elsewhere.
+      expect(decl(shared, 'primary-highlight')).toBe(
+        look === 'velvet' ? 'inset 0 1px 0 rgba(255, 255, 255, 0.45)' : '0 0 #0000',
+      );
+      for (const mode of ['light', 'dark'] as Mode[]) {
+        const b = block(mode === 'light' ? lightSelector(look) : darkSelector(look));
+        const t = def.modes[mode];
+        const popover = decl(b, 'popover')!;
+        const edge = decl(b, 'edge')!;
+        if (def.glass) {
+          expect(popover, `${look} ${mode}`).toBe(rgba(t.surface, 0.84));
+          expect(edge).toBe(mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : t.border.toLowerCase());
+        } else {
+          expect(popover, `${look} ${mode}`).toBe(t.surface.toLowerCase());
+          // A hairline gold-tinted top edge: 35 % accent over the border.
+          expect(edge).toMatch(/^#[0-9a-f]{6}$/);
+          expect(edge).not.toBe(t.border.toLowerCase());
+        }
+      }
+    }
+  });
+
   it('danger and warning text stay ≥ 4.5:1 on their soft fills, in every look × mode', () => {
     for (const look of LOOKS)
       for (const mode of ['light', 'dark'] as Mode[]) {
@@ -154,7 +181,12 @@ describe('looks.generated.css', () => {
       const b = block(selector);
       const t = highContrastThemes[mode];
       expect(b).not.toMatch(/gradient/i);
-      for (const level of [1, 2, 3]) expect(decl(b, `shadow-${level}`)).toBe('none');
+      // Visually none, but still a valid item in a box-shadow list, so rings composed with
+      // it (Tailwind's ring-* + shadow) survive high contrast.
+      for (const level of [1, 2, 3]) expect(decl(b, `shadow-${level}`)).toBe('0 0 #0000');
+      expect(decl(b, 'primary-highlight')).toBe('0 0 #0000');
+      expect(decl(b, 'popover')).toBe(t.surface.toLowerCase());
+      expect(decl(b, 'edge')).toBe(t.border.toLowerCase());
       expect(decl(b, 'bubble-out-from')).toBe(decl(b, 'bubble-out-to'));
       expect(decl(b, 'primary-from')).toBe(decl(b, 'primary-to'));
       expect(decl(b, 'bubble-out-from')).toBe(t.accent.toLowerCase());

@@ -6,24 +6,26 @@ import { Spinner } from './Spinner';
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline';
 type Size = 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm';
 
+// Skins live in styles/primitives.css (look tokens; flat under high contrast).
 const variants: Record<Variant, string> = {
-  primary: 'bg-accent text-on-accent hover:bg-accent-hover',
-  secondary: 'bg-surface-muted text-ink hover:bg-surface-strong',
-  outline: 'border border-line-strong bg-transparent text-ink hover:bg-surface-muted',
-  ghost: 'text-ink hover:bg-surface-muted',
-  danger: 'bg-danger text-white hover:opacity-90',
+  primary: 'vy-btn-primary',
+  secondary: 'vy-btn-secondary',
+  outline: 'vy-btn-outline',
+  ghost: 'vy-btn-ghost',
+  danger: 'vy-btn-danger',
 };
 
+// Small sizes take the look's small radius (callers add touch-target where it is tight).
 const sizes: Record<Size, string> = {
-  sm: 'h-8 px-3 text-[13px] gap-1.5',
-  md: 'h-10 px-4 text-sm gap-2',
-  lg: 'h-12 px-5 text-[15px] gap-2',
-  icon: 'h-10 w-10',
-  'icon-sm': 'h-8 w-8',
+  sm: 'h-8 px-3 text-[13px] gap-1.5 rounded-sm',
+  md: 'h-10 px-4 text-sm gap-2 rounded-md',
+  lg: 'h-12 px-5 text-[15px] gap-2 rounded-md',
+  icon: 'h-10 w-10 rounded-md',
+  'icon-sm': 'h-8 w-8 rounded-sm',
 };
 
 const base =
-  'inline-flex shrink-0 select-none items-center whitespace-nowrap justify-center rounded-md font-semibold transition-colors duration-150';
+  'vy-btn inline-flex shrink-0 select-none items-center whitespace-nowrap justify-center font-semibold';
 
 export function buttonClasses({
   variant = 'primary',
@@ -42,7 +44,10 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   fullWidth?: boolean;
 }
 
-/** One button for the whole product: 8px radius, colour-only state changes. */
+/**
+ * One button for the whole product, in the look's shape and depth. Hover and press
+ * change colour and shadow only; focus is the accent's 2 px outline, offset.
+ */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   {
     variant = 'primary',

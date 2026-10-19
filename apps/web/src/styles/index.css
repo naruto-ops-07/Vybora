@@ -2,9 +2,11 @@
 /*
  * VYBORA design tokens. Colours, tones, radii, shadows and fonts per look (Velvet,
  * Aurora, Bloom) × mode are generated from packages/config by `pnpm theme:css`.
- * Rules: docs/DESIGN_SYSTEM.md. High contrast is flat: no gradient, glow or shadow.
+ * Rules: docs/DESIGN_SYSTEM.md. High contrast is flat: no gradient, glow, shadow or blur.
  */
 @import './looks.generated.css';
+/* Primitive skins (buttons, fields, popovers…): plain CSS in the components layer. */
+@import './primitives.css' layer(components);
 
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
@@ -77,10 +79,20 @@
   --text-2xs--line-height: 16px;
 }
 
-/* Gradients and depth. Under high contrast the stops are one colour and shadows none. */
+/*
+ * Gradients and depth. Under high contrast the stops are one colour, the gradient is
+ * dropped, and every shadow is the no-op `0 0 #0000` (so rings composed with it survive).
+ */
 @utility bg-primary-gradient {
   background-color: var(--vy-primary-to);
-  background-image: linear-gradient(135deg, var(--vy-primary-from), var(--vy-primary-to));
+  background-image: linear-gradient(
+    var(--vy-primary-angle),
+    var(--vy-primary-from),
+    var(--vy-primary-to)
+  );
+  :root[data-contrast='high'] & {
+    background-image: none;
+  }
 }
 @utility bg-bubble-out {
   background-color: var(--vy-bubble-out-to);
@@ -89,6 +101,9 @@
     var(--vy-bubble-out-from),
     var(--vy-bubble-out-to)
   );
+  :root[data-contrast='high'] & {
+    background-image: none;
+  }
 }
 @utility shadow-1 {
   box-shadow: var(--vy-shadow-1);

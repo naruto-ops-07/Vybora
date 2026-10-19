@@ -43,6 +43,8 @@
   --vy-shadow-1: 0 4px 14px rgba(214, 207, 199, 0.4);
   --vy-shadow-2: 0 12px 32px rgba(214, 207, 199, 0.46);
   --vy-shadow-3: 0 24px 64px rgba(214, 207, 199, 0.54);
+  --vy-popover: #fffdf9;
+  --vy-edge: #c4b499;
   --vy-tone-turquoise-fill: #cdede6;
   --vy-tone-turquoise-ink: #0b5a4f;
   --vy-tone-turquoise-name: #0e6b5e;
@@ -74,6 +76,8 @@
   --vy-font-text:
     'DM Sans Variable', 'DM Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --vy-bubble-out-angle: 180deg;
+  --vy-primary-angle: 180deg;
+  --vy-primary-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.45);
   --vy-panel-blur: 0px;
   color-scheme: light;
 }
@@ -115,6 +119,8 @@
   --vy-shadow-1: 0 4px 14px rgba(0, 0, 0, 0.4);
   --vy-shadow-2: 0 12px 32px rgba(0, 0, 0, 0.46);
   --vy-shadow-3: 0 24px 64px rgba(0, 0, 0, 0.54);
+  --vy-popover: #1c1916;
+  --vy-edge: #695a45;
   --vy-tone-turquoise-fill: #6fcdbf;
   --vy-tone-turquoise-ink: #0f0d0b;
   --vy-tone-turquoise-name: #6fcdbf;
@@ -177,6 +183,8 @@
   --vy-shadow-1: 0 4px 16px rgba(195, 199, 206, 0.32);
   --vy-shadow-2: 0 12px 36px rgba(195, 199, 206, 0.4);
   --vy-shadow-3: 0 28px 72px rgba(195, 199, 206, 0.48);
+  --vy-popover: rgba(255, 255, 255, 0.84);
+  --vy-edge: #dce4e4;
   --vy-tone-turquoise-fill: #99f6e4;
   --vy-tone-turquoise-ink: #115e59;
   --vy-tone-turquoise-name: #0f766e;
@@ -209,6 +217,8 @@
   --vy-font-text:
     'Manrope Variable', 'Manrope', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --vy-bubble-out-angle: 135deg;
+  --vy-primary-angle: 135deg;
+  --vy-primary-highlight: 0 0 #0000;
   --vy-panel-blur: 20px;
   color-scheme: light;
 }
@@ -249,6 +259,8 @@
   --vy-shadow-1: 0 4px 16px rgba(0, 2, 8, 0.32);
   --vy-shadow-2: 0 12px 36px rgba(0, 2, 8, 0.4);
   --vy-shadow-3: 0 28px 72px rgba(0, 2, 8, 0.48);
+  --vy-popover: rgba(15, 21, 23, 0.84);
+  --vy-edge: rgba(255, 255, 255, 0.12);
   --vy-tone-turquoise-fill: #2dd4bf;
   --vy-tone-turquoise-ink: #0a0e0f;
   --vy-tone-turquoise-name: #2dd4bf;
@@ -311,6 +323,8 @@
   --vy-shadow-1: 0 6px 18px rgba(208, 203, 235, 0.3);
   --vy-shadow-2: 0 14px 40px rgba(208, 203, 235, 0.36);
   --vy-shadow-3: 0 28px 72px rgba(208, 203, 235, 0.44);
+  --vy-popover: rgba(255, 255, 255, 0.84);
+  --vy-edge: #e6e0f2;
   --vy-tone-turquoise-fill: #c6f3ea;
   --vy-tone-turquoise-ink: #08675b;
   --vy-tone-turquoise-name: #0b7a6c;
@@ -345,6 +359,8 @@
     'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system,
     'Segoe UI', sans-serif;
   --vy-bubble-out-angle: 135deg;
+  --vy-primary-angle: 135deg;
+  --vy-primary-highlight: 0 0 #0000;
   --vy-panel-blur: 20px;
   color-scheme: light;
 }
@@ -385,6 +401,8 @@
   --vy-shadow-1: 0 6px 18px rgba(5, 2, 10, 0.3);
   --vy-shadow-2: 0 14px 40px rgba(5, 2, 10, 0.36);
   --vy-shadow-3: 0 28px 72px rgba(5, 2, 10, 0.44);
+  --vy-popover: rgba(32, 26, 43, 0.84);
+  --vy-edge: rgba(255, 255, 255, 0.12);
   --vy-tone-turquoise-fill: #3ddbc4;
   --vy-tone-turquoise-ink: #17121f;
   --vy-tone-turquoise-name: #3ddbc4;
@@ -445,9 +463,12 @@
   --vy-danger-soft: #fdecea;
   --vy-warning-soft: #fdf3e2;
   --vy-scrim: rgb(11 20 22 / 0.55);
-  --vy-shadow-1: none;
-  --vy-shadow-2: none;
-  --vy-shadow-3: none;
+  --vy-shadow-1: 0 0 #0000;
+  --vy-shadow-2: 0 0 #0000;
+  --vy-shadow-3: 0 0 #0000;
+  --vy-primary-highlight: 0 0 #0000;
+  --vy-popover: #ffffff;
+  --vy-edge: #5f7173;
   --vy-panel-blur: 0px;
   --vy-tone-turquoise-ink: #0b1416;
   --vy-tone-turquoise-name: var(--vy-text);
@@ -500,9 +521,12 @@
   --vy-danger-soft: #2a1414;
   --vy-warning-soft: #2a2110;
   --vy-scrim: rgb(0 0 0 / 0.6);
-  --vy-shadow-1: none;
-  --vy-shadow-2: none;
-  --vy-shadow-3: none;
+  --vy-shadow-1: 0 0 #0000;
+  --vy-shadow-2: 0 0 #0000;
+  --vy-shadow-3: 0 0 #0000;
+  --vy-primary-highlight: 0 0 #0000;
+  --vy-popover: #0a0e0f;
+  --vy-edge: #75898b;
   --vy-panel-blur: 0px;
   --vy-tone-turquoise-ink: #0a0e0f;
   --vy-tone-turquoise-name: var(--vy-text);

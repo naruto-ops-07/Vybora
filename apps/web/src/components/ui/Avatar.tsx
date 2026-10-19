@@ -25,8 +25,9 @@ export interface AvatarProps {
 const TWO_INITIALS_MIN = 24;
 
 /**
- * A person's photo, or a flat circle in their tone with one or two initials
- * (Archivo semibold, sized to the circle). Avatars are content, so circles are allowed.
+ * A person's photo, or a circle in their tone with one or two initials (the look's
+ * display face, semibold, sized to the circle), with a hairline inner edge so pale tones
+ * and photos hold their shape on any surface. Avatars are content, so circles are allowed.
  */
 export function Avatar({
   path,
@@ -51,7 +52,7 @@ export function Avatar({
       data-tone={src ? undefined : tone.name}
     >
       <span
-        className="flex h-full w-full items-center justify-center overflow-hidden rounded-full"
+        className="vy-avatar-face flex h-full w-full items-center justify-center overflow-hidden rounded-full"
         style={!src ? { background: tone.fill } : undefined}
       >
         {src ? (
@@ -67,7 +68,7 @@ export function Avatar({
           />
         ) : (
           <span
-            className="select-none font-sans font-semibold leading-none"
+            className="select-none font-display font-semibold leading-none"
             style={{
               color: tone.ink,
               fontSize: Math.max(8, Math.round(size * (two ? 0.36 : 0.42))),

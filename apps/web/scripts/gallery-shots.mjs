@@ -15,6 +15,10 @@
  *   mobile-hc.png      390×844, dark + high contrast
  *   desktop-{aurora,bloom}[-light].png  1440×900, the other looks, dark and light
  *   landing.png        1440×900, the signed-out landing page (`/`)
+ *   primitives-{look}-{mode}[-hc].png  the Primitives section alone, 1440 wide: Velvet
+ *                      dark, light and high contrast, Aurora and Bloom in both modes. Each
+ *                      also logs the primary button's and the dialog's computed depth, and
+ *                      fails if high contrast leaves a gradient, shadow or blur.
  *
  * Without `?look=` the gallery shows Velvet, the default look.
  *
@@ -62,7 +66,56 @@ const SHOTS = [
   ),
   // Signed out (a fresh context has no session), so `/` renders the landing page.
   { file: 'landing.png', viewport: { width: 1440, height: 900 }, path: '/' },
+  ...[
+    ['velvet', 'dark'],
+    ['velvet', 'light'],
+    ['velvet', 'dark', true],
+    ['velvet', 'light', true],
+    ['aurora', 'dark'],
+    ['aurora', 'light'],
+    ['bloom', 'light'],
+    ['bloom', 'dark'],
+  ].map(([look, theme, hc]) => ({
+    file: `primitives-${look}-${theme}${hc ? '-hc' : ''}.png`,
+    viewport: { width: 1440, height: 900 },
+    query: `look=${look}&theme=${theme}${hc ? '&contrast=high' : ''}`,
+    section: 'primitives',
+    hc: !!hc,
+  })),
 ];
+
+/** Computed depth of the Primitives section: what each look actually draws. */
+async function primitiveDepth(page) {
+  return page.evaluate(() => {
+    const root = document.getElementById('primitives');
+    const pick = (el, props) =>
+      el && Object.fromEntries(props.map((p) => [p, getComputedStyle(el)[p]]));
+    const flatProps = ['backgroundImage', 'boxShadow', 'backdropFilter'];
+    const notFlat = [...root.querySelectorAll('.vy-btn, .vy-field, .vy-seg, .vy-popover, .vy-tile')]
+      .map((el) => [el.className.split(' ').find((c) => c.startsWith('vy-')), pick(el, flatProps)])
+      .filter(
+        ([, s]) =>
+          s.backgroundImage !== 'none' ||
+          !/^(none|rgba\(0, 0, 0, 0\) 0px 0px 0px 0px)$/.test(s.boxShadow) ||
+          !['none', ''].includes(s.backdropFilter),
+      );
+    return {
+      primary: pick(root.querySelector('.vy-btn-primary'), [
+        'backgroundImage',
+        'boxShadow',
+        'color',
+        'borderRadius',
+      ]),
+      dialog: pick(root.querySelector('.vy-popover-3'), [
+        'boxShadow',
+        'backgroundColor',
+        'backdropFilter',
+        'borderTopColor',
+      ]),
+      notFlat,
+    };
+  });
+}
 
 const browser = await chromium.launch();
 let blocked = 0;
@@ -101,7 +154,15 @@ try {
     // Let late font swaps settle: shrink-wrapped bubbles re-measure a frame or two later.
     await page.waitForTimeout(500);
     const path = join(out, shot.file);
-    await page.screenshot({ path, fullPage: true });
+    if (shot.section) {
+      const depth = await primitiveDepth(page);
+      console.log(shot.file, JSON.stringify({ primary: depth.primary, dialog: depth.dialog }));
+      if (shot.hc && depth.notFlat.length) {
+        console.error('not flat under high contrast:', JSON.stringify(depth.notFlat));
+        process.exitCode = 1;
+      }
+      await page.locator(`#${shot.section}`).screenshot({ path });
+    } else await page.screenshot({ path, fullPage: true });
     console.log(`saved ${path}`);
     await context.close();
   }
