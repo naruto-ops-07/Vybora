@@ -177,16 +177,52 @@ describe('add links (/friends?add=)', () => {
 });
 
 describe('friend requests', () => {
+  it('splits requests into Received and Sent tabs with counts', async () => {
+    api.fetchFriendRequests.mockResolvedValue({
+      incoming: [request('sam', 'Sam')],
+      outgoing: [request('lena'), request('kofi')],
+    });
+    renderPane();
+    const tabs = await screen.findByRole('radiogroup', { name: 'Requests' });
+    const received = within(tabs).getByRole('radio', { name: 'Received (1)' });
+    const sent = within(tabs).getByRole('radio', { name: 'Sent (2)' });
+    expect(received).toHaveAttribute('aria-checked', 'true');
+    const inbox = screen.getByRole('list', { name: 'Received requests' });
+    expect(within(inbox).getByRole('button', { name: 'Accept request from Sam' })).toBeVisible();
+    expect(within(inbox).getByRole('button', { name: 'Decline request from Sam' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /^Cancel request/ })).toBeNull();
+
+    await userEvent.click(sent);
+    expect(sent).toHaveAttribute('aria-checked', 'true');
+    const outbox = screen.getByRole('list', { name: 'Sent requests' });
+    expect(within(outbox).getByRole('button', { name: 'Cancel request to lena' })).toBeVisible();
+    expect(within(outbox).getByRole('button', { name: 'Cancel request to kofi' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /^(Accept|Decline) request/ })).toBeNull();
+  });
+
+  it('opens on Sent when nothing is waiting on me, and moves on when a tab empties', async () => {
+    api.fetchFriendRequests.mockResolvedValue({ incoming: [], outgoing: [request('lena')] });
+    renderPane();
+    const tabs = await screen.findByRole('radiogroup', { name: 'Requests' });
+    expect(within(tabs).getByRole('radio', { name: 'Sent (1)' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(within(tabs).getByRole('radio', { name: 'Received (0)' })).toBeInTheDocument();
+  });
+
   it('accepting removes the request at once and shows them as a friend', async () => {
     api.fetchFriendRequests.mockResolvedValue({ incoming: [request('sam', 'Sam')], outgoing: [] });
     api.respondFriendRequest.mockImplementation(never);
     renderPane();
-    const requests = await screen.findByRole('list', { name: 'Requests' });
+    const requests = await screen.findByRole('list', { name: /^(Received|Sent) requests$/ });
     await userEvent.click(
       within(requests).getByRole('button', { name: 'Accept request from Sam' }),
     );
     expect(api.respondFriendRequest).toHaveBeenCalledWith({}, 'id-sam', true);
-    expect(screen.queryByRole('list', { name: 'Requests' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('list', { name: /^(Received|Sent) requests$/ }),
+    ).not.toBeInTheDocument();
     const friends = screen.getByRole('list', { name: 'Friends' });
     expect(within(friends).getByText('Sam')).toBeInTheDocument();
   });
@@ -242,11 +278,11 @@ describe('friend requests', () => {
     let fail!: (e: unknown) => void;
     api.cancelFriendRequest.mockImplementation(() => new Promise((_, r) => (fail = r)));
     renderPane();
-    const requests = await screen.findByRole('list', { name: 'Requests' });
+    const requests = await screen.findByRole('list', { name: /^(Received|Sent) requests$/ });
     expect(within(requests).getByText(/Pending/)).toBeInTheDocument();
     await userEvent.click(within(requests).getByRole('button', { name: 'Cancel request to lena' }));
     expect(api.cancelFriendRequest).toHaveBeenCalledWith({}, 'id-lena');
-    expect(screen.queryByRole('list', { name: 'Requests' })).toBeNull();
+    expect(screen.queryByRole('list', { name: /^(Received|Sent) requests$/ })).toBeNull();
     api.fetchFriendRequests.mockImplementation(never);
     await act(async () => fail(new Error('boom')));
     expect(await screen.findByRole('alert')).toHaveTextContent('Couldn’t cancel');
@@ -267,7 +303,7 @@ describe('friends list', () => {
     );
     expect(screen.getByText('@me_too')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy @me_too' })).toBeInTheDocument();
-    expect(screen.queryByRole('list', { name: 'Requests' })).toBeNull();
+    expect(screen.queryByRole('list', { name: /^(Received|Sent) requests$/ })).toBeNull();
   });
 
   it('names each list once: no region repeats the list’s name', async () => {
@@ -275,7 +311,7 @@ describe('friends list', () => {
     api.fetchFriendRequests.mockResolvedValue({ incoming: [request('sam', 'Sam')], outgoing: [] });
     renderPane();
     await screen.findByRole('list', { name: 'Friends' });
-    expect(screen.getByRole('list', { name: 'Requests' })).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: /^(Received|Sent) requests$/ })).toBeInTheDocument();
     expect(screen.queryAllByRole('region')).toHaveLength(0);
   });
 
@@ -283,7 +319,7 @@ describe('friends list', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true, now: new Date('2026-10-16T12:00:00Z') });
     api.fetchFriendRequests.mockResolvedValue({ incoming: [request('sam', 'Sam')], outgoing: [] });
     renderPane();
-    const requests = await screen.findByRole('list', { name: 'Requests' });
+    const requests = await screen.findByRole('list', { name: /^(Received|Sent) requests$/ });
     expect(within(requests).getByText('3h')).toHaveAttribute('aria-hidden', 'true');
     expect(within(requests).getByText('3 hours ago')).toHaveClass('sr-only');
   });

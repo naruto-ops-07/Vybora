@@ -8,6 +8,7 @@ import {
   DotsThreeIcon,
   PaperPlaneRightIcon,
 } from '@phosphor-icons/react';
+import type { FriendRequest } from '@vybora/api';
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { useA11y } from '@/features/a11y/A11yProvider';
@@ -15,7 +16,7 @@ import { Composer } from '@/features/connect/Composer';
 import { SEAL_MS, SendGlyph } from '@/features/connect/SealedSend';
 import { Meta } from '@/features/connect/ui';
 import { FriendJoinedCard, type JoinedPerson } from '@/features/friends/FriendJoined';
-import { PersonRow } from '@/features/friends/FriendsPane';
+import { PersonRow, RequestsSection } from '@/features/friends/FriendsPane';
 import { PEOPLE, type SamplePerson } from '../sample';
 import { Frame } from './FirstRun';
 
@@ -27,6 +28,10 @@ const asFriend = (p: SamplePerson): JoinedPerson => ({
   avatarPath: null,
 });
 const ME = asFriend(PEOPLE.turquoise);
+const asRequest = (p: SamplePerson, hoursAgo: number): FriendRequest => ({
+  ...asFriend(p),
+  createdAt: new Date(Date.now() - hoursAgo * 3_600_000).toISOString(),
+});
 
 /** Shown only when reduced motion is on (as in the screenshot script). */
 function MotionNote({ children }: { children: string }) {
@@ -120,64 +125,42 @@ export function FriendsSection() {
             onDismiss={noop}
           />
         </div>
-        <h3 className="px-4 pb-1 pt-4 text-[13px] font-semibold text-muted">Requests</h3>
-        <PersonRow
-          person={asFriend(PEOPLE.lime)}
-          detail={
-            <>
-              <span aria-hidden="true">·</span>
-              <Meta className="shrink-0">2h</Meta>
-            </>
-          }
-          actions={
-            <>
-              <Button size="sm" className="touch-target">
-                Accept
-              </Button>
-              <Button size="sm" variant="ghost" className="touch-target">
-                Decline
-              </Button>
-            </>
-          }
+        <RequestsSection
+          incoming={[asRequest(PEOPLE.lime, 2)]}
+          outgoing={[asRequest(PEOPLE.mint, 30), asRequest(PEOPLE.aqua, 50)]}
+          onAccept={noop}
+          onDecline={noop}
+          onCancel={noop}
         />
-        <PersonRow
-          person={asFriend(PEOPLE.mint)}
-          detail={
-            <>
-              <span aria-hidden="true">·</span>
-              <span className="shrink-0">Pending</span>
-            </>
-          }
-          actions={
-            <Button size="sm" variant="ghost" className="touch-target">
-              Cancel
-            </Button>
-          }
-        />
-        <h3 className="px-4 pb-1 pt-4 text-[13px] font-semibold text-muted">Friends</h3>
-        {[maya, asFriend(PEOPLE.sky)].map((f, i) => (
-          <PersonRow
-            key={f.userId}
-            person={f}
-            avatarSize={48}
-            online={i === 0}
-            actions={
-              <>
-                <Button size="sm" variant="outline" className="touch-target">
-                  Message
-                </Button>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  className="touch-target text-muted"
-                  aria-label={`More actions for ${f.displayName || f.username}`}
-                >
-                  <DotsThreeIcon size={18} />
-                </Button>
-              </>
-            }
-          />
-        ))}
+        <h3 className="flex items-center gap-1.5 px-5 pt-5 pb-2 text-[13px] font-semibold text-muted">
+          Friends <span aria-hidden="true">·</span> <Meta>2</Meta>
+        </h3>
+        <ul className="px-2">
+          {[maya, asFriend(PEOPLE.sky)].map((f, i) => (
+            <li key={f.userId} className="vy-row">
+              <PersonRow
+                person={f}
+                avatarSize={48}
+                online={i === 0}
+                actions={
+                  <>
+                    <Button size="sm" variant="outline" className="touch-target">
+                      Message
+                    </Button>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      className="touch-target text-muted"
+                      aria-label={`More actions for ${f.displayName || f.username}`}
+                    >
+                      <DotsThreeIcon size={18} />
+                    </Button>
+                  </>
+                }
+              />
+            </li>
+          ))}
+        </ul>
         <div className="h-3" />
       </Frame>
     </div>

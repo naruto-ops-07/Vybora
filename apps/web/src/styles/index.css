@@ -7,6 +7,8 @@
 @import './looks.generated.css';
 /* Primitive skins (buttons, fields, popovers…): plain CSS in the components layer. */
 @import './primitives.css' layer(components);
+/* The messaging workspace: canvas glow, panels, bubbles, rows, chips (plain CSS too). */
+@import './workspace.css' layer(components);
 
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 

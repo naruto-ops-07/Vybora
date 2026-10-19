@@ -4,6 +4,7 @@ import {
   MonitorIcon,
   UsersThreeIcon,
   WarningIcon,
+  type Icon,
 } from '@phosphor-icons/react';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
@@ -94,13 +95,13 @@ function Centered({
       <div className="max-w-sm text-center">
         <div
           className={cn(
-            'mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-lg border',
-            tone === 'warning' ? 'border-warning text-warning' : 'border-line text-accent',
+            'vy-tile mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-md',
+            tone === 'warning' && 'text-warning',
           )}
         >
           {icon}
         </div>
-        <h2 className="text-base font-semibold">{title}</h2>
+        <h2 className="type-wide text-[17px] font-semibold text-balance">{title}</h2>
         <p className="mt-1.5 text-sm leading-relaxed text-muted">{body}</p>
         {children && <div className="mt-5">{children}</div>}
       </div>
@@ -130,39 +131,138 @@ function isTyping(el: EventTarget | null) {
   return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
 }
 
+type Section = 'messages' | 'friends' | 'settings';
+
 function RailLink({
   to,
   label,
-  icon,
+  icon: Glyph,
   badge,
+  current,
 }: {
   to: string;
   label: string;
-  icon: ReactNode;
+  icon: Icon;
   badge?: ReactNode;
+  /** Overrides the route match (the dev gallery shows a chosen section as current). */
+  current?: boolean;
 }) {
   return (
     <NavLink
       to={to}
       className={({ isActive }) =>
         cn(
-          'relative flex w-full flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition-colors duration-150',
-          isActive ? 'text-accent' : 'text-muted hover:text-ink',
+          'vy-rail-item relative flex min-h-14 w-full flex-col items-center justify-center gap-1 py-1.5 text-[11px] leading-4 font-medium transition-colors duration-150',
+          (current ?? isActive) ? 'font-semibold text-ink' : 'text-muted hover:text-ink',
         )
       }
     >
-      {({ isActive }) => (
-        <>
-          {isActive && (
-            <span className="absolute left-0 top-2 bottom-2 w-0.5 bg-accent" aria-hidden="true" />
-          )}
-          <span aria-hidden="true">{icon}</span>
-          {label}
-          {/* After the label so screen readers hear "Friends, 2 friend requests". */}
-          {badge && <span className="absolute left-1/2 top-1 ml-1.5 flex">{badge}</span>}
-        </>
-      )}
+      {({ isActive: matched }) => {
+        const isActive = current ?? matched;
+        return (
+          <>
+            {/* The current section's icon sits in an accent pill, filled: never colour alone. */}
+            <span
+              className="vy-rail-pill relative flex h-8 w-14 items-center justify-center rounded-full"
+              data-active={isActive || undefined}
+              aria-hidden="true"
+            >
+              <Glyph size={22} weight={isActive ? 'fill' : 'regular'} />
+            </span>
+            {label}
+            {/* After the label so screen readers hear "Friends, 2 friend requests". */}
+            {badge && <span className="absolute top-0.5 left-1/2 ml-2 flex">{badge}</span>}
+          </>
+        );
+      }}
     </NavLink>
+  );
+}
+
+const NAV_LINKS = (friendsBadge?: ReactNode, current?: Section) => {
+  const is = (s: Section) => (current ? current === s : undefined);
+  return (
+    <>
+      <RailLink to="/messages" label="Chats" icon={ChatsCircleIcon} current={is('messages')} />
+      <RailLink
+        to="/friends"
+        label="Friends"
+        icon={UsersThreeIcon}
+        badge={friendsBadge}
+        current={is('friends')}
+      />
+      <RailLink to="/settings" label="Settings" icon={GearSixIcon} current={is('settings')} />
+    </>
+  );
+};
+
+interface NavProfile {
+  id: string;
+  username: string;
+  display_name?: string | null;
+  avatar_path?: string | null;
+}
+
+/** The desktop rail: the mark, the three sections, and your profile at the foot. */
+export function RailNav({
+  friendsBadge,
+  profile,
+  className,
+  current,
+}: {
+  friendsBadge?: ReactNode;
+  profile?: NavProfile | null;
+  className?: string;
+  current?: Section;
+}) {
+  return (
+    <nav
+      aria-label="Primary"
+      className={cn(
+        'w-[76px] shrink-0 flex-col items-center border-r border-line bg-bg py-4',
+        className,
+      )}
+    >
+      <LogoMark size={32} />
+      <div className="mt-6 flex w-full flex-1 flex-col gap-1">
+        {NAV_LINKS(friendsBadge, current)}
+      </div>
+      {profile && (
+        <NavLink
+          to="/settings/profile"
+          aria-label="Your profile"
+          className="rounded-full ring-2 ring-line ring-offset-2 ring-offset-bg transition-shadow duration-150 hover:ring-accent/70"
+        >
+          <Avatar
+            path={profile.avatar_path}
+            name={profile.username}
+            userId={profile.id}
+            displayName={profile.display_name}
+            size={32}
+          />
+        </NavLink>
+      )}
+    </nav>
+  );
+}
+
+/** Phones: the same sections in a bar under the list, on the look's panel. */
+export function BottomNav({
+  friendsBadge,
+  className,
+  current,
+}: {
+  friendsBadge?: ReactNode;
+  className?: string;
+  current?: Section;
+}) {
+  return (
+    <nav
+      aria-label="Primary"
+      className={cn('vy-panel pb-safe flex shrink-0 border-t px-2 pt-1', className)}
+    >
+      {NAV_LINKS(friendsBadge, current)}
+    </nav>
   );
 }
 
@@ -245,37 +345,11 @@ export default function Workspace() {
         Skip to content
       </a>
       <div className="flex h-dvh overflow-hidden bg-bg text-ink">
-        <nav
-          aria-label="Primary"
-          className="hidden w-[72px] shrink-0 flex-col items-center border-r border-line bg-surface py-4 md:flex"
-        >
-          <LogoMark size={30} />
-          <div className="mt-6 flex w-full flex-1 flex-col">
-            <RailLink to="/messages" label="Chats" icon={<ChatsCircleIcon size={22} />} />
-            <RailLink
-              to="/friends"
-              label="Friends"
-              icon={<UsersThreeIcon size={22} />}
-              badge={friendsBadge}
-            />
-            <RailLink to="/settings" label="Settings" icon={<GearSixIcon size={22} />} />
-          </div>
-          {profile && (
-            <NavLink to="/settings/profile" aria-label="Your profile" className="rounded-full">
-              <Avatar
-                path={profile.avatar_path}
-                name={profile.username}
-                userId={profile.id}
-                displayName={profile.display_name}
-                size={32}
-              />
-            </NavLink>
-          )}
-        </nav>
+        <RailNav friendsBadge={friendsBadge} profile={profile} className="hidden md:flex" />
 
         <aside
           className={cn(
-            'h-full w-full shrink-0 flex-col border-line bg-surface md:w-[340px] md:border-r lg:w-[360px]',
+            'h-full w-full shrink-0 flex-col border-line bg-surface md:w-[340px] md:border-r lg:w-[368px]',
             showingContent ? 'hidden md:flex' : 'flex',
           )}
           aria-label={
@@ -306,19 +380,7 @@ export default function Workspace() {
               </Gate>
             )}
           </div>
-          <nav
-            aria-label="Primary"
-            className="pb-safe flex shrink-0 border-t border-line bg-surface md:hidden"
-          >
-            <RailLink to="/messages" label="Chats" icon={<ChatsCircleIcon size={22} />} />
-            <RailLink
-              to="/friends"
-              label="Friends"
-              icon={<UsersThreeIcon size={22} />}
-              badge={friendsBadge}
-            />
-            <RailLink to="/settings" label="Settings" icon={<GearSixIcon size={22} />} />
-          </nav>
+          <BottomNav friendsBadge={friendsBadge} className="md:hidden" />
         </aside>
 
         <main

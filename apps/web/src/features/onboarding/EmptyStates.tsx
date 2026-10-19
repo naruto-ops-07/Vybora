@@ -2,6 +2,8 @@
  * The four illustrated empty states (spec "Your circle, in colour" §2), shared
  * by the workspace and the dev gallery so the copy lives in one place.
  */
+import { CheckIcon, MagnifyingGlassIcon, ShareNetworkIcon } from '@phosphor-icons/react';
+import { CHAT_LIST_EMPTY_COPY, type ChatListEmptyState } from '@vybora/core';
 import type { ReactNode } from 'react';
 import {
   NoChatsIllustration,
@@ -10,7 +12,10 @@ import {
   WelcomeIllustration,
 } from '@/components/illustrations';
 import { Button, ButtonLink } from '@/components/ui/Button';
+import { Avatar } from '@/components/ui/Avatar';
+import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/States';
+import { cn } from '@/lib/cn';
 
 /** Add a friend: the Friends pane with its username field focused (and prefilled, if given). */
 export function AddFriendLink({
@@ -76,18 +81,176 @@ export function WelcomeEmpty({ onCompose, handle }: { onCompose?: () => void; ha
   );
 }
 
-/** The chat list before the first chat. */
-export function NoChatsEmpty({ onCompose }: { onCompose: () => void }) {
+/** A friend offered as a one-tap avatar in the chat list's say-hi state. */
+export interface SayHiFriend {
+  userId: string;
+  username: string;
+  displayName: string | null;
+  avatarPath: string | null;
+}
+
+/** At most this many friends are offered as avatars. */
+export const SAY_HI_MAX = 5;
+
+/** "Find friends": the Friends pane with its add field focused. */
+function FindFriendsLink() {
   return (
-    <EmptyState
-      illustration={<NoChatsIllustration width={160} />}
-      title="No chats yet"
-      body="Add a friend by their username, then say hi."
-      headingLevel={2}
-      className="py-10"
-      action={<AddFriendLink />}
-      secondaryAction={<NewMessageButton onClick={onCompose} />}
-    />
+    <ButtonLink to="/friends" state={{ focusAddFriend: true }} className="touch-target">
+      <MagnifyingGlassIcon size={16} weight="bold" aria-hidden="true" />
+      {CHAT_LIST_EMPTY_COPY['no-friends'].action}
+    </ButtonLink>
+  );
+}
+
+/**
+ * The chat list with no chats (and no search), by `chatListEmptyState`: a fresh account
+ * finds friends or shares its username; requests out say how many are pending; with
+ * friends, up to five are one tap from a chat. `loading` stays neutral (no flash of
+ * "No friends yet"). `friends: null` (they failed to load) shows say-hi without avatars.
+ */
+export function ChatListEmptyView({
+  state,
+  outgoingCount = 0,
+  friends,
+  pendingId,
+  onSayHi,
+  onCompose,
+  onShare,
+  shared,
+  shareStatus,
+}: {
+  state: ChatListEmptyState;
+  outgoingCount?: number;
+  friends?: SayHiFriend[] | null;
+  /** The friend whose chat is being opened. */
+  pendingId?: string;
+  onSayHi?: (friend: SayHiFriend) => void;
+  onCompose: () => void;
+  /** Share your username (HandleCard's Share). Omitted until the profile loads. */
+  onShare?: () => void;
+  /** The share link was just copied. */
+  shared?: boolean;
+  /** Polite announcement for the share. */
+  shareStatus?: string;
+}) {
+  if (state === 'loading')
+    return <div className="min-h-64" aria-hidden="true" data-chat-list-empty="loading" />;
+
+  if (state === 'no-friends') {
+    const copy = CHAT_LIST_EMPTY_COPY['no-friends'];
+    return (
+      <div data-chat-list-empty="no-friends">
+        <EmptyState
+          illustration={<NoFriendsIllustration width={152} />}
+          title={copy.title}
+          body={copy.body}
+          headingLevel={2}
+          className="py-10"
+          action={<FindFriendsLink />}
+          secondaryAction={
+            onShare && (
+              <Button
+                variant="outline"
+                className="touch-target"
+                onClick={onShare}
+                leftIcon={
+                  shared ? (
+                    <CheckIcon size={16} weight="bold" aria-hidden="true" />
+                  ) : (
+                    <ShareNetworkIcon size={16} aria-hidden="true" />
+                  )
+                }
+              >
+                {copy.secondaryAction}
+              </Button>
+            )
+          }
+        />
+        <span className="sr-only" aria-live="polite">
+          {shareStatus}
+        </span>
+      </div>
+    );
+  }
+
+  if (state === 'waiting') {
+    const copy = CHAT_LIST_EMPTY_COPY.waiting;
+    return (
+      <div data-chat-list-empty="waiting">
+        <EmptyState
+          illustration={<NoFriendsIllustration width={152} />}
+          title={copy.title}
+          body={copy.body(outgoingCount)}
+          headingLevel={2}
+          className="py-10"
+          action={<FindFriendsLink />}
+        />
+      </div>
+    );
+  }
+
+  const copy = CHAT_LIST_EMPTY_COPY['say-hi'];
+  const shown = (friends ?? []).slice(0, SAY_HI_MAX);
+  return (
+    <div data-chat-list-empty="say-hi">
+      <EmptyState
+        illustration={<NoChatsIllustration width={152} />}
+        title={copy.title}
+        body={copy.body}
+        headingLevel={2}
+        className="py-10"
+        action={
+          shown.length > 0 && (
+            <ul
+              className="mb-2 flex basis-full flex-wrap justify-center gap-1"
+              aria-label="Friends"
+            >
+              {shown.map((f) => {
+                const name = f.displayName || f.username;
+                const pending = pendingId === f.userId;
+                return (
+                  <li key={f.userId}>
+                    <button
+                      type="button"
+                      aria-label={`Say hi to ${name}`}
+                      aria-busy={pending || undefined}
+                      disabled={!!pendingId}
+                      onClick={() => onSayHi?.(f)}
+                      className={cn(
+                        'group/hi flex w-[68px] flex-col items-center gap-1.5 rounded-md px-1 pt-1.5 pb-1 transition-colors duration-150',
+                        'hover:bg-[color-mix(in_srgb,var(--vy-text)_6%,transparent)] disabled:cursor-default',
+                        pendingId && !pending && 'opacity-60',
+                      )}
+                    >
+                      <span className="relative rounded-full ring-2 ring-transparent ring-offset-2 ring-offset-surface transition-shadow duration-150 group-hover/hi:ring-accent/70 group-focus-visible/hi:ring-accent">
+                        <Avatar
+                          path={f.avatarPath}
+                          name={f.username}
+                          userId={f.userId}
+                          displayName={f.displayName}
+                          username={f.username}
+                          size={48}
+                          decorative
+                        />
+                        {pending && (
+                          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-scrim text-white">
+                            <Spinner size={16} />
+                          </span>
+                        )}
+                      </span>
+                      <span className="w-full truncate text-center text-xs font-medium text-muted group-hover/hi:text-ink">
+                        {name.split(' ')[0]}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        }
+        secondaryAction={<NewMessageButton onClick={onCompose} />}
+      />
+    </div>
   );
 }
 

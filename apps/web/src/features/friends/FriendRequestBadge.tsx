@@ -12,7 +12,7 @@ export function FriendRequestBadge({ count, className }: { count: number; classN
       <span
         aria-hidden="true"
         className={cn(
-          'flex h-[18px] min-w-[18px] items-center justify-center rounded-sm bg-accent px-1 font-mono text-[10px] font-medium leading-none text-on-accent tabular-nums',
+          'vy-count flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 font-mono text-[10px] leading-none font-semibold tabular-nums',
           className,
         )}
       >

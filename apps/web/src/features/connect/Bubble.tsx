@@ -29,7 +29,7 @@ import { toneVars } from '@/lib/tones';
 import { FileAttachment, ImageAttachment, VideoAttachment, VoiceAttachment } from './Attachment';
 import { MessageMenu } from './MessageMenu';
 import { QUICK_REACTIONS } from './reactions';
-import type { ResolvedChatTheme } from './ui';
+import { bubbleFillStyle, type ResolvedChatTheme } from './ui';
 import { useSwipeReply } from './useSwipeReply';
 
 export type { Receipt } from '@vybora/core';
@@ -85,7 +85,7 @@ const RECEIPT_LABEL: Record<Receipt, string> = {
   read: 'read',
 };
 
-/** Flat notch on the last bubble of a run, in the bubble's own colour. */
+/** Notch on the last bubble of a run, in the bubble's own colour (the gradient's end stop). */
 function Tail({ mine, fill }: { mine: boolean; fill?: string }) {
   return (
     <svg
@@ -98,7 +98,7 @@ function Tail({ mine, fill }: { mine: boolean; fill?: string }) {
     >
       <path d="M0 0C0.5 6 3.5 9 8 10H0Z" fill={fill ?? 'var(--vy-bubble-in)'} />
       {!fill && (
-        <path d="M0 0C0.5 6 3.5 9 8 10H0" fill="none" stroke="var(--vy-border)" strokeWidth="1" />
+        <path d="M0 0C0.5 6 3.5 9 8 10H0" fill="none" className="vy-tail-edge" strokeWidth="1" />
       )}
     </svg>
   );
@@ -237,8 +237,9 @@ export const Bubble = memo(function Bubble({
     m.kind === 'attachment' &&
     (m.attachment?.kind === 'image' || m.attachment?.kind === 'video') &&
     !m.deleted;
-  // High contrast: meta text keeps the bubble's own (on-accent) colour at full strength.
-  const metaColor = filled ? (theme.highContrast ? '' : 'text-white/75') : 'text-subtle';
+  // On a filled bubble the meta keeps the bubble's own text colour at full strength:
+  // every fill is only certain of 4.5:1 for its text colour, so no dimming.
+  const metaColor = filled ? '' : 'text-subtle';
 
   let content: ReactNode;
   if (m.kind === 'undecryptable') {
@@ -379,12 +380,19 @@ export const Bubble = memo(function Bubble({
             <div
               className={cn(
                 'relative min-w-0 rounded-lg',
-                media ? 'p-1' : 'px-3 py-2',
+                media ? 'p-1' : 'px-3.5 py-2',
                 runEnd && (mine ? 'rounded-br-sm' : 'rounded-bl-sm'),
-                !filled && 'border border-line bg-bubble-in text-ink',
+                filled ? 'vy-bubble-out shadow-1' : 'vy-bubble-in',
                 selecting && 'pointer-events-none',
               )}
-              style={filled ? { background: theme.bubble, color: theme.bubbleText } : undefined}
+              data-bubble={filled ? 'out' : 'in'}
+              style={
+                filled
+                  ? theme.fill
+                    ? bubbleFillStyle(theme.fill)
+                    : { background: theme.bubble, color: theme.bubbleText }
+                  : undefined
+              }
             >
               {m.replyTo && !m.deleted && (
                 <button
@@ -392,7 +400,7 @@ export const Bubble = memo(function Bubble({
                   onClick={() => !selecting && onJumpTo?.(m.replyTo!.id)}
                   className={cn(
                     'mb-1.5 block w-full border-l-2 py-0.5 pl-2 text-left',
-                    filled ? (theme.highContrast ? 'border-current' : 'border-white/70') : '',
+                    filled ? (theme.highContrast ? 'border-current' : 'border-current/60') : '',
                     media && 'mx-1 mt-1 w-[calc(100%-8px)]',
                   )}
                   style={filled ? undefined : { borderColor: theme.accent }}
@@ -503,7 +511,7 @@ export const Bubble = memo(function Bubble({
                         onReact(m, e);
                       }}
                       className={cn(
-                        'flex h-8 w-8 items-center justify-center rounded-sm text-lg hover:bg-surface-muted',
+                        'flex h-8 w-8 items-center justify-center rounded-sm text-lg hover:bg-[color-mix(in_srgb,var(--vy-accent)_14%,transparent)]',
                         on && 'bg-accent-soft',
                       )}
                       aria-label={`${on ? 'Remove' : 'React with'} ${e}`}
@@ -528,9 +536,9 @@ export const Bubble = memo(function Bubble({
                 title={users.map(nameOf).join(', ')}
                 aria-label={`${emoji} ${users.length}, ${users.includes(myUserId) ? 'remove your reaction' : 'react'}`}
                 className={cn(
-                  'flex h-6 items-center gap-1 rounded-sm border px-1.5 text-xs',
+                  'flex h-6 items-center gap-1 rounded-full border px-2 text-xs',
                   users.includes(myUserId)
-                    ? 'border-accent bg-accent-soft'
+                    ? 'border-accent/60 bg-accent-soft'
                     : 'border-line bg-surface',
                 )}
               >

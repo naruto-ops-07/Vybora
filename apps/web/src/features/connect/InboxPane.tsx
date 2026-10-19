@@ -6,7 +6,13 @@ import {
   updateConversationPreferences,
   type SecureConversation,
 } from '@vybora/api';
-import { chatRowPreview, formatRowTime, receiptOf, usernameFromAddParam } from '@vybora/core';
+import {
+  chatListEmptyState,
+  chatRowPreview,
+  formatRowTime,
+  receiptOf,
+  usernameFromAddParam,
+} from '@vybora/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
@@ -16,9 +22,14 @@ import { Tip } from '@/components/ui/Tooltip';
 import { useToast } from '@/components/ui/Toast';
 import { useA11y } from '@/features/a11y/A11yProvider';
 import { useMe } from '@/features/auth/AuthProvider';
-import { AddFriendLink, NoChatsEmpty, NoResultsEmpty } from '@/features/onboarding/EmptyStates';
+import { useShareMyHandle } from '@/features/friends/HandleCard';
+import { useFriendRequests, useFriends, useMessageFriend } from '@/features/friends/hooks';
+import {
+  AddFriendLink,
+  ChatListEmptyView,
+  NoResultsEmpty,
+} from '@/features/onboarding/EmptyStates';
 import { GetStarted } from '@/features/onboarding/GetStarted';
-import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import { ChatRowMenu } from './ChatRowParts';
 import { ChatRowView } from './ChatRowView';
@@ -32,8 +43,9 @@ import {
   useSecureInbox,
 } from './hooks';
 import { NewChatDialog } from './NewChatDialog';
+import { PaneHeader } from './ui';
 
-type Filter = 'all' | 'unread' | 'groups' | 'pinned' | 'archived';
+export type Filter = 'all' | 'unread' | 'groups' | 'pinned' | 'archived';
 const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'unread', label: 'Unread' },
@@ -42,7 +54,43 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'archived', label: 'Archived' },
 ];
 
-/** "No chats yet", "No one by that name", or a plain line for an empty filter. */
+/**
+ * The chat list before the first chat: what to do next depends on friends (shared rule:
+ * `chatListEmptyState`). Friends that fail to load still get the say-hi copy.
+ */
+function ChatListEmpty({ onCompose }: { onCompose: () => void }) {
+  const friends = useFriends();
+  const requests = useFriendRequests();
+  const message = useMessageFriend();
+  const share = useShareMyHandle();
+  const list = friends.data ?? [];
+  const state = friends.isError
+    ? 'say-hi'
+    : chatListEmptyState({
+        // With no friends, "waiting" vs "no friends" needs the requests too.
+        friendsLoaded: friends.isSuccess && (list.length > 0 || !requests.isPending),
+        friendCount: list.length,
+        outgoingCount: requests.data?.outgoing.length ?? 0,
+      });
+  return (
+    <ChatListEmptyView
+      state={state}
+      outgoingCount={requests.data?.outgoing.length ?? 0}
+      friends={friends.isError ? null : list}
+      pendingId={message.pendingId}
+      onSayHi={(f) => {
+        const friend = list.find((x) => x.userId === f.userId);
+        if (friend) message.open(friend);
+      }}
+      onCompose={onCompose}
+      onShare={share ? () => void share.share() : undefined}
+      shared={share?.done === 'link'}
+      shareStatus={share?.status}
+    />
+  );
+}
+
+/** The first-chat states, "No one by that name", or a plain line for an empty filter. */
 function InboxEmpty({
   term,
   filter,
@@ -61,11 +109,76 @@ function InboxEmpty({
         action={<AddFriendLink username={usernameFromAddParam(term)} variant="outline" size="sm" />}
       />
     );
-  if (filter === 'all' && !hasChats) return <NoChatsEmpty onCompose={onCompose} />;
+  if (filter === 'all' && !hasChats) return <ChatListEmpty onCompose={onCompose} />;
   return (
-    <p className="px-8 py-12 text-center text-sm text-muted">
+    <p className="px-8 py-14 text-center text-sm text-muted">
       {filter === 'all' ? 'No chats here' : `No ${filter} chats`}
     </p>
+  );
+}
+
+/** The chat list's title, New message, search and filter chips (no data of its own). */
+export function ChatListHeader({
+  term,
+  onTerm,
+  filter,
+  onFilter,
+  searchRef,
+  onCompose,
+}: {
+  term: string;
+  onTerm: (term: string) => void;
+  filter: Filter;
+  onFilter: (filter: Filter) => void;
+  searchRef?: React.RefObject<HTMLInputElement | null>;
+  onCompose: () => void;
+}) {
+  return (
+    <>
+      <PaneHeader title="Chats">
+        <Tip label="New message" shortcut="Alt N">
+          <Button size="icon" onClick={onCompose} aria-label="New message">
+            <NotePencilIcon size={19} weight="bold" />
+          </Button>
+        </Tip>
+      </PaneHeader>
+
+      <div className="shrink-0 px-3 pt-1">
+        {/* The wrapper carries the focus ring so the input itself needs none. */}
+        <label className="vy-search flex h-10 items-center gap-2 rounded-md px-3">
+          <MagnifyingGlassIcon size={16} className="text-subtle" aria-hidden="true" />
+          <input
+            ref={searchRef}
+            value={term}
+            onChange={(e) => onTerm(e.target.value)}
+            placeholder="Search chats"
+            aria-label="Search chats"
+            className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-subtle"
+          />
+          <kbd className="hidden rounded-sm border border-line bg-surface px-1.5 font-mono text-[11px] leading-4 text-muted lg:inline">
+            /
+          </kbd>
+        </label>
+        <div
+          className="scrollbar-none -mx-3 mt-2.5 flex gap-1.5 overflow-x-auto px-3 pb-2.5"
+          role="tablist"
+          aria-label="Filter chats"
+        >
+          {FILTERS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              role="tab"
+              aria-selected={filter === f.id}
+              onClick={() => onFilter(f.id)}
+              className="vy-chip touch-target flex h-8 shrink-0 items-center rounded-full px-3 text-[13px] font-medium"
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -177,64 +290,21 @@ export function InboxPane({
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-line pl-4 pr-2">
-        <h1 className="type-wide text-lg font-semibold">Chats</h1>
-        <Tip label="New message" shortcut="Alt N">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setComposing(true)}
-            aria-label="New message"
-          >
-            <NotePencilIcon size={20} />
-          </Button>
-        </Tip>
-      </header>
+      <ChatListHeader
+        term={term}
+        onTerm={setTerm}
+        filter={filter}
+        onFilter={setFilter}
+        searchRef={searchRef}
+        onCompose={() => setComposing(true)}
+      />
 
-      <div className="shrink-0 px-3 pt-3">
-        {/* The wrapper carries the focus ring so the input itself needs none. */}
-        <label className="flex h-10 items-center gap-2 rounded-md border border-line-strong bg-surface px-3 focus-within:border-accent focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent">
-          <MagnifyingGlassIcon size={16} className="text-subtle" aria-hidden="true" />
-          <input
-            ref={searchRef}
-            value={term}
-            onChange={(e) => setTerm(e.target.value)}
-            placeholder="Search chats"
-            aria-label="Search chats"
-            className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-subtle"
-          />
-          <kbd className="hidden rounded-sm border border-line px-1.5 font-mono text-[10px] text-subtle lg:inline">
-            /
-          </kbd>
-        </label>
-        <div
-          className="scrollbar-none mt-2 flex gap-4 overflow-x-auto border-b border-line px-1"
-          role="tablist"
-          aria-label="Filter chats"
-        >
-          {FILTERS.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              role="tab"
-              aria-selected={filter === f.id}
-              onClick={() => setFilter(f.id)}
-              className={cn(
-                '-mb-px shrink-0 border-b-2 py-2 text-[13px] font-medium transition-colors duration-150',
-                filter === f.id
-                  ? 'border-accent text-ink'
-                  : 'border-transparent text-muted hover:text-ink',
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="scroll-thin min-h-0 flex-1 overflow-y-auto" aria-busy={inbox.isPending}>
+      <div
+        className="scroll-thin min-h-0 flex-1 overflow-y-auto border-t border-line"
+        aria-busy={inbox.isPending}
+      >
         {inbox.isPending && (
-          <ul className="space-y-1 p-3" aria-label="Loading chats">
+          <ul className="space-y-1 px-4 py-3" aria-label="Loading chats">
             {[0, 1, 2, 3, 4].map((i) => (
               <li key={i} className="flex items-center gap-3 py-2">
                 <div className="skeleton h-12 w-12 rounded-full" />
@@ -274,7 +344,7 @@ export function InboxPane({
             onCompose={() => setComposing(true)}
           />
         )}
-        <ul className="py-1">
+        <ul className="px-2 py-1.5">
           {visible.map((c) => {
             const peer = peerOf(c, userId);
             const title = conversationTitle(c, userId, nicknames.data);
@@ -330,7 +400,7 @@ export function InboxPane({
             );
           })}
         </ul>
-        <p className="px-4 pb-4 pt-2 text-xs text-muted">
+        <p className="px-5 pt-3 pb-5 text-xs leading-relaxed text-muted">
           Chats from before end-to-end encryption are in{' '}
           <Link
             to="/messages/legacy"

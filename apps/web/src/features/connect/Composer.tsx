@@ -108,7 +108,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
 
   if (disabled) {
     return (
-      <div className="flex shrink-0 items-start gap-3 border-t border-line bg-surface px-5 py-4 text-sm text-muted">
+      <div className="vy-panel vy-canvas-layer flex shrink-0 items-start gap-3 border-t px-5 py-4 text-sm text-muted">
         <LockSimpleIcon size={16} className="mt-0.5 shrink-0 text-accent" aria-hidden="true" />
         <p>{disabledReason}</p>
       </div>
@@ -116,10 +116,10 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   }
 
   return (
-    <div className="pb-safe shrink-0 border-t border-line bg-surface px-3 py-2.5 md:px-5">
+    <div className="vy-panel vy-canvas-layer pb-safe shrink-0 border-t px-3 py-3 md:px-5">
       {replyTo && (
         <div
-          className="mb-2 flex items-center gap-3 border-l-2 bg-surface-muted py-1.5 pl-3 pr-1"
+          className="mb-2 flex items-center gap-3 rounded-sm border-l-[3px] bg-surface-muted py-1.5 pr-1 pl-3"
           style={{ borderColor: accent }}
         >
           <div className="min-w-0 flex-1">
@@ -157,7 +157,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           }}
         />
         {/* The wrapper carries the focus ring so the textarea itself needs none. */}
-        <div className="flex min-h-10 flex-1 items-center rounded-md border border-line-strong bg-bg px-3 focus-within:border-accent focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent">
+        <div className="vy-search flex min-h-10 flex-1 items-center rounded-lg px-3.5">
           <textarea
             ref={area}
             rows={1}

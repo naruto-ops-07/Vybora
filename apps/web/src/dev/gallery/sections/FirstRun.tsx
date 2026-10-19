@@ -8,14 +8,15 @@ import { Meta } from '@/features/connect/ui';
 import { HandleCardView } from '@/features/friends/HandleCard';
 import {
   AddFriendLink,
+  ChatListEmptyView,
   FriendsEmpty,
-  NoChatsEmpty,
   NoResultsEmpty,
   WelcomeEmpty,
+  type SayHiFriend,
 } from '@/features/onboarding/EmptyStates';
 import { GetStartedView } from '@/features/onboarding/GetStarted';
 import { cn } from '@/lib/cn';
-import { PEOPLE } from '../sample';
+import { PEOPLE, type SamplePerson } from '../sample';
 
 const noop = () => undefined;
 const ME = PEOPLE.turquoise;
@@ -46,6 +47,21 @@ export function Frame({
   );
 }
 
+const asFriend = (p: SamplePerson): SayHiFriend => ({
+  userId: p.id,
+  username: p.username,
+  displayName: p.display_name,
+  avatarPath: null,
+});
+const FRIENDS = [
+  PEOPLE.ocean,
+  PEOPLE.lime,
+  PEOPLE.aqua,
+  PEOPLE.mint,
+  PEOPLE.glacier,
+  PEOPLE.sky,
+].map(asFriend);
+
 export function EmptyStatesSection() {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -53,8 +69,17 @@ export function EmptyStatesSection() {
         <WelcomeEmpty onCompose={noop} handle={<Handle />} />
       </Frame>
       <div className="space-y-6">
-        <Frame label="Chat list, no chats yet" className="bg-surface">
-          <NoChatsEmpty onCompose={noop} />
+        <Frame label="Chat list, a fresh account (no friends, nothing sent)" className="bg-surface">
+          <ChatListEmptyView state="no-friends" onCompose={noop} onShare={noop} />
+        </Frame>
+        <Frame label="Chat list, waiting on 2 requests" className="bg-surface">
+          <ChatListEmptyView state="waiting" outgoingCount={2} onCompose={noop} />
+        </Frame>
+        <Frame label="Chat list, friends to say hi to (up to 5)" className="bg-surface">
+          <ChatListEmptyView state="say-hi" friends={FRIENDS} onSayHi={noop} onCompose={noop} />
+        </Frame>
+        <Frame label="Chat list, friends couldn’t load" className="bg-surface">
+          <ChatListEmptyView state="say-hi" friends={null} onCompose={noop} />
         </Frame>
         <Frame label="Friends, none yet" className="bg-surface">
           <FriendsEmpty handle={<Handle />} />

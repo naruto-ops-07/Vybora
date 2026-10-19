@@ -66,7 +66,7 @@ export function GetStartedView({
     return (
       <section
         aria-labelledby={titleId}
-        className="m-3 flex items-start gap-3 rounded-lg border border-line bg-surface p-3.5"
+        className="m-3 flex items-start gap-3 vy-card rounded-lg p-3.5"
         data-get-started="done"
       >
         <CheckCircleIcon
@@ -112,7 +112,7 @@ export function GetStartedView({
   return (
     <section
       aria-labelledby={titleId}
-      className="m-3 rounded-lg border border-line bg-surface p-3.5"
+      className="m-3 vy-card rounded-lg p-3.5"
       data-get-started="steps"
     >
       <div className="flex items-start gap-3">
@@ -127,7 +127,10 @@ export function GetStartedView({
       {/* Three flat segments: a glance at progress. The text above carries it for screen readers. */}
       <div className="mt-2 grid grid-cols-3 gap-1" aria-hidden="true">
         {GET_STARTED_STEPS.map((s) => (
-          <span key={s} className={cn('h-1', steps[s] ? 'bg-accent' : 'bg-surface-strong')} />
+          <span
+            key={s}
+            className={cn('h-1 rounded-full', steps[s] ? 'bg-accent' : 'bg-surface-strong')}
+          />
         ))}
       </div>
       <ol className="mt-1">

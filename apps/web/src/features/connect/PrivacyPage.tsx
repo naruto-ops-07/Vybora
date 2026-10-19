@@ -144,7 +144,7 @@ export default function PrivacyPage() {
 
   return (
     <SettingsPage title="Privacy & security">
-      <div className="flex items-start gap-3 rounded-lg border border-line bg-surface p-4">
+      <div className="flex items-start gap-3 vy-card rounded-lg p-4">
         <LockSimpleIcon size={20} className="mt-0.5 shrink-0 text-accent" aria-hidden="true" />
         <div>
           <p className="font-medium">Your messages are end-to-end encrypted</p>

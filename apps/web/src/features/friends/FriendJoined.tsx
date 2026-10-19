@@ -46,10 +46,7 @@ export function FriendJoinedCard({
   return (
     <section
       aria-labelledby={titleId}
-      className={cn(
-        'flex items-start gap-3 rounded-lg border border-line bg-surface p-4',
-        className,
-      )}
+      className={cn('flex items-start gap-3 vy-card rounded-lg p-4', className)}
       data-friend-joined={friend.userId}
     >
       {/* Their avatar sits in front with a ring in the surface colour (a border, not a shadow). */}

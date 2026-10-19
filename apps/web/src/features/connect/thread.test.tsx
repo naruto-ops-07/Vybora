@@ -1,14 +1,20 @@
-import { resolveChatTheme } from '@vybora/config';
-import { personTone, type ThreadItem } from '@vybora/core';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import type { ChatTheme } from '@vybora/api';
+import { looks, resolveChatTheme } from '@vybora/config';
+import { A11Y_STORAGE_KEY, personTone, type ThreadItem } from '@vybora/core';
 import type { LocalMessage } from '@vybora/e2ee';
-import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { renderWithProviders } from '@/test/utils';
 import { TooltipProvider } from '@/components/ui/Tooltip';
 import { Bubble } from './Bubble';
+import { ChatGlow } from './Canvas';
 import { useIncomingAnnouncement } from './announce';
 import { threadKeyDown } from './threadKeys';
 import { DateChip, groupByDay, JumpToLatest, ThreadDay, UnreadDivider } from './ThreadParts';
+import { useChatTheme } from './ui';
 
 vi.mock('./ConnectProvider', () => ({ useConnect: () => ({ engine: null }) }));
 
@@ -334,5 +340,109 @@ describe('thread keyboard', () => {
     act(() => rows[0]!.focus());
     fireEvent.keyDown(rows[0]!, { key: 'Enter' });
     expect(onMenu).toHaveBeenCalled();
+  });
+});
+
+describe('bubbles and canvas in the new looks', () => {
+  const html = document.documentElement;
+  const css = ['styles/workspace.css'].map((f) =>
+    readFileSync(resolve(process.cwd(), 'src', f), 'utf8'),
+  );
+  let sheet: HTMLStyleElement;
+  beforeAll(() => {
+    sheet = document.createElement('style');
+    sheet.textContent = css.join('\n');
+    document.head.append(sheet);
+  });
+  afterAll(() => sheet.remove());
+  beforeEach(() => {
+    html.dataset.look = 'velvet';
+    html.dataset.theme = 'dark';
+  });
+  afterEach(() => {
+    cleanup();
+    delete html.dataset.look;
+    delete html.dataset.theme;
+    delete html.dataset.contrast;
+    localStorage.clear();
+  });
+
+  function Themed({ chatTheme }: { chatTheme: ChatTheme }) {
+    const theme = useChatTheme(chatTheme);
+    return <Harness mine theme={theme} />;
+  }
+  const outgoing = (chatTheme: ChatTheme) => {
+    const { container } = renderWithProviders(<Themed chatTheme={chatTheme} />);
+    return container.querySelector<HTMLElement>('[data-bubble="out"]')!;
+  };
+
+  it('Velvet: a Default-theme outgoing bubble is the look’s gradient, its tail the end stop', () => {
+    const bubble = outgoing({});
+    const t = looks.velvet.modes.dark;
+    const style = getComputedStyle(bubble);
+    expect(style.backgroundImage).toContain('linear-gradient');
+    expect(style.backgroundImage.toLowerCase()).toContain(t.bubbleOutFrom.toLowerCase());
+    expect(bubble.className).toContain('shadow-1');
+    const tail = bubble.querySelector('[data-tail="true"] path')!;
+    expect(tail.getAttribute('fill')?.toLowerCase()).toBe(t.bubbleOutTo.toLowerCase());
+  });
+
+  it('a named chat theme (ocean) keeps its own colour, flat, with the look’s depth', () => {
+    const bubble = outgoing({ preset: 'ocean' });
+    const style = getComputedStyle(bubble);
+    expect(style.backgroundImage === '' || style.backgroundImage === 'none').toBe(true);
+    expect(style.backgroundColor).toBe('rgb(29, 78, 216)');
+    expect(bubble.className).toContain('shadow-1');
+  });
+
+  it('under high contrast the outgoing bubble is flat', () => {
+    localStorage.setItem(A11Y_STORAGE_KEY, JSON.stringify({ highContrast: true }));
+    html.dataset.contrast = 'high';
+    const bubble = outgoing({});
+    const style = getComputedStyle(bubble);
+    expect(style.backgroundImage === '' || style.backgroundImage === 'none').toBe(true);
+  });
+
+  it('incoming bubbles are the look’s bubble-in with elevation 1', () => {
+    const { container } = render(<Harness />);
+    const bubble = container.querySelector<HTMLElement>('[data-bubble="in"]')!;
+    expect(bubble).toHaveClass('vy-bubble-in');
+    expect(getComputedStyle(bubble).boxShadow).toBe('var(--vy-shadow-1)');
+  });
+
+  it('Aurora’s glow drifts; reduced motion stills it; high contrast removes it', () => {
+    html.dataset.look = 'aurora';
+    const { container, unmount } = renderWithProviders(<ChatGlow />);
+    const glow = container.querySelector<HTMLElement>('[data-chat-glow]')!;
+    expect(glow).toHaveAttribute('aria-hidden', 'true');
+    expect(glow.dataset.ambient).toBe('drift');
+    expect(getComputedStyle(glow).animationName).toBe('vy-glow-drift');
+    expect(getComputedStyle(glow).pointerEvents).toBe('none');
+    unmount();
+
+    localStorage.setItem(A11Y_STORAGE_KEY, JSON.stringify({ reduceMotion: 'on' }));
+    const still = renderWithProviders(<ChatGlow />);
+    const stillGlow = still.container.querySelector<HTMLElement>('[data-chat-glow]')!;
+    expect(stillGlow.dataset.ambient).toBe('none');
+    expect(['', 'none']).toContain(getComputedStyle(stillGlow).animationName);
+    still.unmount();
+
+    localStorage.setItem(A11Y_STORAGE_KEY, JSON.stringify({ highContrast: true }));
+    const flat = renderWithProviders(<ChatGlow />);
+    expect(flat.container.querySelector('[data-chat-glow]')).toBeNull();
+  });
+
+  it('Bloom pulses, Velvet holds still', () => {
+    html.dataset.look = 'bloom';
+    const bloom = renderWithProviders(<ChatGlow />);
+    const glow = bloom.container.querySelector<HTMLElement>('[data-chat-glow]')!;
+    expect(glow.dataset.ambient).toBe('pulse');
+    expect(getComputedStyle(glow).animationName).toBe('vy-glow-pulse');
+    bloom.unmount();
+    html.dataset.look = 'velvet';
+    const velvet = renderWithProviders(<ChatGlow />);
+    const still = velvet.container.querySelector<HTMLElement>('[data-chat-glow]')!;
+    expect(still.dataset.ambient).toBe('none');
+    expect(['', 'none']).toContain(getComputedStyle(still).animationName);
   });
 });

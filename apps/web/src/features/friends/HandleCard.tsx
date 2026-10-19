@@ -16,44 +16,38 @@ export interface HandlePerson {
   avatar_path?: string | null;
 }
 
-type Done = 'username' | 'link' | null;
+export type HandleShareDone = 'username' | 'link' | null;
 const FEEDBACK_MS = 2000;
 
 /**
- * Your own @username, ready to pass on. Copy puts "@username" on the
- * clipboard; Share opens the system share sheet with a link that prefills the
- * add-friend field (`/friends?add=…`), or copies that link where there's no
- * share sheet. Both count as "Share your username" in Get started.
+ * Copy and Share for an @username: Copy puts "@username" on the clipboard; Share opens
+ * the system share sheet with a link that prefills the add-friend field, or copies that
+ * link where there's no share sheet. `done` says what just went through, for 2 s.
  */
-export function HandleCardView({
-  person,
+export function useHandleShare({
+  username,
   link,
-  variant = 'full',
   onShared,
-  className,
 }: {
-  person: HandlePerson;
+  username: string;
   link: string;
-  variant?: 'full' | 'compact';
   /** Called once a copy or share has gone through. */
   onShared?: () => void;
-  className?: string;
 }) {
   const toast = useToast();
-  const [done, setDone] = useState<Done>(null);
+  const [done, setDone] = useState<HandleShareDone>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
-  const handle = `@${person.username}`;
-  const name = person.display_name || person.username;
+  const handle = `@${username}`;
 
-  const flash = (what: Exclude<Done, null>) => {
+  const flash = (what: Exclude<HandleShareDone, null>) => {
     setDone(what);
     onShared?.();
     clearTimeout(timer.current);
     timer.current = setTimeout(() => setDone(null), FEEDBACK_MS);
   };
 
-  const copy = async (text: string, what: Exclude<Done, null>) => {
+  const copy = async (text: string, what: Exclude<HandleShareDone, null>) => {
     try {
       await navigator.clipboard.writeText(text);
       flash(what);
@@ -76,6 +70,65 @@ export function HandleCardView({
     await copy(link, 'link');
   };
 
+  /** What a polite live region should say about `done`. */
+  const status =
+    done === 'username' ? `${handle} copied` : done === 'link' ? 'Link to add you copied' : '';
+
+  return {
+    handle,
+    done,
+    status,
+    copyHandle: () => copy(handle, 'username'),
+    share,
+  };
+}
+
+/** Share for the signed-in user (counts as "Share your username"); null until the profile loads. */
+export function useShareMyHandle() {
+  const { profile } = useAuth();
+  const [, update] = useOnboarding(profile?.id);
+  const username = profile?.username ?? '';
+  const share = useHandleShare({
+    username,
+    link: friendInviteLink(siteUrl(), username),
+    onShared: () => update({ shared: true }),
+  });
+  return username ? share : null;
+}
+
+/**
+ * Your own @username, ready to pass on. Copy puts "@username" on the
+ * clipboard; Share opens the system share sheet with a link that prefills the
+ * add-friend field (`/friends?add=…`), or copies that link where there's no
+ * share sheet. Both count as "Share your username" in Get started.
+ */
+export function HandleCardView({
+  person,
+  link,
+  variant = 'full',
+  onShared,
+  className,
+}: {
+  person: HandlePerson;
+  link: string;
+  variant?: 'full' | 'compact';
+  /** Called once a copy or share has gone through. */
+  onShared?: () => void;
+  className?: string;
+}) {
+  const {
+    handle,
+    done,
+    status: said,
+    copyHandle,
+    share,
+  } = useHandleShare({
+    username: person.username,
+    link,
+    onShared,
+  });
+  const name = person.display_name || person.username;
+
   const compact = variant === 'compact';
   const buttons = (
     <div className={cn('flex shrink-0 gap-2', !compact && 'mt-3')}>
@@ -91,7 +144,7 @@ export function HandleCardView({
             <CopyIcon size={14} aria-hidden="true" />
           )
         }
-        onClick={() => void copy(handle, 'username')}
+        onClick={() => void copyHandle()}
       >
         {done === 'username' ? 'Copied' : 'Copy'}
       </Button>
@@ -115,7 +168,7 @@ export function HandleCardView({
   );
   const status = (
     <span aria-live="polite" className="sr-only" data-handle-status="">
-      {done === 'username' ? `${handle} copied` : done === 'link' ? 'Link to add you copied' : ''}
+      {said}
     </span>
   );
 
@@ -125,7 +178,7 @@ export function HandleCardView({
         className={cn('flex flex-wrap items-center gap-2', className)}
         data-handle-card="compact"
       >
-        <span className="flex h-8 min-w-0 flex-1 basis-28 items-center rounded-md border border-line bg-surface-muted px-2.5">
+        <span className="flex h-8 min-w-0 flex-1 basis-28 items-center rounded-sm border border-line bg-surface-muted px-2.5">
           <span className="truncate font-mono text-[13px] text-ink">{handle}</span>
         </span>
         {buttons}
@@ -135,7 +188,7 @@ export function HandleCardView({
 
   return (
     <div
-      className={cn('rounded-lg border border-line bg-surface p-4', className)}
+      className={cn('vy-card rounded-lg border-t-[var(--vy-edge)] p-4', className)}
       data-handle-card="full"
     >
       <div className="flex items-center gap-3">
@@ -149,7 +202,9 @@ export function HandleCardView({
           decorative
         />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[15px] font-semibold">{name}</span>
+          <span className="type-wide block truncate text-[16px] leading-6 font-semibold">
+            {name}
+          </span>
           <span className="block truncate font-mono text-[13px] text-muted">{handle}</span>
         </span>
       </div>

@@ -28,6 +28,7 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefOb
 import { useLocation, useSearchParams } from 'react-router';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { Segmented } from '@/components/ui/Segmented';
 import { ConfirmDialog } from '@/components/ui/Dialog';
 import { menuContentClass, menuDangerItemClass, menuItemClass } from '@/components/ui/Menu';
 import { useToast } from '@/components/ui/Toast';
@@ -35,13 +36,15 @@ import { Tip } from '@/components/ui/Tooltip';
 import { useA11y } from '@/features/a11y/A11yProvider';
 import { useMe } from '@/features/auth/AuthProvider';
 import { useOnlinePeers, useSecureInbox } from '@/features/connect/hooks';
-import { Meta } from '@/features/connect/ui';
+import { Meta, PaneHeader } from '@/features/connect/ui';
 import { FriendsEmpty } from '@/features/onboarding/EmptyStates';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import { FriendJoinedCard, joinedText } from './FriendJoined';
 import { HandleCard } from './HandleCard';
 import { nameOf, useFriendActions, useFriendRequests, useFriends, useMessageFriend } from './hooks';
+
+type RequestTab = 'received' | 'sent';
 
 /** The friendship the joined card is for (or waiting to show). */
 interface Joined {
@@ -139,7 +142,7 @@ function AddFriendForm({
   return (
     <form
       aria-labelledby={headingId}
-      className="shrink-0 border-b border-line px-3 pb-3 pt-3"
+      className="shrink-0 border-b border-line px-4 pt-1 pb-4"
       onSubmit={(e) => {
         e.preventDefault();
         if (!username || send.isPending) return;
@@ -147,16 +150,14 @@ function AddFriendForm({
         send.mutate(username);
       }}
     >
-      <h2 id={headingId} className="mb-1.5 px-1 text-[13px] font-semibold text-muted">
+      <h2 id={headingId} className="mb-2 text-[13px] font-semibold text-muted">
         Add a friend
       </h2>
       <div className="flex gap-2">
         {/* The wrapper carries the focus ring so the input itself needs none. */}
         <label
-          className={cn(
-            'flex h-10 min-w-0 flex-1 items-center gap-0.5 rounded-md border bg-surface px-3 focus-within:border-accent focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent',
-            invalid ? 'border-danger' : 'border-line-strong',
-          )}
+          className="vy-search flex h-10 min-w-0 flex-1 items-center gap-0.5 rounded-md px-3"
+          data-invalid={invalid || undefined}
         >
           <span className="font-mono text-sm text-subtle" aria-hidden="true">
             @
@@ -192,7 +193,7 @@ function AddFriendForm({
         id={noticeId}
         role="status"
         className={cn(
-          'flex items-start gap-1.5 px-1 text-[13px] leading-snug',
+          'flex items-start gap-1.5 text-[13px] leading-snug',
           notice && 'mt-2',
           notice?.tone === 'success' && 'text-success',
           notice?.tone === 'info' && 'text-muted',
@@ -207,9 +208,7 @@ function AddFriendForm({
         )}
       </div>
       {!notice && (
-        <p className="mt-2 px-1 text-xs text-muted">
-          Usernames are exact. Ask your friend for theirs.
-        </p>
+        <p className="mt-2 text-xs text-muted">Usernames are exact. Ask your friend for theirs.</p>
       )}
     </form>
   );
@@ -229,7 +228,7 @@ export function PersonRow({
   avatarSize?: number;
 }) {
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5">
+    <div className="flex items-center gap-3 px-3 py-2.5">
       <span className="relative shrink-0">
         <Avatar
           path={person.avatarPath}
@@ -242,7 +241,7 @@ export function PersonRow({
           <span
             role="img"
             aria-label="Online"
-            className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-surface bg-success"
+            className="absolute right-0 bottom-0 h-3 w-3 rounded-full border-2 border-[var(--avatar-ring,var(--vy-surface))] bg-success"
           />
         )}
       </span>
@@ -345,7 +344,7 @@ function SectionHeading({
   children,
   headingRef,
 }: {
-  id: string;
+  id?: string;
   children: ReactNode;
   headingRef?: RefObject<HTMLHeadingElement | null>;
 }) {
@@ -354,7 +353,7 @@ function SectionHeading({
       id={id}
       ref={headingRef}
       tabIndex={headingRef ? -1 : undefined}
-      className="px-4 pb-1 pt-4 text-[13px] font-semibold text-muted outline-none"
+      className="flex items-center gap-1.5 px-5 pt-5 pb-2 text-[13px] font-semibold text-muted outline-none"
     >
       {children}
     </h2>
@@ -389,6 +388,138 @@ function Retry({ children, onRetry }: { children: ReactNode; onRetry: () => void
         Try again
       </button>
     </p>
+  );
+}
+
+/**
+ * Pending requests in two tabs, **Received (n)** and **Sent (n)** (a Segmented control):
+ * Accept and Decline under Received, Cancel under Sent. Opens on Received when something
+ * waits on me; when the tab in view runs out, the other one takes its place.
+ */
+export function RequestsSection({
+  headingId,
+  incoming,
+  outgoing,
+  onAccept,
+  onDecline,
+  onCancel,
+}: {
+  headingId?: string;
+  incoming: FriendRequest[];
+  outgoing: FriendRequest[];
+  /** Each gets the pressed button, so focus can move to a neighbour before the row goes. */
+  onAccept: (r: FriendRequest, from: HTMLElement) => void;
+  onDecline: (r: FriendRequest, from: HTMLElement) => void;
+  onCancel: (r: FriendRequest, from: HTMLElement) => void;
+}) {
+  const [picked, setPicked] = useState<RequestTab | null>(null);
+  const preferred: RequestTab =
+    picked ?? (incoming.length || !outgoing.length ? 'received' : 'sent');
+  const tab: RequestTab =
+    preferred === 'received' && !incoming.length && outgoing.length
+      ? 'sent'
+      : preferred === 'sent' && !outgoing.length && incoming.length
+        ? 'received'
+        : preferred;
+  const now = new Date();
+  const when = (r: FriendRequest) =>
+    r.createdAt ? (
+      <>
+        <span aria-hidden="true">·</span>
+        <Meta className="shrink-0">
+          <span aria-hidden="true">{formatRelativeTime(r.createdAt, now)}</span>
+          <span className="sr-only">{formatRelativeTimeLong(r.createdAt, now)}</span>
+        </Meta>
+      </>
+    ) : null;
+
+  return (
+    <section>
+      <SectionHeading id={headingId}>Requests</SectionHeading>
+      <div className="px-4 pb-2">
+        <Segmented
+          label="Requests"
+          value={tab}
+          options={[
+            { value: 'received', label: `Received (${incoming.length})` },
+            { value: 'sent', label: `Sent (${outgoing.length})` },
+          ]}
+          onChange={setPicked}
+        />
+      </div>
+      {tab === 'received' ? (
+        <ul aria-label="Received requests" className="px-2">
+          {incoming.map((r) => {
+            const name = r.displayName || r.username;
+            return (
+              <li key={`in-${r.userId}`} className="vy-row">
+                <PersonRow
+                  person={r}
+                  detail={when(r)}
+                  actions={
+                    <>
+                      <Button
+                        size="sm"
+                        className="touch-target"
+                        aria-label={`Accept request from ${name}`}
+                        onClick={(e) => {
+                          onAccept(r, e.currentTarget);
+                        }}
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="touch-target"
+                        aria-label={`Decline request from ${name}`}
+                        onClick={(e) => {
+                          onDecline(r, e.currentTarget);
+                        }}
+                      >
+                        Decline
+                      </Button>
+                    </>
+                  }
+                />
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <ul aria-label="Sent requests" className="px-2">
+          {outgoing.map((r) => {
+            const name = r.displayName || r.username;
+            return (
+              <li key={`out-${r.userId}`} className="vy-row">
+                <PersonRow
+                  person={r}
+                  detail={
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span className="shrink-0">Pending</span>
+                    </>
+                  }
+                  actions={
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="touch-target"
+                      aria-label={`Cancel request to ${name}`}
+                      onClick={(e) => {
+                        onCancel(r, e.currentTarget);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  }
+                />
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -473,23 +604,10 @@ export function FriendsPane({ inputRef }: { inputRef?: RefObject<HTMLInputElemen
   }, [joinedRun, reduceMotion]);
   const incoming = requests.data?.incoming ?? [];
   const outgoing = requests.data?.outgoing ?? [];
-  const now = new Date();
-  const when = (r: FriendRequest) =>
-    r.createdAt ? (
-      <>
-        <span aria-hidden="true">·</span>
-        <Meta className="shrink-0">
-          <span aria-hidden="true">{formatRelativeTime(r.createdAt, now)}</span>
-          <span className="sr-only">{formatRelativeTimeLong(r.createdAt, now)}</span>
-        </Meta>
-      </>
-    ) : null;
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-14 shrink-0 items-center border-b border-line px-4">
-        <h1 className="type-wide text-lg font-semibold">Friends</h1>
-      </header>
+      <PaneHeader title="Friends" />
       <AddFriendForm
         inputRef={inputRef}
         onAccepted={(username) => join({ username, displayName: null, via: 'send' })}
@@ -503,7 +621,7 @@ export function FriendsPane({ inputRef }: { inputRef?: RefObject<HTMLInputElemen
 
       <div className="scroll-thin min-h-0 flex-1 overflow-y-auto pb-4">
         {joinedFriend && profile && (
-          <div ref={joinedRef} className="px-3 pt-3">
+          <div ref={joinedRef} className="px-3 pt-4">
             <FriendJoinedCard
               me={{
                 userId: profile.id,
@@ -528,82 +646,23 @@ export function FriendsPane({ inputRef }: { inputRef?: RefObject<HTMLInputElemen
           <Retry onRetry={() => void requests.refetch()}>Couldn’t load friend requests.</Retry>
         )}
         {incoming.length + outgoing.length > 0 && (
-          <section>
-            <SectionHeading id={requestsId}>
-              Requests <span aria-hidden="true">·</span>{' '}
-              <Meta className="ml-0.5">{incoming.length + outgoing.length}</Meta>
-            </SectionHeading>
-            <ul aria-label="Requests">
-              {incoming.map((r) => {
-                const name = r.displayName || r.username;
-                return (
-                  <li key={`in-${r.userId}`}>
-                    <PersonRow
-                      person={r}
-                      detail={when(r)}
-                      actions={
-                        <>
-                          <Button
-                            size="sm"
-                            className="touch-target"
-                            aria-label={`Accept request from ${name}`}
-                            onClick={(e) => {
-                              focusNeighbour(e.currentTarget, friendsHeading.current);
-                              respond.mutate({ request: r, accept: true });
-                            }}
-                          >
-                            Accept
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="touch-target"
-                            aria-label={`Decline request from ${name}`}
-                            onClick={(e) => {
-                              focusNeighbour(e.currentTarget, friendsHeading.current);
-                              respond.mutate({ request: r, accept: false });
-                            }}
-                          >
-                            Decline
-                          </Button>
-                        </>
-                      }
-                    />
-                  </li>
-                );
-              })}
-              {outgoing.map((r) => {
-                const name = r.displayName || r.username;
-                return (
-                  <li key={`out-${r.userId}`}>
-                    <PersonRow
-                      person={r}
-                      detail={
-                        <>
-                          <span aria-hidden="true">·</span>
-                          <span className="shrink-0">Pending</span>
-                        </>
-                      }
-                      actions={
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="touch-target"
-                          aria-label={`Cancel request to ${name}`}
-                          onClick={(e) => {
-                            focusNeighbour(e.currentTarget, friendsHeading.current);
-                            cancel.mutate(r);
-                          }}
-                        >
-                          Cancel
-                        </Button>
-                      }
-                    />
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
+          <RequestsSection
+            headingId={requestsId}
+            incoming={incoming}
+            outgoing={outgoing}
+            onAccept={(r, from) => {
+              focusNeighbour(from, friendsHeading.current);
+              respond.mutate({ request: r, accept: true });
+            }}
+            onDecline={(r, from) => {
+              focusNeighbour(from, friendsHeading.current);
+              respond.mutate({ request: r, accept: false });
+            }}
+            onCancel={(r, from) => {
+              focusNeighbour(from, friendsHeading.current);
+              cancel.mutate(r);
+            }}
+          />
         )}
 
         <section aria-busy={friends.isPending}>
@@ -612,7 +671,7 @@ export function FriendsPane({ inputRef }: { inputRef?: RefObject<HTMLInputElemen
             {friends.isSuccess && (
               <>
                 {' '}
-                <span aria-hidden="true">·</span> <Meta className="ml-0.5">{list.length}</Meta>
+                <span aria-hidden="true">·</span> <Meta>{list.length}</Meta>
               </>
             )}
           </SectionHeading>
@@ -622,7 +681,7 @@ export function FriendsPane({ inputRef }: { inputRef?: RefObject<HTMLInputElemen
           )}
           {friends.isSuccess && list.length === 0 && <FriendsEmpty handle={<HandleCard />} />}
           {list.length > 0 && (
-            <ul aria-label="Friends" ref={listRef}>
+            <ul aria-label="Friends" ref={listRef} className="px-2">
               {list.map((f) => {
                 const name = f.displayName || f.username;
                 return (
@@ -632,10 +691,7 @@ export function FriendsPane({ inputRef }: { inputRef?: RefObject<HTMLInputElemen
                     onMessage={() => message.open(f)}
                     onRemove={() => setRemoving(f)}
                   >
-                    <li
-                      data-friend-row={f.userId}
-                      className="transition-colors duration-150 hover:bg-surface-muted"
-                    >
+                    <li data-friend-row={f.userId} className="vy-row">
                       <PersonRow
                         person={f}
                         avatarSize={48}

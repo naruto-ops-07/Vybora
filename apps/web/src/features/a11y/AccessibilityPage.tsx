@@ -61,7 +61,7 @@ export default function AccessibilityPage() {
             options={SIZES}
             onChange={(textSize) => setPrefs({ textSize })}
           />
-          <p className="text-msg rounded-lg rounded-bl-sm border border-line bg-bubble-in px-3 py-2">
+          <p className="text-msg vy-bubble-in rounded-lg rounded-bl-sm px-3.5 py-2">
             This is how messages will look.
           </p>
         </div>

@@ -22,6 +22,7 @@ import { IllustrationsSection } from './sections/Illustrations';
 import { PrimitivesSection } from './sections/Primitives';
 import { ThreadSection } from './sections/Thread';
 import { TonesSection } from './sections/Tones';
+import { WorkspaceSection } from './sections/Workspace';
 
 interface GallerySection {
   id: string;
@@ -72,6 +73,13 @@ const SECTIONS: GallerySection[] = [
     Component: PrimitivesSection,
   },
   {
+    id: 'workspace',
+    title: 'Workspace',
+    description:
+      'Rail, chat list, chat header, canvas light, bubbles and composer, assembled from the real pieces. The Default chat theme is the look’s gradient bubble; a named theme keeps its colour.',
+    Component: WorkspaceSection,
+  },
+  {
     id: 'tones',
     title: 'Personal tones',
     description:
@@ -103,7 +111,7 @@ const SECTIONS: GallerySection[] = [
     id: 'empty-states',
     title: 'Empty states',
     description:
-      'Illustration, heading, one sentence, then actions. The welcome and friends states carry your HandleCard.',
+      'Illustration, heading, one sentence, then actions. The chat list before the first chat follows your friends: none yet, requests out, or friends to say hi to.',
     Component: EmptyStatesSection,
   },
   {
@@ -138,7 +146,7 @@ const SECTIONS: GallerySection[] = [
     id: 'friends',
     title: 'Friends',
     description:
-      'The friendship-joined card above request and friend rows. The two avatars slide together once; under reduced motion they start joined.',
+      'The friendship-joined card, requests in Received and Sent tabs, and friend rows. The two avatars slide together once; under reduced motion they start joined.',
     Component: FriendsSection,
   },
 ];

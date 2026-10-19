@@ -1,9 +1,6 @@
 import {
-  ArrowLeftIcon,
   CircleNotchIcon,
-  InfoIcon,
   LockSimpleIcon,
-  TimerIcon,
   UploadSimpleIcon,
   WarningIcon,
   WifiSlashIcon,
@@ -28,15 +25,13 @@ import {
 import { MAX_ATTACHMENT_BYTES, type AttachmentRef, type LocalMessage } from '@vybora/e2ee';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Link, Navigate, useParams } from 'react-router';
+import { Navigate, useParams } from 'react-router';
 import { Avatar, GroupAvatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
-import { Tip } from '@/components/ui/Tooltip';
 import { ConfirmDialog } from '@/components/ui/Dialog';
 import { useToast } from '@/components/ui/Toast';
 import { useA11y } from '@/features/a11y/A11yProvider';
 import { useMe } from '@/features/auth/AuthProvider';
-import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import { useIncomingAnnouncement } from './announce';
 import { Bubble } from './Bubble';
@@ -58,7 +53,9 @@ import { useCopyText } from './copy';
 import { useToday } from './useToday';
 import { BulkDeleteDialog, SelectBar } from './SelectBar';
 import { threadKeyDown } from './threadKeys';
-import { chatBackground, effectiveTheme, TypingDots, useChatTheme } from './ui';
+import { ChatGlow } from './Canvas';
+import { ChatHeaderView } from './ChatHeader';
+import { chatBackground, effectiveTheme, useChatTheme } from './ui';
 import { VerifyDialog } from './VerifyDialog';
 
 export const ttlLabel = (s: number) =>
@@ -437,7 +434,7 @@ export default function ChatPane() {
   return (
     <div className="flex h-full min-w-0 flex-1">
       <div
-        className="relative flex h-full min-w-0 flex-1 flex-col bg-bg"
+        className="relative isolate flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-bg"
         style={chatBackground(theme, def)}
         onDragOver={(e) => {
           if (composerDisabled || !e.dataTransfer.types.includes('Files')) return;
@@ -451,6 +448,7 @@ export default function ChatPane() {
           if (!composerDisabled) void sendFiles([...e.dataTransfer.files]);
         }}
       >
+        <ChatGlow />
         {selection ? (
           <SelectBar
             count={selectedMessages.length}
@@ -463,80 +461,34 @@ export default function ChatPane() {
             onCancel={() => setSelection(null)}
           />
         ) : (
-          <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-surface px-2 md:px-4">
-            <Link
-              to="/messages"
-              className="flex h-10 w-10 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-ink md:hidden"
-              aria-label="Back to chats"
-            >
-              <ArrowLeftIcon size={20} />
-            </Link>
-            <button
-              type="button"
-              onClick={() => setDetails((d) => !d)}
-              className="flex min-w-0 flex-1 items-center gap-3 rounded-md py-1 text-left"
-              aria-label={`${title}, chat details`}
-            >
-              {conv?.kind === 'group' ? (
-                <GroupAvatar members={conv.members.filter((x) => x.id !== userId)} size={34} />
+          <ChatHeaderView
+            title={title}
+            avatar={
+              conv?.kind === 'group' ? (
+                <GroupAvatar members={conv.members.filter((x) => x.id !== userId)} size={40} />
               ) : (
                 <Avatar
                   path={peer?.avatar_path}
                   name={peer?.username ?? '?'}
                   userId={peer?.id ?? id}
                   displayName={peer?.display_name}
-                  size={34}
+                  size={40}
                 />
-              )}
-              <span className="min-w-0">
-                <span className="block truncate text-[15px] font-semibold">{title || ' '}</span>
-                <span
-                  className="flex items-center gap-1.5 font-mono text-[11px] leading-4"
-                  aria-live="polite"
-                >
-                  {typingNames.length ? (
-                    <TypingDots color={def.accent} />
-                  ) : shownOnline ? (
-                    <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
-                  ) : (
-                    <LockSimpleIcon size={10} className="text-subtle" aria-hidden="true" />
-                  )}
-                  <span
-                    className={shownOnline && !typingNames.length ? 'text-success' : 'text-subtle'}
-                    style={typingNames.length ? { color: def.accent } : undefined}
-                  >
-                    {subtitle}
-                  </span>
-                </span>
-              </span>
-            </button>
-            {conv?.disappearingSeconds ? (
-              <span
-                className="flex items-center gap-1 rounded-sm border border-line px-1.5 py-0.5 font-mono text-[11px] text-muted"
-                title="Disappearing messages are on"
-              >
-                <TimerIcon size={12} aria-hidden="true" /> {ttlLabel(conv.disappearingSeconds)}
-                <span className="sr-only">disappearing messages</span>
-              </span>
-            ) : null}
-            <Tip label="Details" shortcut="Alt I">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setDetails((d) => !d)}
-                aria-label="Chat details"
-                aria-pressed={details}
-                className={cn('text-muted', details && 'bg-surface-strong text-ink')}
-              >
-                <InfoIcon size={20} />
-              </Button>
-            </Tip>
-          </header>
+              )
+            }
+            subtitle={subtitle}
+            typing={typingNames.length > 0}
+            online={shownOnline}
+            accent={def.accent}
+            disappearing={conv?.disappearingSeconds ? ttlLabel(conv.disappearingSeconds) : null}
+            details={details}
+            onToggleDetails={() => setDetails((d) => !d)}
+          />
         )}
 
         {!live && (
           <div
-            className="flex shrink-0 items-center justify-center gap-2 border-b border-line bg-warning-soft px-3 py-1.5 text-xs text-warning"
+            className="vy-canvas-layer flex shrink-0 items-center justify-center gap-2 border-b border-line bg-warning-soft px-3 py-1.5 text-xs text-warning"
             role="status"
           >
             <WifiSlashIcon size={13} aria-hidden="true" /> Reconnecting — messages will sync
@@ -547,7 +499,7 @@ export default function ChatPane() {
           <button
             type="button"
             onClick={() => setVerifying(peer.id)}
-            className="flex shrink-0 items-center gap-3 border-b border-line bg-warning-soft px-4 py-2.5 text-left text-sm"
+            className="vy-canvas-layer flex shrink-0 items-center gap-3 border-b border-line bg-warning-soft px-4 py-2.5 text-left text-sm"
           >
             <WarningIcon size={16} className="shrink-0 text-warning" aria-hidden="true" />
             <span className="flex-1">
@@ -557,7 +509,7 @@ export default function ChatPane() {
           </button>
         )}
 
-        <div className="relative flex min-h-0 flex-1 flex-col">
+        <div className="vy-canvas-layer flex min-h-0 flex-1 flex-col">
           <div
             ref={scroller}
             className="scroll-thin min-h-0 flex-1 overflow-y-auto py-4"
@@ -586,7 +538,7 @@ export default function ChatPane() {
                 </Button>
               </div>
             ) : (
-              <p className="mx-auto mb-6 mt-2 flex max-w-sm items-start justify-center gap-2 px-6 text-center text-xs leading-relaxed text-muted">
+              <p className="vy-float mx-auto mt-2 mb-6 flex w-fit max-w-[min(24rem,calc(100%-2rem))] items-start justify-center gap-2 rounded-md px-4 py-2.5 text-center text-xs leading-relaxed text-muted">
                 <LockSimpleIcon
                   size={13}
                   className="mt-0.5 shrink-0 text-accent"

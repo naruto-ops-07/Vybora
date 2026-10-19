@@ -67,7 +67,7 @@ export default function EditProfilePage() {
         Your name, username, photo and about text are visible to signed-in people who search for
         you, so they can start a chat. Profile photos are not end-to-end encrypted.
       </p>
-      <div className="flex flex-wrap items-center gap-4 rounded-lg border border-line bg-surface p-4">
+      <div className="flex flex-wrap items-center gap-4 vy-card rounded-lg p-4">
         <Avatar
           path={profile.avatar_path}
           name={profile.username}

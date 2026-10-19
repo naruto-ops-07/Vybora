@@ -8,6 +8,7 @@ import {
 } from '@phosphor-icons/react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Navigate, NavLink } from 'react-router';
+import { PaneHeader } from '@/features/connect/ui';
 import { cn } from '@/lib/cn';
 
 const SECTIONS: { to: string; label: string; description: string; icon: ReactNode }[] = [
@@ -47,9 +48,7 @@ const SECTIONS: { to: string; label: string; description: string; icon: ReactNod
 export function SettingsNav() {
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-14 shrink-0 items-center border-b border-line px-4">
-        <h1 className="type-wide text-lg font-semibold">Settings</h1>
-      </header>
+      <PaneHeader title="Settings" />
       <nav aria-label="Settings sections" className="scroll-thin flex-1 overflow-y-auto py-2">
         {SECTIONS.map((s) => (
           <NavLink
@@ -57,15 +56,18 @@ export function SettingsNav() {
             to={s.to}
             className={({ isActive }) =>
               cn(
-                'relative flex items-center gap-3 px-4 py-3 transition-colors duration-150',
-                isActive ? 'bg-surface-strong' : 'hover:bg-surface-muted',
+                'vy-row relative mx-2 flex items-center gap-3 px-3 py-3',
+                isActive && 'font-semibold',
               )
             }
           >
             {({ isActive }) => (
               <>
                 {isActive && (
-                  <span className="absolute inset-y-0 left-0 w-0.5 bg-accent" aria-hidden="true" />
+                  <span
+                    className="vy-row-mark absolute top-1/2 -left-0.5 h-6 w-[3px] -translate-y-1/2"
+                    aria-hidden="true"
+                  />
                 )}
                 <span className={isActive ? 'text-accent' : 'text-muted'} aria-hidden="true">
                   {s.icon}
@@ -111,15 +113,15 @@ export function SettingsPage({
 }) {
   return (
     <div className="scroll-thin h-full w-full overflow-y-auto">
-      <header className="sticky top-0 z-10 flex h-14 items-center gap-2 border-b border-line bg-surface px-2 md:px-6">
+      <header className="vy-panel sticky top-0 z-10 flex h-16 items-center gap-2 border-b px-2 md:px-6">
         <NavLink
           to={back}
-          className="flex h-10 w-10 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-ink md:hidden"
+          className="flex h-11 w-11 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-ink md:hidden"
           aria-label="Back to settings"
         >
           <CaretRightIcon size={18} className="rotate-180" aria-hidden="true" />
         </NavLink>
-        <h1 className="text-[17px] font-semibold">{title}</h1>
+        <h1 className="type-wide text-[19px] font-semibold">{title}</h1>
       </header>
       <div className="mx-auto w-full max-w-2xl space-y-8 px-4 py-6 md:px-6 md:py-8">{children}</div>
     </div>

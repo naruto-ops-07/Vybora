@@ -118,7 +118,7 @@ export function ChatRowMenu({
 }
 
 const ROW_ACTION =
-  'touch-target flex items-center justify-center rounded-sm p-1.5 text-muted hover:bg-surface-muted hover:text-ink';
+  'touch-target flex items-center justify-center rounded-sm p-1.5 text-muted transition-colors duration-150 hover:bg-[color-mix(in_srgb,var(--vy-text)_8%,transparent)] hover:text-ink';
 
 /**
  * Pin, archive and more for a chat row. On hover/focus it floats over the row's
@@ -147,7 +147,7 @@ export function ChatRowActions({
         'gap-0.5',
         alwaysShow
           ? 'flex shrink-0 items-center pr-2'
-          : 'absolute right-2 top-1.5 hidden rounded-md border border-line bg-surface p-0.5 group-focus-within:flex group-hover:flex',
+          : 'vy-popover absolute top-1.5 right-2 hidden rounded-md p-0.5 group-focus-within:flex group-hover:flex',
       )}
     >
       <Tip label={pinned ? 'Unpin' : 'Pin'} side="top">

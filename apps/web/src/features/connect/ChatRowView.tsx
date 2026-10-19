@@ -52,15 +52,14 @@ export function ChatRowView({
   const unread = unreadCount > 0;
   return (
     <li
+      // Inset, rounded, the accent wash when current; the group avatar's ring and the
+      // online dot's edge follow the row's background (styles/workspace.css `.vy-row`).
       className={cn(
-        'group relative transition-colors duration-150',
-        // The group avatar's ring matches whatever background the row has.
-        active
-          ? 'bg-surface-strong [--avatar-ring:var(--vy-surface-strong)]'
-          : 'hover:bg-surface-muted hover:[--avatar-ring:var(--vy-surface-muted)]',
+        'vy-row group relative',
         // Always-visible actions sit beside the row so they never cover its time.
         alwaysShowActions && 'flex items-center',
       )}
+      data-active={active || undefined}
     >
       {wrapLink(
         <Link
@@ -68,25 +67,33 @@ export function ChatRowView({
           data-chat-link
           aria-current={active ? 'page' : undefined}
           className={cn(
-            'relative flex items-center gap-3 px-4 py-2.5',
+            'relative flex items-center gap-3 rounded-[inherit] px-3 py-2.5',
             alwaysShowActions && 'min-w-0 flex-1 pr-2',
           )}
         >
           {active && (
-            <span className="absolute inset-y-0 left-0 w-0.5 bg-accent" aria-hidden="true" />
+            <span
+              className="vy-row-mark absolute top-1/2 -left-0.5 h-6 w-[3px] -translate-y-1/2"
+              aria-hidden="true"
+            />
           )}
           <span className="relative">
             {avatar}
             {online && (
               <span
-                className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-surface bg-success"
+                className="absolute right-0 bottom-0 h-3 w-3 rounded-full border-2 border-[var(--avatar-ring)] bg-success"
                 aria-label="Online"
               />
             )}
           </span>
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5">
-              <span className={cn('truncate text-msg', unread ? 'font-semibold' : 'font-medium')}>
+              <span
+                className={cn(
+                  'text-msg truncate',
+                  unread ? 'font-semibold text-ink' : 'font-medium',
+                )}
+              >
                 {title}
               </span>
               {pinned && (
@@ -95,7 +102,9 @@ export function ChatRowView({
               {muted && (
                 <BellSlashIcon size={12} className="shrink-0 text-subtle" aria-label="Muted" />
               )}
-              <Meta className={cn('ml-auto shrink-0', unread && 'text-accent')}>{time}</Meta>
+              <Meta className={cn('ml-auto shrink-0 pl-1', unread && 'font-medium text-accent')}>
+                {time}
+              </Meta>
             </span>
             <span className="mt-0.5 flex items-center gap-2">
               <span
@@ -111,10 +120,8 @@ export function ChatRowView({
               </span>
               {unread && (
                 <span
-                  className={cn(
-                    'ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-sm px-1 font-mono text-[11px] font-medium',
-                    muted ? 'bg-surface-strong text-ink' : 'bg-accent text-on-accent',
-                  )}
+                  className="vy-count ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 font-mono text-[11px] leading-none font-semibold tabular-nums"
+                  data-muted={muted || undefined}
                 >
                   {formatUnread(unreadCount)}
                   <span className="sr-only"> unread</span>

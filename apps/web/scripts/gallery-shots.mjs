@@ -4,7 +4,10 @@
  * review. Not part of the test suite, and it starts nothing: run the dev server
  * yourself, then
  *
- *   node apps/web/scripts/gallery-shots.mjs [baseUrl]    # default http://localhost:5173
+ *   node apps/web/scripts/gallery-shots.mjs [baseUrl] [--only=prefix]
+ *
+ * (baseUrl defaults to http://localhost:5173; --only keeps the shots whose file name
+ * starts with the prefix, e.g. --only=workspace.)
  *
  * Writes to apps/web/.impeccable/review/ (git-ignored):
  *   desktop.png        1440×900, dark
@@ -19,6 +22,12 @@
  *                      dark, light and high contrast, Aurora and Bloom in both modes. Each
  *                      also logs the primary button's and the dialog's computed depth, and
  *                      fails if high contrast leaves a gradient, shadow or blur.
+ *   workspace-{look}-{mode}-{1440,390}.png  the Workspace section (rail, list, chat), every
+ *                      look × mode at both widths, plus workspace-hc-{mode}-1440.png. High
+ *                      contrast fails if the canvas glow, a gradient bubble or a blur remains.
+ *   empty-{look}-{mode}.png, friends-{look}-{mode}.png  the chat-list empty states and the
+ *                      Friends section (Received / Sent tabs) per look × mode, 1440 wide.
+ *   ambient.txt-style log lines: the canvas glow's animation per look with motion allowed.
  *
  * Without `?look=` the gallery shows Velvet, the default look.
  *
@@ -30,7 +39,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 
-const base = new URL(process.argv[2] ?? 'http://localhost:5173');
+const args = process.argv.slice(2);
+const only = args.find((a) => a.startsWith('--only='))?.slice('--only='.length);
+const base = new URL(args.find((a) => !a.startsWith('--')) ?? 'http://localhost:5173');
 const out = join(dirname(fileURLToPath(import.meta.url)), '..', '.impeccable', 'review');
 mkdirSync(out, { recursive: true });
 
@@ -82,7 +93,65 @@ const SHOTS = [
     section: 'primitives',
     hc: !!hc,
   })),
-];
+  ...['velvet', 'aurora', 'bloom'].flatMap((look) =>
+    ['dark', 'light'].flatMap((theme) => [
+      ...[1440, 390].map((width) => ({
+        file: `workspace-${look}-${theme}-${width}.png`,
+        viewport: { width, height: width === 390 ? 844 : 900 },
+        mobile: width === 390,
+        query: `look=${look}&theme=${theme}`,
+        section: 'workspace',
+      })),
+      {
+        file: `empty-${look}-${theme}.png`,
+        viewport: { width: 1440, height: 900 },
+        query: `look=${look}&theme=${theme}`,
+        section: 'empty-states',
+      },
+      {
+        file: `friends-${look}-${theme}.png`,
+        viewport: { width: 1440, height: 900 },
+        query: `look=${look}&theme=${theme}`,
+        section: 'friends',
+      },
+    ]),
+  ),
+  ...['dark', 'light'].map((theme) => ({
+    file: `workspace-hc-${theme}-1440.png`,
+    viewport: { width: 1440, height: 900 },
+    query: `look=aurora&theme=${theme}&contrast=high`,
+    section: 'workspace',
+    hc: true,
+  })),
+  // Motion allowed: the canvas glow's ambient animation per look (logged, no image).
+  ...['velvet', 'aurora', 'bloom'].map((look) => ({
+    file: `ambient-${look}`,
+    viewport: { width: 1440, height: 900 },
+    query: `look=${look}&theme=dark`,
+    section: 'workspace',
+    motion: true,
+  })),
+].filter((shot) => !only || shot.file.startsWith(only));
+
+/** The Workspace section under high contrast: anything still lit, graded or frosted. */
+async function workspaceLeftovers(page) {
+  return page.evaluate(() => {
+    const root = document.getElementById('workspace');
+    const out = [];
+    if (root.querySelector('[data-chat-glow]')) out.push('canvas glow is rendered');
+    for (const el of root.querySelectorAll(
+      '[data-bubble], .vy-panel, .vy-float, .vy-count, .vy-chip',
+    )) {
+      const s = getComputedStyle(el);
+      if (s.backgroundImage !== 'none') out.push(`gradient on ${el.className.slice(0, 40)}`);
+      if (!['none', ''].includes(s.backdropFilter))
+        out.push(`blur on ${el.className.slice(0, 40)}`);
+      if (!/^(none|rgba\(0, 0, 0, 0\) 0px 0px 0px 0px)$/.test(s.boxShadow))
+        out.push(`shadow on ${el.className.slice(0, 40)}: ${s.boxShadow}`);
+    }
+    return out;
+  });
+}
 
 /** Computed depth of the Primitives section: what each look actually draws. */
 async function primitiveDepth(page) {
@@ -126,7 +195,7 @@ try {
       deviceScaleFactor: shot.mobile ? 2 : 1,
       isMobile: !!shot.mobile,
       hasTouch: !!shot.mobile,
-      reducedMotion: 'reduce',
+      reducedMotion: shot.motion ? 'no-preference' : 'reduce',
     });
     await context.route('**/*', (route) => {
       const host = new URL(route.request().url()).host;
@@ -151,10 +220,39 @@ try {
       });
       await page.waitForTimeout(1200);
     }
+    // Section shots: the gallery's sticky header would sit over the element.
+    if (shot.section)
+      await page.addStyleTag({ content: 'header.sticky { position: static !important; }' });
     // Let late font swaps settle: shrink-wrapped bubbles re-measure a frame or two later.
     await page.waitForTimeout(500);
     const path = join(out, shot.file);
-    if (shot.section) {
+    if (shot.motion) {
+      const glow = await page.evaluate(() => {
+        const el = document.querySelector('#workspace [data-chat-glow]');
+        if (!el) return null;
+        const s = getComputedStyle(el);
+        return {
+          ambient: el.dataset.ambient,
+          animation: s.animationName,
+          duration: s.animationDuration,
+        };
+      });
+      console.log(shot.file, JSON.stringify(glow));
+      await context.close();
+      continue;
+    }
+    if (shot.section === 'workspace') {
+      if (shot.hc) {
+        const left = await workspaceLeftovers(page);
+        if (left.length) {
+          console.error('workspace not flat under high contrast:', JSON.stringify(left));
+          process.exitCode = 1;
+        }
+      }
+      await page.locator('#workspace').screenshot({ path });
+    } else if (shot.section && shot.section !== 'primitives') {
+      await page.locator(`#${shot.section}`).screenshot({ path });
+    } else if (shot.section) {
       const depth = await primitiveDepth(page);
       console.log(shot.file, JSON.stringify({ primary: depth.primary, dialog: depth.dialog }));
       if (shot.hc && depth.notFlat.length) {
