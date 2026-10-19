@@ -1,50 +1,50 @@
 # VYBORA design system
 
-_Established 2026-10-14. Source of truth for tokens: [`packages/config/src/index.ts`](../packages/config/src/index.ts) (mirrored as CSS variables in [`apps/web/src/styles/index.css`](../apps/web/src/styles/index.css)). Chat themes: [`packages/config/src/chat.ts`](../packages/config/src/chat.ts)._
+_Rewritten 2026-10-19 for the three looks. On 2026-10-18 the owner dropped the flat rules of 2026-10-14 (no gradients, no shadows, graphite + teal only, Archivo, radii 4/8/12)._
 
-## Direction
+## Token model
 
-A private messaging product should feel **quiet, precise and trustworthy**: the interface recedes so conversations are the focus. Style family: _Minimalism / Swiss_ (selected with the UI/UX Pro Max design-system search for "private secure messaging"; its default palette and typeface were overridden by the product brief).
+- **Source of truth:** [`packages/config/src/looks.ts`](../packages/config/src/looks.ts): `looks` (three `LookDef`s, each with `fonts`, `radii`, `elevation`, `glass`, `ambient` and `modes.light|dark` tokens), `highContrastThemes`, `personTonesByLook`, `DEFAULT_LOOK = 'velvet'`. Chat themes and `outgoingBubbleFill` are in [`packages/config/src/chat.ts`](../packages/config/src/chat.ts). Contrast for every look × mode is tested in `packages/core/src/looks.test.ts`.
+- **Web:** `pnpm theme:css` (`scripts/gen-look-css.mjs`) generates the CSS variables (`--vy-*`: surfaces, text, `--vy-bubble-out-from|to|text`, `--vy-primary-from|to`, `--vy-shadow-1..3`, `--vy-radius-sm|md|lg`, `--vy-font-display|text`, tones), keyed by `data-look` and `data-theme` on `<html>`. Don't hand-edit the generated block: change `looks.ts` and re-run. A pre-paint script in `index.html` (mirrored and parity-tested by `initialAppearance` in `apps/web/src/lib/theme.ts`) sets look, theme, high contrast and text size before first paint.
+- **Mobile:** `useTheme()` returns the active look's tokens for the current mode (or the high-contrast set), plus radii, fonts and `shadowStyle(level, t)`.
+- **Storage:** the choice is per device under `vybora.appearance` (`APPEARANCE_KEY`, parsed by `parseAppearance` in core). Appearance never leaves the device.
 
-| Principle                  | In practice                                                                                                                                            |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Flat, layered by tone      | Surfaces are separated by 1px borders and three surface tones — never by shadows or gradients                                                          |
-| One accent, used sparingly | Teal/turquoise marks the primary action, the current selection, focus and unread state. Everything else is neutral, except people (see Personal tones) |
-| Data looks like data       | Timestamps, counts and protocol details use IBM Plex Mono; labels stay in sentence case                                                                |
-| Dense but calm             | Compact type scale and 4‑pt spacing so chat lists and threads show more content                                                                        |
-| Motion only for state      | Colour/opacity transitions ≤ 180 ms in the app (see Motion and libraries). No lift, scale or decorative animation                                      |
+## The looks
 
-### Hard constraints
+|                       | Velvet (default)                                                                                                                       | Aurora                                                                                     | Bloom                                                                                                                   |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| Palette               | Warm black `#0F0D0B` / ivory, deep emerald bubbles (`#145244 → #0D3B31` dark), champagne gold accent (`#D4B483` dark, `#846530` light) | Graphite `#0A0E0F` and teal, teal → indigo bubbles (`#0A8276 → #5F62EE`), turquoise accent | Pearl / plum night, sunset pink → orange bubbles (`#D6336C → #C84A1A`), violet accent and primary (`#6D4AFF → #A23EF0`) |
+| Type (display / text) | Fraunces / DM Sans                                                                                                                     | Sora / Manrope                                                                             | Plus Jakarta Sans                                                                                                       |
+| Radii sm / md / lg    | 6 / 12 / 18                                                                                                                            | 8 / 14 / 20                                                                                | 10 / 16 / 24                                                                                                            |
+| Elevation             | Soft real shadows in three levels (1: bubbles, buttons, cards · 2: menus, popovers, toasts · 3: dialogs, sheets)                       | Same three levels, tuned per look                                                          | Same three levels, tuned per look                                                                                       |
+| Glass                 | None (solid panels)                                                                                                                    | Frosted header, composer and popovers (web)                                                | Frosted (web)                                                                                                           |
+| Ambient               | None (a still glow)                                                                                                                    | Slow drift                                                                                 | Soft glow pulse                                                                                                         |
 
-No gradients · no drop shadows · no Lucide icons · no emoji as interface icons · no hover lift/scale · no gratuitous animation · no pill-shaped controls · no arbitrary radii or spacing · no oversized headings in messaging screens. Enforced in code: Tailwind's shadow tokens are set to `none` and radius utilities collapse to the three allowed values.
+IBM Plex Mono stays for timestamps, counts and protocol details in every look. Fonts are **self-hosted**: web bundles them from `@fontsource` / `@fontsource-variable` packages (no Google Fonts request); mobile loads them with `expo-font` from the bundled `@expo-google-fonts/*` packages. Mobile draws headers and popovers solid (no blur).
 
-## Colour
+Hex values moved away from the mockups to pass a contrast floor are listed at the top of `looks.ts`.
 
-Midnight graphite and deep teal, with turquoise (dark) / teal‑700 (light) accents and emerald for success. Every text pair below meets **WCAG AA (4.5:1)**; `subtle` text meets 4.5:1 on `surface`.
+### High contrast
 
-| Token                            | Light                             | Dark                              | Use                                         |
-| -------------------------------- | --------------------------------- | --------------------------------- | ------------------------------------------- |
-| `bg`                             | `#F3F6F6`                         | `#0A0E0F`                         | App background, chat canvas                 |
-| `surface`                        | `#FFFFFF`                         | `#0F1517`                         | Panels, lists, headers, cards               |
-| `surface-muted`                  | `#EDF2F2`                         | `#151D1F`                         | Hover / pressed                             |
-| `surface-strong`                 | `#E2EAEA`                         | `#1B2528`                         | Selected row, group avatar                  |
-| `line` / `line-strong`           | `#DCE4E4` / `#C2CFCF`             | `#1F2A2D` / `#2E3D41`             | Dividers / control borders                  |
-| `ink` / `muted` / `subtle`       | `#0B1416` / `#4B5C5E` / `#5F7173` | `#E6EEEE` / `#9AACAD` / `#75898B` | Text hierarchy                              |
-| `accent` / `on-accent`           | `#0F766E` / `#FFFFFF`             | `#2DD4BF` / `#04201D`             | Primary actions, focus, selection           |
-| `accent-soft`                    | `#DDF3F0`                         | `#0E2B2A`                         | Selected reaction / segment background      |
-| `bubble-in`                      | `#EDF2F2`                         | `#1B2528`                         | Incoming message                            |
-| `danger` · `success` · `warning` | `#B42318` · `#047857` · `#B45309` | `#F87171` · `#34D399` · `#FBBF24` | Status (always paired with text or an icon) |
+One flat set (`highContrastThemes`, light and dark), shared by all three looks: no gradients, no shadows (`--vy-shadow-*` are `0 0 #0000` so focus rings still compose), no ambient, links underlined. Primary text ≥ 7:1, secondary ≥ 4.5:1, borders ≥ 3:1.
 
-**Chat themes** (shared per conversation, synced to all members): eight flat outgoing-bubble colours — Teal (default), Emerald, Ocean, Indigo, Violet, Rose, Ember, Graphite — each with white text ≥ 4.5:1 and separate accents for dark and light mode. Wallpapers are flat line/dot patterns (Constellation, Waves, Grid, Rings, Dunes, Stars) drawn in the accent at ≤ 22% opacity. Preset and wallpaper keys are validated by the database and must not be renamed.
+### Outgoing bubbles
 
-## Typography
+`outgoingBubbleFill(chatTheme, look, mode, { highContrast })` is the one rule for web and mobile. The **Default** chat theme (the Teal preset too) uses the look's bubble gradient (180° in Velvet, 135° otherwise). Any other chat theme is that theme's flat colour with white text ≥ 4.5:1, drawn with the look's radius and depth. High contrast uses the flat accent.
 
-| Family            | Role                                                                                                                                                            | Weights            |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| **Archivo**       | All interface text. Display headings use the expanded width (125%, `.type-display`) — the brand’s one bold typographic move; web only (the variable width axis) | 400, 500, 600, 700 |
-| **IBM Plex Mono** | Timestamps, counts, unread badges, safety numbers, ciphertext, protocol details                                                                                 | 400, 500           |
+### Settings → Appearance
 
-Web loads both from Google Fonts with `display=swap`; mobile bundles them with `expo-font` (`@expo-google-fonts/*`). React Native ignores `fontWeight` with custom fonts, so mobile uses `components/Text.tsx`, which maps weight → font file.
+Web and mobile: one card per look (name, one-line description, preview) and a Mode control (Light · Dark · Match system). The change applies at once, on this device only.
+
+## Contrast floors
+
+Every text pair meets **WCAG AA (4.5:1)** in every look and mode; control edges (`borderStrong`) ≥ 3:1; `border` is a decorative hairline. Status colours (danger, success, warning) always come with text or an icon.
+
+**Chat themes** (shared per conversation, synced to all members): Default (the look's bubble) plus flat presets (Emerald, Ocean, Indigo, Violet, Rose, Ember, Graphite), each with separate accents for dark and light. Wallpapers are line/dot patterns in the accent at ≤ 22% opacity. Preset and wallpaper keys are validated by the database and must not be renamed.
+
+## Typography scale
+
+React Native ignores `fontWeight` with custom fonts, so mobile uses `components/Text.tsx`, which maps weight → font file.
 
 | Step   | Size / line height | Use                             |
 | ------ | ------------------ | ------------------------------- |
@@ -60,24 +60,24 @@ Body text on mobile inputs is 16px (prevents iOS zoom).
 ## Spacing, radius, sizing
 
 - **Spacing**: 4‑pt scale — 4, 8, 12, 16, 20, 24, 32, 40, 48.
-- **Radius**: `sm` 4 (badges, segments, reaction chips) · `md` 8 (buttons, inputs, cards' inner controls) · `lg` 12 (panels, dialogs, message bubbles; 4 on the tail corner). Circles only for avatars and status dots.
+- **Radius**: from the look (`--vy-radius-sm|md|lg` on web, `useTheme` on mobile): `sm` badges, segments, chips · `md` buttons, inputs · `lg` panels, dialogs, message bubbles (tighter on the tail corner). Circles only for avatars and status dots.
 - **Touch targets**: ≥ 44×44 on mobile, ≥ 32×32 visible with ≥ 40 px hit area on web.
 - **Icons**: Phosphor, regular weight (≈1.5 px stroke). Sizes 16 / 20 / 24. Decorative icons are hidden from assistive tech; standalone icon buttons always have a label.
 
 ## Components
 
-| Component               | Rules                                                                                                                                                         |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Button                  | Variants: primary (accent fill), secondary, outline, ghost, danger. 8px radius. Press/hover changes colour only. Loading shows a spinner and sets `aria-busy` |
-| Input / textarea        | 1px `line-strong` border, accent border on focus plus the global 2px focus ring. Labels always visible; errors below the field with `role="alert"`            |
-| Toggle                  | Square-cornered switch with `role="switch"` and `aria-checked`                                                                                                |
-| Segmented control       | Joined rectangular segments (theme, phone visibility)                                                                                                         |
-| Tabs / filters          | Text tabs with a 2px accent underline (no pills)                                                                                                              |
-| List row                | 44–48px avatar, title + mono time, preview; selected = `surface-strong` + 2px accent bar                                                                      |
-| Message bubble          | Outgoing = theme colour, white text; incoming = `bubble-in` + border. Mono timestamp and receipt ticks inside the bubble                                      |
-| Section                 | Sentence-case semibold label, bordered `surface` card, muted footnote                                                                                         |
-| Dialog / sheet          | Bordered `surface`, scrim, focus trap, Escape/close button; bottom sheet on phones                                                                            |
-| Empty / error / loading | Bordered icon tile + title + one line + optional action; skeletons pulse in tone (no shimmer gradient)                                                        |
+| Component               | Rules                                                                                                                                                                                       |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Button                  | Variants: primary (the look's primary gradient), secondary, outline, ghost, danger. `md` radius, elevation 1. Press/hover changes colour only. Loading shows a spinner and sets `aria-busy` |
+| Input / textarea        | 1px `line-strong` border, accent border on focus plus the global 2px focus ring. Labels always visible; errors below the field with `role="alert"`                                          |
+| Toggle                  | Square-cornered switch with `role="switch"` and `aria-checked`                                                                                                                              |
+| Segmented control       | Joined rectangular segments (theme, phone visibility)                                                                                                                                       |
+| Tabs / filters          | Text tabs with a 2px accent underline (no pills)                                                                                                                                            |
+| List row                | 44–48px avatar, title + mono time, preview; selected = `surface-strong` + 2px accent bar                                                                                                    |
+| Message bubble          | Outgoing = `outgoingBubbleFill` (look gradient or chat-theme colour); incoming = `bubble-in` + hairline. Mono timestamp and receipt ticks inside the bubble                                 |
+| Section                 | Sentence-case semibold label, bordered `surface` card, muted footnote                                                                                                                       |
+| Dialog / sheet          | Bordered `surface`, scrim, focus trap, Escape/close button; bottom sheet on phones                                                                                                          |
+| Empty / error / loading | Bordered icon tile + title + one line + optional action; skeletons pulse in tone (no shimmer gradient)                                                                                      |
 
 ## Layout
 
@@ -90,7 +90,7 @@ Body text on mobile inputs is 16px (prevents iOS zoom).
 Shared by web and mobile; the grouping logic lives in `packages/core` (`layoutThread`, `chat/time`, `chat/preview`, `chat/swipe`).
 
 - **Runs.** Consecutive messages from the same sender form a run: 2 px between bubbles inside a run, 8 px between runs.
-- **Tail.** The last bubble of a run gets a flat SVG notch and a 4 px tailed corner (other corners 12 px). No curves, shadows or gradients.
+- **Tail.** The last bubble of a run gets a tighter tailed corner; the other corners use the look's `lg` radius.
 - **Date chips.** 4 px radius, IBM Plex Mono 11 px. On web the chip is sticky per day section, so it never overlaps the next day's chip; on mobile a floating chip follows the scroll.
 - **Unread divider.** A labelled rule above the first unread message. The count is frozen when the chat opens (`unreadUntilSeq` in `layoutThread`; both apps freeze `lastReadSeq` and `lastSeq` at open), so it never grows while you read.
 - **Jump to latest.** 8 px radius, 40 px on web and 44 px on mobile, with a count of new messages while you are scrolled up.
@@ -102,7 +102,7 @@ Shared by web and mobile; the grouping logic lives in `packages/core` (`layoutTh
 
 ## Personal tones ("Your circle, in colour")
 
-_Added 2026-10-17._ People are the colour; the interface stays graphite. `personTone(userId)` in `packages/core` hashes the user id (FNV-1a, 32 bit) into one of eight tones, so a person has the same colour on every device. Values: `personTones` in `packages/config`, mirrored as `--vy-tone-<name>-fill|ink|name` on web.
+_Added 2026-10-17; per look since 2026-10-18._ People are the colour. `personTone(userId)` in `packages/core` hashes the user id (FNV-1a, 32 bit) into one of eight tone slots, so a person keeps the same slot on every device. Each look fills the slots from `personTonesByLook`: Velvet uses jewel tones (turquoise, emerald, citrine, aquamarine, topaz, garnet, sapphire, amethyst), Aurora the original teal–blue set below, Bloom vivid tones (teal, green, pink, sky, tangerine, sunflower, blue, orchid). Web mirrors them as `--vy-tone-<name>-fill|ink|name`. Aurora's values:
 
 | Tone      | Dark fill / name | Light fill | Light name (text) | Light initials |
 | --------- | ---------------- | ---------- | ----------------- | -------------- |
@@ -116,13 +116,13 @@ _Added 2026-10-17._ People are the colour; the interface stays graphite. `person
 | glacier   | `#A5B4FC`        | `#E0E7FF`  | `#4338CA`         | `#4338CA`      |
 
 - Dark initials are `#0A0E0F` on every fill. Contrast is checked in core tests: names ≥ 4.5:1 on surfaces and incoming bubbles, initials ≥ 4.5:1 on fills.
-- **Only** for avatar fallbacks (flat circle, one or two initials in Archivo semibold), group sender names and mentions. Never on chrome, buttons, backgrounds or status: typing and unread stay in the accent.
+- **Only** for avatar fallbacks (circle, one or two initials in the text font, semibold), group sender names and mentions. Never on chrome, buttons, backgrounds or status: typing and unread stay in the accent.
 - High contrast: sender names use the text colour in bold; initials switch to the theme ink.
 - Group avatars: the first two other members by id, overlapping, the front one with a 2 px ring in the row colour (a border, not a shadow).
 
 ## Illustrations and empty states
 
-Four flat drawings (welcome, no chats, no friends, nothing found) on web (`apps/web/src/components/illustrations`) and mobile (`apps/mobile/src/components/illustrations.tsx`, react-native-svg), in one grammar: graphite line (muted text) at 1.5 px with round caps (non-scaling), two or three flat fills from the tones and the accent, radii 8–12, VYBORA's own bubble tail and a lock seal. They are decorative (hidden from assistive tech). An empty state is an illustration, a heading, one sentence and at most two actions:
+Four flat drawings (welcome, no chats, no friends, nothing found) on web (`apps/web/src/components/illustrations`) and mobile (`apps/mobile/src/components/illustrations.tsx`, react-native-svg), in one grammar: a line in the muted text colour at 1.5 px with round caps (non-scaling), two or three flat fills from the tones and the accent, radii 8–12, VYBORA's own bubble tail and a lock seal. They are decorative (hidden from assistive tech). An empty state is an illustration, a heading, one sentence and at most two actions:
 
 | Where                  | Heading                   | Sentence                                                     |
 | ---------------------- | ------------------------- | ------------------------------------------------------------ |
@@ -130,6 +130,8 @@ Four flat drawings (welcome, no chats, no friends, nothing found) on web (`apps/
 | Empty chat list        | No chats yet              | Add a friend by their username, then say hi.                 |
 | No friends             | Your circle starts here   | Share your username or add someone by theirs.                |
 | Search found no one    | No one by that name       | Check the spelling, or add them by username.                 |
+
+**Fresh-account chat list** (`chatListEmptyState` and `CHAT_LIST_EMPTY_COPY` in core, same on web and mobile) shows one of three states: no friends ("No friends yet", with Find friends and Share your username), waiting on sent requests ("Waiting on N requests. Find more friends while you wait."), or friends but no chats ("No chats yet", "Say hi to a friend.", New message). Friends → requests has **Received (n)** and **Sent (n)** tabs.
 
 The first-run **Get started** panel sits at the top of the chat list: three steps (share your username, add a friend, say hi), each with a check icon and "Done" in its accessible name (never colour alone), "N of 3" in Plex Mono, three flat progress segments, and a hide button. **HandleCard** shows your avatar, name and `@username` with Copy and Share.
 
@@ -157,7 +159,9 @@ High-contrast token rules (checked in core tests, light and dark): primary text 
 | Command menu (Ctrl/⌘ K) | Jump to any chat, start a message, open settings or switch theme                                                                                                                                                                                                                                                                                      | [`cmdk`](https://cmdk.paco.me)                                                                             |
 | Landing page only       | One orchestrated hero reveal (masked headline lines); the "How a message travels" diagram is driven by scroll position; the workspace preview reveals once; FAQ expands to measured height; smooth wheel scrolling                                                                                                                                    | [`motion`](https://motion.dev), [`lenis`](https://lenis.darkroom.engineering), `@radix-ui/react-accordion` |
 
-Everything is wrapped in `MotionConfig reducedMotion="user"`; Lenis and the ciphertext scramble switch off under `prefers-reduced-motion`, and the global CSS rule collapses keyframe and transition durations. Nothing lifts, scales or bounces.
+**Ambient:** each look has at most one ambient effect (Aurora drifts, Bloom pulses, Velvet stays still) behind signed-out surfaces and as the chat canvas glow. It stops under reduced motion and is absent in high contrast. Motion uses opacity and transform only.
+
+Everything is wrapped in `MotionConfig reducedMotion="user"`; Lenis and the ciphertext scramble switch off under `prefers-reduced-motion`, and the global CSS rule collapses keyframe and transition durations. Nothing lifts, scales or bounces on hover.
 
 ## Accessibility
 

@@ -38,7 +38,8 @@ Private and beautiful: Signal-level privacy in an app that is far more enjoyable
 ## Brand Commitments
 
 - Name: VYBORA (existing logo mark in `apps/web/src/components/ui/Logo.tsx`).
-- Binding visual rules from the owner's brief, re-confirmed 2026-10-17: midnight graphite + deep teal with turquoise/emerald accents; Archivo + IBM Plex Mono; no gradients, no drop shadows, no pill-shaped controls, no Lucide icons, no emoji as interface icons, no hover lift/scale animations, no gratuitous animation; radii 4/8/12.
+- On 2026-10-18 the owner dropped the earlier flat rules (no gradients, no drop shadows, graphite + teal only, Archivo, radii 4/8/12). The product now ships three looks, each in light and dark, chosen in Settings → Appearance: **Velvet** (default: warm black / ivory, deep emerald bubbles, champagne gold; Fraunces + DM Sans), **Aurora** (graphite and teal, teal → indigo bubbles, frosted panels; Sora + Manrope) and **Bloom** (pearl / plum night, sunset pink → orange bubbles, violet accents; Plus Jakarta Sans). Tokens live in `packages/config/src/looks.ts`; see `docs/DESIGN_SYSTEM.md`.
+- Still binding in every look: WCAG 2.2 AA text contrast (high contrast 7:1, flat and shared by all looks); ≥ 44 px touch targets; reduced motion respected (ambient effects stop); per-device text size; Phosphor icons (no Lucide, no emoji as interface icons); sentence case; no invented claims; no message plaintext anywhere outside the chats themselves.
 - Voice: plain, warm, sentence case; honest about what is and isn't protected.
 
 ## Evidence on Hand

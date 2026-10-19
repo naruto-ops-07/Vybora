@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-10-19 — The new look: Velvet, Aurora and Bloom (web and mobile)
+
+- **Three looks, each in light and dark:** Velvet (the new default: warm black / ivory, deep emerald bubbles, champagne gold, Fraunces + DM Sans, soft shadows), Aurora (graphite and teal, teal → indigo bubbles, frosted panels, slow drift; Sora + Manrope) and Bloom (pearl / plum night, sunset pink → orange bubbles, violet accents, frosted panels, soft pulse; Plus Jakarta Sans). The owner dropped the earlier flat, no-gradient, no-shadow rules on 2026-10-18.
+- **Settings → Appearance** on web and mobile: pick a look and a mode (Light, Dark, Match system). Stored on this device only.
+- **One token source:** `packages/config/src/looks.ts`; web CSS is generated with `pnpm theme:css`, mobile reads `useTheme()`. Every look × mode passes the WCAG AA contrast tests; high contrast stays one flat set (7:1) for all looks. Personal tones come per look.
+- **Bubbles:** the Default chat theme uses the look's gradient bubble (`outgoingBubbleFill`); other chat themes keep their flat colour.
+- **Every screen** (chat list, chat, details, friends, settings, sign-in, landing) uses the look's type, radii, depth and ambient glow. Ambient effects stop under reduced motion and are absent in high contrast.
+- **Friends:** requests are split into **Received (n)** and **Sent (n)** tabs.
+- **Fresh-account chat list:** "No friends yet" with Find friends and Share your username; "Waiting on N requests" while requests are out; "No chats yet — Say hi to a friend." once you have friends.
+- **Fonts are self-hosted:** web bundles them from `@fontsource` packages (no Google Fonts request); mobile bundles them with `expo-font`. The unused Archivo packages are removed.
+- **Pre-paint:** the web page sets look, theme, high contrast and text size before first paint, so high-contrast and large-text users never see a frame of the wrong colours or size.
+- **Tests:** `pnpm check` exits 0: web 279, mobile 172, core 199, api 36, e2ee 23, validation 22, database 267. The design detector reports 0 findings on web and mobile source.
+- **Not checked on a device:** no phone or simulator was used. Bubble shadows and SVG gradients on low-end Android, and the Fraunces display size on 320 px screens, still need a look on real hardware.
+
 ## 2026-10-18 — Email codes: confirm sign-up and sign in with a 6-digit code
 
 - **Sign-up (web and mobile):** after "Create account", you type the 6-digit code from the email on "Enter the code". The link in the same email still works as a fallback, and on web it still returns to `?next=`.
