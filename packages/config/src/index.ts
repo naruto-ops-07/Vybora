@@ -4,82 +4,14 @@
  * (apps/web/src/styles/index.css); mobile consumes them directly.
  * Rules and rationale: docs/DESIGN_SYSTEM.md.
  *
- * Visual language: midnight graphite + deep teal, turquoise/emerald accents
- * used sparingly. Flat surfaces separated by borders and tone — no gradients,
- * no shadows.
+ * Colour lives per look (Velvet, Aurora, Bloom) × mode in `./looks`, with
+ * gradients, glows and elevation. High contrast is one flat set shared by
+ * every look: no gradients, no shadows.
  */
 
-export const palette = {
-  graphite950: '#0A0E0F',
-  graphite900: '#0F1517',
-  graphite850: '#151D1F',
-  graphite800: '#1B2528',
-  graphite750: '#1F2A2D',
-  graphite700: '#2E3D41',
-  graphite500: '#75898B',
-  graphite400: '#9AACAD',
-  graphite100: '#E6EEEE',
-  mist50: '#F3F6F6',
-  mist100: '#EDF2F2',
-  mist200: '#E2EAEA',
-  mist300: '#DCE4E4',
-  mist400: '#C2CFCF',
-  slate600: '#5F7173',
-  slate700: '#4B5C5E',
-  ink: '#0B1416',
-  white: '#FFFFFF',
-  turquoise: '#2DD4BF',
-  turquoiseLight: '#5EEAD4',
-  teal700: '#0F766E',
-  teal800: '#115E59',
-  tealDeep: '#0F4C47',
-  emerald: '#34D399',
-  emeraldDeep: '#047857',
-} as const;
+import { palette, personTonesByLook, type ThemeTokens } from './looks';
 
-export const themes = {
-  light: {
-    bg: palette.mist50,
-    surface: palette.white,
-    surfaceMuted: palette.mist100,
-    surfaceStrong: palette.mist200,
-    border: palette.mist300,
-    borderStrong: palette.mist400,
-    text: palette.ink,
-    textMuted: palette.slate700,
-    textSubtle: palette.slate600,
-    accent: palette.teal700,
-    accentHover: palette.teal800,
-    accentSoft: '#DDF3F0',
-    onAccent: palette.white,
-    bubbleIn: palette.mist100,
-    danger: '#B42318',
-    success: palette.emeraldDeep,
-    warning: '#B45309',
-  },
-  dark: {
-    bg: palette.graphite950,
-    surface: palette.graphite900,
-    surfaceMuted: palette.graphite850,
-    surfaceStrong: palette.graphite800,
-    border: palette.graphite750,
-    borderStrong: palette.graphite700,
-    text: palette.graphite100,
-    textMuted: palette.graphite400,
-    textSubtle: palette.graphite500,
-    accent: palette.turquoise,
-    accentHover: palette.turquoiseLight,
-    accentSoft: '#0E2B2A',
-    onAccent: '#04201D',
-    bubbleIn: palette.graphite800,
-    danger: '#F87171',
-    success: palette.emerald,
-    warning: '#FBBF24',
-  },
-} as const;
-
-export type ThemeName = keyof typeof themes;
-export type ThemeTokens = { [K in keyof (typeof themes)['light']]: string };
+export * from './looks';
 
 /**
  * Accessibility → High contrast. Same keys as `themes`; text ≥ 7:1, secondary
@@ -126,7 +58,7 @@ export const highContrastThemes: { light: ThemeTokens; dark: ThemeTokens } = {
   },
 };
 
-/** Three radii only: small controls, standard controls, panels/bubbles. */
+/** Legacy radii (small controls, standard controls, panels/bubbles); looks carry their own. */
 export const radii = { sm: 4, md: 8, lg: 12 } as const;
 
 /** 4-pt rhythm. */
@@ -157,44 +89,8 @@ export const iconSizes = { sm: 16, md: 20, lg: 24 } as const;
 /** Motion is functional only: opacity/colour transitions, no lift or scale. */
 export const motion = { fast: 120, base: 180 } as const;
 
-export type PersonToneName =
-  'turquoise' | 'emerald' | 'lime' | 'aqua' | 'sky' | 'mint' | 'ocean' | 'glacier';
-
-/** One tone in one theme: avatar fill, initials on that fill, and name text on surfaces. */
-export interface PersonToneColors {
-  fill: string;
-  ink: string;
-  name: string;
-}
-
-const DARK_INK = palette.graphite950;
-const tone = (dark: string, lightFill: string, lightName: string, lightInk = lightName) => ({
-  dark: { fill: dark, ink: DARK_INK, name: dark },
-  light: { fill: lightFill, ink: lightInk, name: lightName },
-});
-
-/**
- * Personal tones (people are the colour). Keys and order match `PERSON_TONES` in
- * `@vybora/core`, which picks one per user id. Used only for avatar fallbacks,
- * group sender names and mentions — never chrome, buttons or backgrounds.
- * Contrast is checked in core (tones.test.ts). Departures from the 2026-10-17 spec table,
- * made because a contrast test failed: lime light name #4D7C0F → #3F6212 (4.42:1 on
- * #EDF2F2); light ink for turquoise, emerald, aqua and sky is one step darker than the
- * name (the name colour was 4.28–4.47:1 on its fill).
- */
-export const personTones: Record<
-  PersonToneName,
-  { dark: PersonToneColors; light: PersonToneColors }
-> = {
-  turquoise: tone('#2DD4BF', '#99F6E4', '#0F766E', '#115E59'),
-  emerald: tone('#34D399', '#A7F3D0', '#047857', '#065F46'),
-  lime: tone('#A3E635', '#D9F99D', '#3F6212'),
-  aqua: tone('#22D3EE', '#A5F3FC', '#0E7490', '#155E75'),
-  sky: tone('#38BDF8', '#BAE6FD', '#0369A1', '#075985'),
-  mint: tone('#6EE7B7', '#D1FAE5', '#065F46'),
-  ocean: tone('#60A5FA', '#BFDBFE', '#1D4ED8'),
-  glacier: tone('#A5B4FC', '#E0E7FF', '#4338CA'),
-};
+/** Today's tones (Aurora's). Prefer `personTonesByLook[look]`. */
+export const personTones = personTonesByLook.aurora;
 
 /** High contrast keeps tone fills; initials switch to the theme ink for ≥ 7:1. */
 export const personToneHighContrastInk = { light: palette.ink, dark: palette.graphite950 } as const;
