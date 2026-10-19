@@ -28,6 +28,15 @@
  *   empty-{look}-{mode}.png, friends-{look}-{mode}.png  the chat-list empty states and the
  *                      Friends section (Received / Sent tabs) per look × mode, 1440 wide.
  *   ambient.txt-style log lines: the canvas glow's animation per look with motion allowed.
+ *   {look}-{dark,light,dark-hc}-{1440,390}.png  the whole gallery in every look × mode
+ *                      (and dark + high contrast) at both widths.
+ *   landing-{look}-{mode}-{1440,390}.png, landing-hc-dark-1440.png  the signed-out landing
+ *                      page in the device's saved look (set in localStorage before load, as
+ *                      a returning visitor would have it): every look in dark and light at
+ *                      1440, dark at 390. High contrast fails if a glow, gradient or blur
+ *                      remains anywhere on the page.
+ *   {login,signup,forgot,404}-{look}-{mode}-{1440,390}.png  the auth pages and the 404 per
+ *                      look, dark at 1440 and 390, light at 1440. Nothing is submitted.
  *
  * Without `?look=` the gallery shows Velvet, the default look.
  *
@@ -77,6 +86,52 @@ const SHOTS = [
   ),
   // Signed out (a fresh context has no session), so `/` renders the landing page.
   { file: 'landing.png', viewport: { width: 1440, height: 900 }, path: '/' },
+  // The whole gallery: every look × {dark, light, dark + high contrast} × {1440, 390}.
+  ...['velvet', 'aurora', 'bloom'].flatMap((look) =>
+    ['dark', 'light', 'dark-hc'].flatMap((mode) =>
+      [1440, 390].map((width) => ({
+        file: `${look}-${mode}-${width}.png`,
+        viewport: { width, height: width === 390 ? 844 : 900 },
+        mobile: width === 390,
+        query: `look=${look}&theme=${mode.split('-')[0]}${mode.endsWith('hc') ? '&contrast=high' : ''}`,
+      })),
+    ),
+  ),
+  // Signed-out pages in the saved look: what a returning visitor's device shows.
+  ...['velvet', 'aurora', 'bloom'].flatMap((look) =>
+    [
+      ['landing', '/'],
+      ['login', '/login'],
+      ['signup', '/signup'],
+      ['forgot', '/forgot-password'],
+      ['404', '/no-such-page'],
+    ].flatMap(([name, path]) =>
+      [
+        ['dark', 1440],
+        ['light', 1440],
+        ['dark', 390],
+      ].map(([mode, width]) => ({
+        file: `${name}-${look}-${mode}-${width}.png`,
+        viewport: { width, height: width === 390 ? 844 : 900 },
+        mobile: width === 390,
+        path,
+        storage: { 'vybora.appearance': JSON.stringify({ look, mode }) },
+      })),
+    ),
+  ),
+  ...[
+    ['landing', '/'],
+    ['login', '/login'],
+  ].map(([name, path]) => ({
+    file: `${name}-hc-dark-1440.png`,
+    viewport: { width: 1440, height: 900 },
+    path,
+    hc: true,
+    storage: {
+      'vybora.appearance': JSON.stringify({ look: 'aurora', mode: 'dark' }),
+      'vybora.a11y': JSON.stringify({ highContrast: true }),
+    },
+  })),
   ...[
     ['velvet', 'dark'],
     ['velvet', 'light'],
@@ -203,12 +258,48 @@ try {
       blocked++;
       return route.abort();
     });
+    if (shot.storage)
+      await context.addInitScript((entries) => {
+        for (const [k, v] of Object.entries(entries)) localStorage.setItem(k, v);
+      }, shot.storage);
     const page = await context.newPage();
     const url = new URL(shot.path ?? `/__gallery?${shot.query}`, base);
     await page.goto(url.href, { waitUntil: 'networkidle' });
     if (shot.path) await page.locator('main h1').first().waitFor();
     else await page.getByRole('heading', { name: 'Design gallery' }).waitFor();
     await page.evaluate(() => document.fonts.ready);
+    if (shot.storage) {
+      // The saved look must be on <html> (from the pre-paint script), not the default.
+      const want = JSON.parse(shot.storage['vybora.appearance']);
+      const got = await page.evaluate(() => ({
+        look: document.documentElement.dataset.look,
+        theme: document.documentElement.dataset.theme,
+        contrast: document.documentElement.dataset.contrast,
+      }));
+      if (got.look !== want.look || got.theme !== want.mode) {
+        console.error(`${shot.file}: expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`);
+        process.exitCode = 1;
+      }
+      if (shot.hc) {
+        const left = await page.evaluate(() =>
+          [...document.querySelectorAll('body *')]
+            .filter((el) => {
+              const st = getComputedStyle(el);
+              return (
+                el.classList.contains('vy-glow') ||
+                st.backgroundImage.includes('gradient') ||
+                !['none', ''].includes(st.backdropFilter) ||
+                !/^(none|rgba\(0, 0, 0, 0\) 0px 0px 0px 0px)$/.test(st.boxShadow)
+              );
+            })
+            .map((el) => `${el.tagName} ${String(el.className).slice(0, 50)}`),
+        );
+        if (left.length) {
+          console.error(`${shot.file}: not flat under high contrast:`, JSON.stringify(left));
+          process.exitCode = 1;
+        }
+      }
+    }
     if (shot.path) {
       // Scroll once through the page so scroll-revealed sections are in the capture.
       await page.evaluate(async () => {

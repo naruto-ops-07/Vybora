@@ -281,13 +281,10 @@ export function EmailCodeStep({
               onPaste={(e) => onPaste(i, e)}
               onFocus={(e) => e.currentTarget.select()}
               className={cn(
-                'h-14 w-full min-w-0 flex-1 rounded-md border bg-surface text-center font-mono text-2xl font-medium tabular-nums text-ink caret-accent',
-                'transition-colors duration-150 focus:border-accent read-only:text-muted',
-                codeError
-                  ? 'border-danger'
-                  : digit
-                    ? 'border-muted'
-                    : 'border-line-strong hover:border-muted',
+                // The look's field: its edge, inset, radius and accent focus ring.
+                'vy-field h-14 w-full min-w-0 flex-1 rounded-md text-center font-mono text-2xl font-medium tabular-nums caret-accent',
+                'read-only:text-muted',
+                !codeError && digit && 'border-muted focus:border-accent',
               )}
             />
           </Fragment>

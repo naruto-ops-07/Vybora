@@ -89,3 +89,34 @@ describe('safeNext', () => {
     expect(safeNext(null)).toBe('/messages');
   });
 });
+
+describe('auth pages in the new looks', () => {
+  it('lights the brand panel with the look’s ambient glow and the illustration', async () => {
+    const { AuthLayout } = await import('./AuthLayout');
+    renderWithProviders(
+      <AuthLayout title="Sign in">
+        <p>form</p>
+      </AuthLayout>,
+    );
+    const panel = screen.getByRole('complementary');
+    expect(panel.querySelector('.vy-glow[aria-hidden="true"]')).not.toBeNull();
+    expect(panel.querySelector('svg')).not.toBeNull();
+    expect(screen.getByRole('heading', { level: 1, name: 'Sign in' })).toHaveClass('type-display');
+  });
+
+  it('draws the six code boxes as the look’s field: its radius and focus ring', async () => {
+    const { EmailCodeStep } = await import('./EmailCodeStep');
+    renderWithProviders(
+      <EmailCodeStep
+        email="maya@example.com"
+        purpose="signup"
+        onVerified={vi.fn()}
+        onResend={vi.fn()}
+        onChangeEmail={vi.fn()}
+      />,
+    );
+    const boxes = screen.getAllByRole('textbox', { name: /^Digit \d of 6$/ });
+    expect(boxes).toHaveLength(6);
+    for (const b of boxes) expect(b).toHaveClass('vy-field', 'rounded-md');
+  });
+});

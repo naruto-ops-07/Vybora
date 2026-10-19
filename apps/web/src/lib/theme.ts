@@ -1,10 +1,13 @@
-import { LOOKS, looks, type Look, type Mode } from '@vybora/config';
+import { highContrastThemes, LOOKS, looks, type Look, type Mode } from '@vybora/config';
 import {
+  A11Y_STORAGE_KEY,
   APPEARANCE_KEY,
+  parseA11yPrefs,
   parseAppearance,
   resolveMode,
   type Appearance,
   type ModePref,
+  type TextSize,
 } from '@vybora/core';
 import { useSyncExternalStore } from 'react';
 
@@ -26,14 +29,24 @@ export const THEME_COLORS = Object.fromEntries(
 
 /**
  * What the pre-paint script in index.html computes, as a pure function: the stored
- * appearance (falling back to the legacy key, then Velvet + system), resolved to a mode.
+ * appearance (falling back to the legacy key, then Velvet + system), resolved to a mode,
+ * plus the accessibility prefs the A11yProvider applies later (high contrast and text
+ * size, from `vybora.a11y`), so a high-contrast user never sees one frame of the look.
+ * Under high contrast the theme colour is the high-contrast background.
  * Never throws: unreadable storage or a missing matchMedia count as nothing stored and a
  * light system.
  */
 export function initialAppearance(
   read: (key: string) => string | null,
   systemDark: () => boolean,
-): { look: Look; mode: ModePref; theme: Mode; color: string } {
+): {
+  look: Look;
+  mode: ModePref;
+  theme: Mode;
+  color: string;
+  contrast: 'high' | 'normal';
+  textSize: TextSize;
+} {
   const safe = (key: string) => {
     try {
       return read(key);
@@ -51,7 +64,33 @@ export function initialAppearance(
     }
   }
   const theme = resolveMode(mode, dark);
-  return { look, mode, theme, color: THEME_COLORS[look][theme] };
+  const a11y = parseA11yPrefs(safe(A11Y_STORAGE_KEY));
+  const color = a11y.highContrast ? highContrastThemes[theme].bg : THEME_COLORS[look][theme];
+  return {
+    look,
+    mode,
+    theme,
+    color,
+    contrast: a11y.highContrast ? 'high' : 'normal',
+    textSize: a11y.textSize,
+  };
+}
+
+/**
+ * Applies `initialAppearance` to the page, as index.html's inline script does before the
+ * bundle loads (tests use it to stand in for that script).
+ */
+export function applyInitialAppearance(): void {
+  const r = initialAppearance(
+    (k) => localStorage.getItem(k),
+    () => matchMedia('(prefers-color-scheme: dark)').matches,
+  );
+  const html = document.documentElement;
+  html.setAttribute('data-look', r.look);
+  html.setAttribute('data-theme', r.theme);
+  html.setAttribute('data-contrast', r.contrast);
+  html.setAttribute('data-text-size', r.textSize);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', r.color);
 }
 
 // --- Fonts -----------------------------------------------------------------------
@@ -122,9 +161,12 @@ function apply(s: AppearanceState) {
   const html = document.documentElement;
   html.dataset.look = s.look;
   html.dataset.theme = s.resolved;
-  document
-    .querySelector('meta[name="theme-color"]')
-    ?.setAttribute('content', THEME_COLORS[s.look][s.resolved]);
+  // High contrast (set pre-paint and by the A11yProvider) keeps its own background.
+  const color =
+    html.dataset.contrast === 'high'
+      ? highContrastThemes[s.resolved].bg
+      : THEME_COLORS[s.look][s.resolved];
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color);
   void loadLookFonts(s.look);
 }
 

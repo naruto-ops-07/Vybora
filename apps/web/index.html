@@ -13,15 +13,18 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>VYBORA</title>
     <script>
-      // Apply the saved look and mode before first paint, so the wrong look never
-      // flashes. Mirrors initialAppearance() in src/lib/theme.ts (theme.test.ts runs
-      // this script against it). The colours are each look's background.
+      // Apply the saved look and mode, and the accessibility prefs (high contrast, text
+      // size), before first paint, so the wrong look never flashes. Mirrors
+      // initialAppearance() in src/lib/theme.ts (theme.test.ts runs this script against
+      // it). The colours are each look's background; H is the high-contrast background.
       (function () {
         var C = {
           velvet: { light: '#FBF8F2', dark: '#0F0D0B' },
           aurora: { light: '#F3F6F6', dark: '#0A0E0F' },
           bloom: { light: '#F7F5FC', dark: '#17121F' },
         };
+        var H = { light: '#FFFFFF', dark: '#000000' };
+        var SIZES = { sm: 1, md: 1, lg: 1, xl: 1 };
         function read(key) {
           try {
             return localStorage.getItem(key);
@@ -57,11 +60,26 @@
           }
         }
         var theme = dark ? 'dark' : 'light';
+        var a = null;
+        try {
+          var rawA = read('vybora.a11y');
+          a = rawA ? JSON.parse(rawA) : null;
+        } catch (e) {
+          a = null;
+        }
+        if (!a || typeof a !== 'object' || Array.isArray(a)) a = {};
+        var high = a.highContrast === true;
+        var size =
+          typeof a.textSize === 'string' && Object.prototype.hasOwnProperty.call(SIZES, a.textSize)
+            ? a.textSize
+            : 'md';
         try {
           document.documentElement.setAttribute('data-look', look);
           document.documentElement.setAttribute('data-theme', theme);
+          document.documentElement.setAttribute('data-contrast', high ? 'high' : 'normal');
+          document.documentElement.setAttribute('data-text-size', size);
           var meta = document.querySelector('meta[name="theme-color"]');
-          if (meta) meta.setAttribute('content', C[look][theme]);
+          if (meta) meta.setAttribute('content', high ? H[theme] : C[look][theme]);
         } catch (e) {}
       })();
     </script>

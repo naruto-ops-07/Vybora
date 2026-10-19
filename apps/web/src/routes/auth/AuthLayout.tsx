@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { WelcomeIllustration } from '@/components/illustrations';
 import { Logo } from '@/components/ui/Logo';
+import { Ambient } from '../landing/Ambient';
 
 const POINTS = [
   { icon: <LockSimpleIcon size={18} />, text: 'End-to-end encrypted with MLS (RFC 9420)' },
@@ -23,29 +24,37 @@ export function AuthLayout({
 }) {
   return (
     <div className="grid min-h-dvh bg-bg lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-      <aside className="hidden flex-col justify-between border-r border-line bg-surface p-10 lg:flex">
-        <Link to="/" aria-label="VYBORA home" className="w-fit">
-          <Logo />
-        </Link>
-        <div className="max-w-sm">
-          <WelcomeIllustration width={248} />
-          <p className="type-display mt-10 text-4xl">
-            Conversations that stay between the people in them.
+      <aside className="relative hidden overflow-hidden border-r border-line bg-surface lg:block">
+        <Ambient />
+        <div className="vy-canvas-layer flex h-full flex-col justify-between p-10 xl:p-14">
+          <Link to="/" aria-label="VYBORA home" className="w-fit">
+            <Logo />
+          </Link>
+          <div className="max-w-md">
+            <div className="w-fit rounded-lg border border-line bg-bg/70 p-6 shadow-2">
+              <WelcomeIllustration width={232} />
+            </div>
+            <p className="type-display mt-12 text-[2.5rem] xl:text-5xl">
+              Conversations that stay between the people in them.
+            </p>
+            <ul className="mt-8 space-y-3">
+              {POINTS.map((p) => (
+                <li key={p.text} className="flex items-center gap-3 text-[15px] text-muted">
+                  <span
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"
+                    aria-hidden="true"
+                  >
+                    {p.icon}
+                  </span>
+                  {p.text}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <p className="text-sm text-subtle">
+            The server stores ciphertext only. Notifications never include what you wrote.
           </p>
-          <ul className="mt-8 space-y-3">
-            {POINTS.map((p) => (
-              <li key={p.text} className="flex items-center gap-3 text-sm text-muted">
-                <span className="text-accent" aria-hidden="true">
-                  {p.icon}
-                </span>
-                {p.text}
-              </li>
-            ))}
-          </ul>
         </div>
-        <p className="text-sm text-subtle">
-          The server stores ciphertext only. Notifications never include what you wrote.
-        </p>
       </aside>
 
       <div className="flex flex-col">
@@ -59,7 +68,7 @@ export function AuthLayout({
           className="flex flex-1 items-start justify-center px-5 pb-16 pt-4 sm:items-center sm:pt-0"
         >
           <div className="w-full max-w-[380px]">
-            <h1 className="type-wide text-2xl font-semibold tracking-tight">{title}</h1>
+            <h1 className="type-display text-3xl">{title}</h1>
             {subtitle && <p className="mt-1.5 text-[15px] text-muted">{subtitle}</p>}
             <div className="mt-6">{children}</div>
             {footer && (

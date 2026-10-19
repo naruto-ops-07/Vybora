@@ -78,10 +78,7 @@ export function Journey() {
       <div className={reduceMotion ? undefined : 'sticky top-0 flex h-dvh items-center'}>
         <div className="mx-auto grid w-full max-w-6xl items-center gap-10 px-5 md:grid-cols-[0.9fr_1.1fr]">
           <div>
-            <h2
-              id="journey-title"
-              className="type-wide text-3xl font-semibold tracking-tight md:text-4xl"
-            >
+            <h2 id="journey-title" className="type-display text-4xl md:text-5xl">
               How a message travels
             </h2>
             <ol className="mt-8 space-y-1">
@@ -135,7 +132,7 @@ export function Journey() {
             </ol>
           </div>
 
-          <figure className="rounded-lg border border-line-strong bg-surface p-5 md:p-8">
+          <figure className="rounded-lg border border-line bg-surface p-5 shadow-2 md:p-8">
             <svg
               viewBox="0 0 600 120"
               className="w-full"
@@ -196,7 +193,7 @@ export function Journey() {
                 <span key={n.label}>{n.label}</span>
               ))}
             </div>
-            <figcaption className="mt-8 rounded-md border border-line bg-bg p-4">
+            <figcaption className="mt-8 rounded-md border border-line bg-surface-muted p-4">
               <span className="flex items-center gap-2 text-xs text-muted">
                 {step.sealed && (
                   <LockSimpleIcon size={13} className="text-accent" aria-hidden="true" />

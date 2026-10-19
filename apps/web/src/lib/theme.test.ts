@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { LOOKS, looks } from '@vybora/config';
-import { APPEARANCE_KEY } from '@vybora/core';
+import { highContrastThemes, LOOKS, looks } from '@vybora/config';
+import { A11Y_STORAGE_KEY, APPEARANCE_KEY } from '@vybora/core';
 import { describe, expect, it } from 'vitest';
 import { initialAppearance, LEGACY_THEME_KEY, THEME_COLORS } from './theme';
 
@@ -35,7 +35,13 @@ function runInline(store: Store, systemDark: boolean | 'missing') {
     localStorage,
     matchMedia,
   );
-  return { look: attrs['data-look'], theme: attrs['data-theme'], color: meta.content };
+  return {
+    look: attrs['data-look'],
+    theme: attrs['data-theme'],
+    color: meta.content,
+    contrast: attrs['data-contrast'],
+    textSize: attrs['data-text-size'],
+  };
 }
 
 function runFn(store: Store, systemDark: boolean | 'missing') {
@@ -49,7 +55,13 @@ function runFn(store: Store, systemDark: boolean | 'missing') {
       return systemDark;
     },
   );
-  return { look: r.look, theme: r.theme, color: r.color };
+  return {
+    look: r.look,
+    theme: r.theme,
+    color: r.color,
+    contrast: r.contrast,
+    textSize: r.textSize,
+  };
 }
 
 const CASES: Store[] = [
@@ -72,6 +84,20 @@ const CASES: Store[] = [
   { [LEGACY_THEME_KEY]: 'light' },
   { [LEGACY_THEME_KEY]: 'system' },
   { [LEGACY_THEME_KEY]: 'sepia' },
+  // Accessibility prefs (the A11yProvider's stored JSON): high contrast and text size.
+  { [A11Y_STORAGE_KEY]: '{"highContrast":true}' },
+  {
+    [A11Y_STORAGE_KEY]: '{"highContrast":true,"textSize":"xl"}',
+    [APPEARANCE_KEY]: '{"look":"bloom","mode":"light"}',
+  },
+  { [A11Y_STORAGE_KEY]: '{"highContrast":"yes","textSize":"huge"}' },
+  { [A11Y_STORAGE_KEY]: '{"textSize":"sm"}', [APPEARANCE_KEY]: '{"look":"aurora","mode":"dark"}' },
+  { [A11Y_STORAGE_KEY]: '{"textSize":"constructor","highContrast":1}' },
+  { [A11Y_STORAGE_KEY]: '{"textSize":"toString"}' },
+  { [A11Y_STORAGE_KEY]: '{garbage' },
+  { [A11Y_STORAGE_KEY]: '[true]' },
+  { [A11Y_STORAGE_KEY]: 'null' },
+  { [A11Y_STORAGE_KEY]: '' },
 ];
 
 describe('pre-paint script (index.html)', () => {
@@ -91,6 +117,8 @@ describe('pre-paint script (index.html)', () => {
       look: 'velvet',
       theme: 'light',
       color: looks.velvet.modes.light.bg,
+      contrast: 'normal',
+      textSize: 'md',
     });
   });
 
@@ -101,6 +129,26 @@ describe('pre-paint script (index.html)', () => {
         const store = { [APPEARANCE_KEY]: JSON.stringify({ look, mode }) };
         expect(runInline(store, false).color).toBe(looks[look].modes[mode].bg);
       }
+  });
+
+  it('applies high contrast and text size before paint, with the high-contrast background', () => {
+    for (const theme of ['light', 'dark'] as const) {
+      const store = {
+        [APPEARANCE_KEY]: JSON.stringify({ look: 'bloom', mode: theme }),
+        [A11Y_STORAGE_KEY]: JSON.stringify({ highContrast: true, textSize: 'lg' }),
+      };
+      expect(runInline(store, false)).toEqual({
+        look: 'bloom',
+        theme,
+        color: highContrastThemes[theme].bg,
+        contrast: 'high',
+        textSize: 'lg',
+      });
+    }
+    // Garbage a11y JSON: defaults, no crash.
+    const garbage = runInline({ [A11Y_STORAGE_KEY]: '{oops' }, true);
+    expect(garbage).toMatchObject({ contrast: 'normal', textSize: 'md' });
+    expect(garbage.color).toBe(looks.velvet.modes.dark.bg);
   });
 
   it('loads no web fonts from Google', () => {

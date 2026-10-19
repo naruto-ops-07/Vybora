@@ -28,14 +28,14 @@ export function Faq() {
   return (
     <section className="border-t border-line py-20 md:py-28" aria-labelledby="faq-title">
       <div className="mx-auto grid max-w-6xl gap-10 px-5 md:grid-cols-[0.8fr_1.2fr]">
-        <h2 id="faq-title" className="type-wide text-3xl font-semibold tracking-tight md:text-4xl">
+        <h2 id="faq-title" className="type-display text-4xl md:text-5xl">
           Questions, answered plainly
         </h2>
         <Accordion.Root type="single" collapsible className="border-t border-line">
           {QUESTIONS.map(({ q, a }) => (
             <Accordion.Item key={q} value={q} className="border-b border-line">
               <Accordion.Header>
-                <Accordion.Trigger className="group flex w-full items-center justify-between gap-6 py-5 text-left text-[17px] font-medium">
+                <Accordion.Trigger className="group flex min-h-11 w-full items-center justify-between gap-6 py-5 text-left text-[17px] font-medium">
                   {q}
                   <PlusIcon
                     size={18}

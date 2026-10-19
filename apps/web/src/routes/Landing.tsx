@@ -13,6 +13,8 @@ import { Link } from 'react-router';
 import { ButtonLink } from '@/components/ui/Button';
 import { Logo } from '@/components/ui/Logo';
 import { useA11y } from '@/features/a11y/A11yProvider';
+import { useDocumentLook } from '@/features/connect/ui';
+import { cn } from '@/lib/cn';
 import { Faq } from './landing/Faq';
 import { Hero } from './landing/Hero';
 import { Journey } from './landing/Journey';
@@ -22,35 +24,41 @@ import { Showcase } from './landing/Showcase';
 // Social first (what people come for), then what keeps it private.
 const FEATURES = [
   {
-    icon: <UserPlusIcon size={20} />,
+    icon: <UserPlusIcon size={22} />,
     title: 'Friends by username',
     body: 'Add people by their exact username, no phone number needed. Choose whether only friends can start chats with you.',
   },
   {
-    icon: <UsersThreeIcon size={20} />,
+    icon: <UsersThreeIcon size={22} />,
     title: 'Groups with roles',
     body: 'Admins manage members and settings. New members only see messages sent after they join.',
   },
   {
-    icon: <TimerIcon size={20} />,
+    icon: <TimerIcon size={22} />,
     title: 'Disappearing messages',
     body: 'Set a timer per chat, from five minutes to a week. Messages are removed from devices and the server.',
   },
   {
-    icon: <DevicesIcon size={20} />,
+    icon: <DevicesIcon size={22} />,
     title: 'Phone and web',
     body: 'Each device has its own keys. Remove a lost device and it’s cut off from new messages immediately.',
   },
   {
-    icon: <LockSimpleIcon size={20} />,
+    icon: <LockSimpleIcon size={22} />,
     title: 'Encrypted by default',
     body: 'Every chat uses MLS, the IETF standard for end-to-end encrypted group messaging. There is no unencrypted mode.',
   },
   {
-    icon: <FingerprintIcon size={20} />,
+    icon: <FingerprintIcon size={22} />,
     title: 'Verify, don’t trust',
     body: 'Compare a safety number with a contact to confirm nobody is in the middle. Key changes are flagged.',
   },
+];
+
+// Two columns: what people come for, then what keeps it private.
+const COLUMNS = [
+  { label: 'With your people', features: FEATURES.slice(0, 3) },
+  { label: 'Between you only', features: FEATURES.slice(3) },
 ];
 
 const SERVER = {
@@ -71,10 +79,14 @@ const SERVER = {
 export default function Landing() {
   const { reduceMotion } = useA11y();
   useSmoothScroll(!reduceMotion);
+  // Frosted over the page in Aurora (the look with glass); a solid bar in the others.
+  const frosted = useDocumentLook().look === 'aurora';
   return (
     <MotionConfig reducedMotion={reduceMotion ? 'always' : 'never'}>
       <div className="min-h-dvh bg-bg">
-        <header className="sticky top-0 z-30 border-b border-line bg-bg/90 backdrop-blur-md">
+        <header
+          className={cn('sticky top-0 z-30 border-b', frosted ? 'vy-panel' : 'border-line bg-bg')}
+        >
           <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
             <Link to="/" aria-label="VYBORA home">
               <Logo />
@@ -106,14 +118,32 @@ export default function Landing() {
           <Hero />
 
           <section className="border-y border-line bg-surface" aria-label="Features">
-            <div className="mx-auto grid max-w-6xl gap-px border-x border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
-              {FEATURES.map((f) => (
-                <div key={f.title} className="bg-surface px-5 py-8">
-                  <span className="text-accent" aria-hidden="true">
-                    {f.icon}
-                  </span>
-                  <h3 className="mt-4 text-[15px] font-semibold">{f.title}</h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-muted">{f.body}</p>
+            <div className="mx-auto grid max-w-6xl gap-x-20 gap-y-14 px-5 py-20 md:grid-cols-2 md:py-28">
+              {COLUMNS.map((col) => (
+                <div key={col.label}>
+                  <p className="flex items-center gap-3 text-sm font-medium text-accent">
+                    <span className="h-px w-8 bg-accent" aria-hidden="true" />
+                    {col.label}
+                  </p>
+                  <ul className="mt-6">
+                    {col.features.map((f) => (
+                      <li
+                        key={f.title}
+                        className="grid grid-cols-[2.75rem_1fr] gap-x-4 border-t border-line py-8 first:border-t-0 first:pt-2"
+                      >
+                        <span
+                          className="vy-tile mt-1 flex h-11 w-11 items-center justify-center rounded-md text-accent"
+                          aria-hidden="true"
+                        >
+                          {f.icon}
+                        </span>
+                        <div className="min-w-0">
+                          <h3 className="type-display text-2xl md:text-[1.75rem]">{f.title}</h3>
+                          <p className="mt-3 max-w-[46ch] leading-relaxed text-muted">{f.body}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               ))}
             </div>
@@ -124,20 +154,17 @@ export default function Landing() {
 
           <section className="border-t border-line py-20 md:py-28" aria-labelledby="servers-title">
             <div className="mx-auto max-w-6xl px-5">
-              <h2
-                id="servers-title"
-                className="type-wide text-3xl font-semibold tracking-tight md:text-4xl"
-              >
+              <h2 id="servers-title" className="type-display text-4xl md:text-5xl">
                 What our servers can see
               </h2>
               <p className="mt-4 max-w-2xl text-lg leading-relaxed text-muted">
                 End-to-end encryption protects what you say. It doesn’t hide that a conversation
                 exists, so here is exactly where the line is.
               </p>
-              <div className="mt-10 grid gap-px overflow-hidden rounded-lg border border-line bg-line md:grid-cols-2">
-                <div className="bg-surface p-6">
-                  <h3 className="font-semibold">Can’t see</h3>
-                  <ul className="mt-4 space-y-3">
+              <div className="mt-12 grid gap-5 md:grid-cols-2">
+                <div className="rounded-lg border border-line bg-surface p-7 shadow-2 md:p-8">
+                  <h3 className="type-display text-2xl">Can’t see</h3>
+                  <ul className="mt-6 space-y-4">
                     {SERVER.cannot.map((s) => (
                       <li key={s} className="flex items-start gap-3">
                         <CheckIcon
@@ -150,9 +177,9 @@ export default function Landing() {
                     ))}
                   </ul>
                 </div>
-                <div className="bg-surface p-6">
-                  <h3 className="font-semibold">Can see</h3>
-                  <ul className="mt-4 space-y-3">
+                <div className="rounded-lg border border-dashed border-line-strong p-7 md:p-8">
+                  <h3 className="type-display text-2xl">Can see</h3>
+                  <ul className="mt-6 space-y-4">
                     {SERVER.can.map((s) => (
                       <li key={s} className="flex items-start gap-3 text-muted">
                         <XIcon
@@ -171,8 +198,8 @@ export default function Landing() {
 
           <Faq />
 
-          <section className="bg-[#0F4C47] text-[#E6EEEE]">
-            <div className="mx-auto flex max-w-6xl flex-col items-start gap-8 px-5 py-20 md:flex-row md:items-end md:justify-between md:py-24">
+          <section className="bg-primary-gradient text-on-primary">
+            <div className="mx-auto flex max-w-6xl flex-col items-start gap-10 px-5 py-20 md:flex-row md:items-end md:justify-between md:py-28">
               <h2 className="type-display max-w-[16ch] text-4xl md:text-6xl">
                 Bring your circle. Keep it between you.
               </h2>
@@ -180,8 +207,8 @@ export default function Landing() {
                 <ButtonLink
                   to="/signup"
                   size="lg"
-                  // Fixed colours on the fixed teal band (cn merges, so these replace the variant's).
-                  className="bg-[#2DD4BF] text-[#04201D] hover:bg-[#5EEAD4]"
+                  // Inverted on the primary band: a caller's bg-* replaces the gradient.
+                  className="bg-on-primary text-[var(--vy-primary-from)] shadow-2 hover:bg-on-primary/90"
                 >
                   Create your account
                 </ButtonLink>
@@ -189,7 +216,7 @@ export default function Landing() {
                   to="/login"
                   size="lg"
                   variant="outline"
-                  className="border-[#E6EEEE]/40 text-[#E6EEEE] hover:bg-white/10"
+                  className="border-on-primary/45 text-on-primary hover:bg-on-primary/10"
                 >
                   Sign in
                 </ButtonLink>
