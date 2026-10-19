@@ -19,6 +19,12 @@ export interface AvatarProps {
   className?: string;
   /** Part of a larger labelled image (e.g. a group avatar): no role or name of its own. */
   decorative?: boolean;
+  /**
+   * Where the initials sit, as fractions of `size` (default the centre). For an avatar
+   * partly covered by another (the back of a pair): one initial, moved into the part
+   * that stays visible, so no glyph is ever cut.
+   */
+  glyphAt?: { x: number; y: number };
 }
 
 /** Below this size two letters get too small to read; show one. */
@@ -38,10 +44,15 @@ export function Avatar({
   size = 40,
   className,
   decorative,
+  glyphAt,
 }: AvatarProps) {
   const [failed, setFailed] = useState(false);
   const src = !failed ? avatarUrl(supabase, path) : null;
-  const initials = initialsFor(displayName, username ?? name, size < TWO_INITIALS_MIN ? 1 : 2);
+  const initials = initialsFor(
+    displayName,
+    username ?? name,
+    glyphAt || size < TWO_INITIALS_MIN ? 1 : 2,
+  );
   const two = initials !== initialsFor(displayName, username ?? name, 1);
   const tone = toneVars(userId);
   return (
@@ -73,7 +84,11 @@ export function Avatar({
               color: tone.ink,
               fontSize: Math.max(8, Math.round(size * (two ? 0.36 : 0.42))),
               letterSpacing: two ? '0.02em' : undefined,
+              transform: glyphAt
+                ? `translate(${Math.round((glyphAt.x - 0.5) * size)}px, ${Math.round((glyphAt.y - 0.5) * size)}px)`
+                : undefined,
             }}
+            data-glyph-at={glyphAt ? `${glyphAt.x},${glyphAt.y}` : undefined}
             aria-hidden="true"
           >
             {initials}
@@ -94,6 +109,17 @@ export interface AvatarPerson {
 /** The two members a group avatar shows: first two by id, so every device agrees. */
 export function groupAvatarPair(members: readonly AvatarPerson[]): AvatarPerson[] {
   return [...members].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).slice(0, 2);
+}
+
+/**
+ * A group avatar's layout for a box of `size`: each member circle is `inner` across; the
+ * front one sits bottom-right inside a `ring` px border. The back one shows a single
+ * initial centred at `backGlyph` × inner on both axes, in the quarter the front leaves
+ * uncovered (pinned by a no-overlap test for sizes ≥ 32; every use is ≥ 34). Shared with mobile's GroupAvatar.
+ */
+export function groupAvatarGeometry(size: number) {
+  const inner = Math.round(size * 0.62);
+  return { inner, ring: 2, backGlyph: 0.37 };
 }
 
 /**
@@ -140,7 +166,7 @@ export function GroupAvatar({
         <Avatar {...person(back)} size={size} decorative />
       </span>
     );
-  const inner = Math.round(size * 0.62);
+  const g = groupAvatarGeometry(size);
   return (
     <span
       className={cn('relative inline-block shrink-0', className)}
@@ -149,13 +175,19 @@ export function GroupAvatar({
       aria-label={label}
       data-group-avatar=""
     >
-      <Avatar {...person(back)} size={inner} decorative className="absolute left-0 top-0" />
+      <Avatar
+        {...person(back)}
+        size={g.inner}
+        decorative
+        className="absolute left-0 top-0"
+        glyphAt={{ x: g.backGlyph, y: g.backGlyph }}
+      />
       <span
         className="absolute bottom-0 right-0 rounded-full border-2"
         style={{ borderColor: 'var(--avatar-ring, var(--vy-surface))' }}
         data-avatar-front=""
       >
-        <Avatar {...person(front)} size={inner} decorative className="block" />
+        <Avatar {...person(front)} size={g.inner} decorative className="block" />
       </span>
     </span>
   );

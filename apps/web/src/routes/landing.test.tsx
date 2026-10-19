@@ -104,6 +104,26 @@ describe('Landing header', () => {
     expect(screen.queryByText('With your people')).toBeNull();
     expect(screen.queryByText('Between you only')).toBeNull();
   });
+
+  it('opens on the h1 with no eyebrow pill; the MLS claim lives in the demo footer', () => {
+    renderWithProviders(<Landing />);
+    const h1 = screen.getByRole('heading', { level: 1 });
+    expect(h1.previousElementSibling).toBeNull();
+    const claim = screen.getByText('End-to-end encrypted with MLS (RFC 9420).');
+    expect(claim.closest('section')?.contains(h1)).toBe(true);
+    expect(claim.parentElement?.className).toContain('border-t');
+  });
+});
+
+describe('Not found', () => {
+  it('has no tracked mono status label above the heading; the status is in the title', async () => {
+    const { default: NotFound } = await import('./NotFound');
+    renderWithProviders(<NotFound />);
+    const h1 = screen.getByRole('heading', { level: 1, name: 'This page isn’t here' });
+    expect(screen.queryByText('404')).toBeNull();
+    expect(h1.parentElement?.querySelector('.font-mono')).toBeNull();
+    expect(document.title).toContain('404');
+  });
 });
 
 describe('Landing in the saved look', () => {

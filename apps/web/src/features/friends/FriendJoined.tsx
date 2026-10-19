@@ -11,6 +11,13 @@ export type JoinedPerson = Pick<Friend, 'userId' | 'username' | 'displayName' | 
 const SIZE = 40;
 /** How far the two avatars overlap once joined. They start 16 px apart (see `.join-*`). */
 const OVERLAP = 12;
+/**
+ * Theirs covers the right of mine, so mine shows one initial moved left into what stays
+ * visible: its right edge clears their ring (pinned by a test).
+ */
+const MINE_GLYPH = { x: 0.38, y: 0.5 };
+/** The pair's layout, for the no-clipping test. */
+export const joinedAvatarGeometry = { size: SIZE, overlap: OVERLAP, ring: 2, mineGlyph: MINE_GLYPH };
 
 /** The sentence the card shows, and the one a screen reader hears when it appears. */
 export const joinedText = (friend: JoinedPerson) => `You and ${nameOf(friend)} are now friends`;
@@ -66,6 +73,7 @@ export function FriendJoinedCard({
             size={SIZE}
             decorative
             className="block"
+            glyphAt={MINE_GLYPH}
           />
         </span>
         <span

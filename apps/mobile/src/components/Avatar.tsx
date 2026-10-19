@@ -25,6 +25,11 @@ export interface AvatarProps {
   /** Part of a larger labelled image (a group avatar): no label of its own. */
   decorative?: boolean;
   style?: StyleProp<ViewStyle>;
+  /**
+   * Where the initials sit, as fractions of `size` (default the centre). For an avatar
+   * partly covered by another: one initial, moved into the part that stays visible.
+   */
+  glyphAt?: { x: number; y: number };
 }
 
 /**
@@ -40,12 +45,17 @@ export function Avatar({
   size = 40,
   decorative,
   style,
+  glyphAt,
 }: AvatarProps) {
   const tone = usePersonTone(userId);
   const t = useTheme();
   const [failed, setFailed] = useState(false);
   const uri = failed ? null : avatarUrl(supabase, path);
-  const initials = initialsFor(displayName, username ?? name, size < TWO_INITIALS_MIN ? 1 : 2);
+  const initials = initialsFor(
+    displayName,
+    username ?? name,
+    glyphAt || size < TWO_INITIALS_MIN ? 1 : 2,
+  );
   const two = initials.length > 1 && initials !== initialsFor(displayName, username ?? name, 1);
   const circle = { width: size, height: size, borderRadius: size / 2 };
   return (
@@ -87,7 +97,14 @@ export function Avatar({
               fontWeight: '600',
               fontSize: Math.max(8, Math.round(size * (two ? 0.36 : 0.42))),
               letterSpacing: two ? size * 0.0072 : undefined,
+              transform: glyphAt
+                ? [
+                    { translateX: Math.round((glyphAt.x - 0.5) * size) },
+                    { translateY: Math.round((glyphAt.y - 0.5) * size) },
+                  ]
+                : undefined,
             }}
+            testID={glyphAt ? `avatar-glyph-at-${glyphAt.x},${glyphAt.y}` : undefined}
           >
             {initials}
           </Text>
@@ -116,6 +133,15 @@ const person = (p: AvatarPerson) => ({
   displayName: p.display_name,
   username: p.username,
 });
+
+/**
+ * A group avatar's layout (same as web): member circles `inner` across, the front one
+ * bottom-right in a `ring` px border, and the back one's single initial centred at
+ * `backGlyph` × inner on both axes, in the quarter the front leaves uncovered.
+ */
+export function groupAvatarGeometry(size: number) {
+  return { inner: Math.round(size * 0.62), ring: 2, backGlyph: 0.37 };
+}
 
 /**
  * Two overlapping member avatars: the back one up-left, the front one down-right
@@ -158,7 +184,7 @@ export function GroupAvatar({
         <Avatar {...person(back)} size={size} decorative />
       </View>
     );
-  const inner = Math.round(size * 0.62);
+  const { inner, ring: ringWidth, backGlyph } = groupAvatarGeometry(size);
   return (
     <View {...a11y} style={{ width: size, height: size }} testID="group-avatar">
       <Avatar
@@ -166,14 +192,15 @@ export function GroupAvatar({
         size={inner}
         decorative
         style={{ position: 'absolute', left: 0, top: 0 }}
+        glyphAt={{ x: backGlyph, y: backGlyph }}
       />
       <View
         style={{
           position: 'absolute',
           right: 0,
           bottom: 0,
-          borderRadius: (inner + 4) / 2,
-          borderWidth: 2,
+          borderRadius: inner / 2 + ringWidth,
+          borderWidth: ringWidth,
           borderColor: ring ?? t.surface,
         }}
       >

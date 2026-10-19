@@ -19,6 +19,8 @@ export type JoinedPerson = Pick<Friend, 'userId' | 'username' | 'displayName' | 
 const SIZE = 40;
 /** How far the two avatars overlap once joined; they start 16 px further apart. */
 const OVERLAP = 12;
+/** Theirs covers the right of mine, so mine shows one initial moved left (same as web). */
+const MINE_GLYPH = { x: 0.38, y: 0.5 };
 const JOIN_MS = 280;
 const SLIDE = 14;
 
@@ -89,6 +91,7 @@ export function FriendJoinedCard({
             username={me.username}
             size={SIZE}
             decorative
+            glyphAt={MINE_GLYPH}
           />
         </Animated.View>
         {/* Theirs in front, with a ring in the card colour (a border, not a shadow). */}

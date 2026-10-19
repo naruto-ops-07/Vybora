@@ -615,3 +615,18 @@ describe('friend request badge', () => {
     expect(api.fetchFriendRequests).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('FriendJoined avatars', () => {
+  it('their ring never covers a glyph of mine', async () => {
+    const { joinedAvatarGeometry: g } = await import('./FriendJoined');
+    const fs = Math.max(8, Math.round(g.size * 0.42));
+    const r = g.size / 2 + g.ring;
+    const cx = g.size - g.overlap - g.ring + r;
+    const cy = -g.ring + r;
+    const right = g.mineGlyph.x * g.size + 0.42 * fs;
+    const gy = g.mineGlyph.y * g.size;
+    // The glyph box's nearest point to their centre (same row, so its right edge).
+    expect(Math.hypot(cx - right, cy - gy)).toBeGreaterThan(r + 0.5);
+    expect(g.mineGlyph.x * g.size - 0.42 * fs).toBeGreaterThan(2);
+  });
+});

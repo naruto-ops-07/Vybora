@@ -86,6 +86,7 @@ function SealDemo() {
         </p>
       </div>
       <p className="border-t border-line px-5 py-3 text-xs leading-relaxed text-subtle">
+        <span className="font-medium text-muted">End-to-end encrypted with MLS (RFC 9420).</span>{' '}
         A demonstration with a throwaway key. Real chats use MLS keys that only the members’ devices
         hold.
       </p>
@@ -99,10 +100,6 @@ export function Hero() {
       <Ambient />
       <div className="vy-canvas-layer mx-auto grid max-w-6xl items-center gap-14 px-5 pb-20 pt-14 md:grid-cols-[1.15fr_1fr] md:pb-32 md:pt-24">
         <div className="min-w-0">
-          <p className="mb-7 inline-flex items-center gap-2 rounded-full border border-line bg-surface/70 px-3 py-1.5 text-xs font-medium text-muted">
-            <LockSimpleIcon size={13} weight="fill" className="text-accent" aria-hidden="true" />
-            End-to-end encrypted with MLS (RFC 9420)
-          </p>
           <h1 className="type-display text-[2.75rem] sm:text-6xl lg:text-[5.5rem]">
             {LINES.map((line, i) => (
               <span key={line} className="block overflow-hidden pb-[0.06em]">

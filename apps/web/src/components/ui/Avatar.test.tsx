@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { personTone } from '@vybora/core';
 import { describe, expect, it } from 'vitest';
-import { Avatar, GroupAvatar } from './Avatar';
+import { Avatar, GroupAvatar, groupAvatarGeometry } from './Avatar';
 
 const MAYA = 'a3f1c2d4-0000-4000-8000-000000000001';
 
@@ -58,7 +58,8 @@ describe('GroupAvatar', () => {
     const group = screen.getByRole('img', { name: 'Group' });
     expect(screen.getAllByRole('img')).toHaveLength(1);
     const faces = group.querySelectorAll('[data-tone]');
-    expect([...faces].map((f) => f.textContent)).toEqual(['AR', 'B']);
+    // The back one shows a single initial, moved into its visible quarter.
+    expect([...faces].map((f) => f.textContent)).toEqual(['A', 'B']);
     expect([...faces].map((f) => f.getAttribute('data-tone'))).toEqual([
       personTone('a'),
       personTone('b'),
@@ -68,6 +69,29 @@ describe('GroupAvatar', () => {
     expect(ring.className).toContain('border-2');
     expect(ring.style.borderColor).toBe('var(--avatar-ring, var(--vy-surface))');
     expect(ring.style.boxShadow).toBe('');
+  });
+
+  it('never lets the front circle cover a glyph of the back one, at any size', () => {
+    for (const size of [32, 34, 36, 40, 44, 48, 56, 64, 72, 96]) {
+      const { inner, ring, backGlyph } = groupAvatarGeometry(size);
+      const fs = Math.max(8, Math.round(inner * 0.42));
+      // A generous glyph box: a wide capital (W, M) is ≤ 0.84 em; caps are ≤ 0.72 em tall.
+      const right = backGlyph * inner + 0.42 * fs;
+      const bottom = backGlyph * inner + 0.36 * fs;
+      const left = backGlyph * inner - 0.42 * fs;
+      const top = backGlyph * inner - 0.36 * fs;
+      const r = inner / 2 + ring;
+      const c = size - r; // front circle centre, both axes
+      // Nearest point of the glyph box to the front centre is its bottom-right corner.
+      expect(Math.hypot(c - right, c - bottom)).toBeGreaterThan(r + 0.5);
+      // …and the whole glyph stays inside the back circle.
+      const b = inner / 2;
+      expect(Math.hypot(b - left, b - top)).toBeLessThan(b);
+    }
+    const { container } = render(<GroupAvatar members={people} size={44} />);
+    expect(container.querySelector('[data-glyph-at]')?.getAttribute('data-glyph-at')).toBe(
+      '0.37,0.37',
+    );
   });
 
   it('shows one member alone and falls back to a glyph with nobody else', () => {

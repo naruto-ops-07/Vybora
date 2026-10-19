@@ -16,6 +16,7 @@ jest.mock('expo-secure-store', () => ({
 
 import { A11Y_STORAGE_KEY } from '@vybora/core';
 import { A11yProvider } from '@/lib/a11y';
+import { groupAvatarGeometry } from '@/components/Avatar';
 import { Avatar, Button, Empty, ErrorView, GroupAvatar, TextField } from '@/components/ui';
 
 /** Every host node type in the rendered tree (react-native-svg renders named hosts). */
@@ -107,9 +108,22 @@ describe('mobile UI primitives', () => {
     expect(screen.getByLabelText('Trip')).toBeTruthy();
     // The member avatars are decorative inside the labelled group image.
     const hidden = { includeHiddenElements: true };
-    expect(screen.getByText('AB', hidden)).toBeTruthy();
+    // The back one shows one initial, moved into the quarter the front leaves visible.
+    expect(screen.getByText('A', hidden)).toBeTruthy();
     expect(screen.getByText('B', hidden)).toBeTruthy();
     expect(screen.queryByText('C', hidden)).toBeNull();
-    expect(screen.queryByText('AB')).toBeNull();
+    expect(screen.queryByText('AB', hidden)).toBeNull();
+    expect(screen.getByTestId('avatar-glyph-at-0.37,0.37', hidden)).toBeTruthy();
+  });
+
+  it('GroupAvatar geometry keeps every glyph of the back avatar uncovered', () => {
+    for (const size of [32, 34, 40, 44, 48, 56, 64, 96]) {
+      const { inner, ring, backGlyph } = groupAvatarGeometry(size);
+      const fs = Math.max(8, Math.round(inner * 0.42));
+      const r = inner / 2 + ring;
+      const c = size - r;
+      const edge = backGlyph * inner;
+      expect(Math.hypot(c - (edge + 0.42 * fs), c - (edge + 0.36 * fs))).toBeGreaterThan(r + 0.5);
+    }
   });
 });
