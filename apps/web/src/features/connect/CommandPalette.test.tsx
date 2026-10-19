@@ -53,3 +53,23 @@ describe('command palette: add a friend', () => {
     expect(screen.getByText('/friends {"focusAddFriend":true}')).toBeInTheDocument();
   });
 });
+
+describe('command palette: appearance', () => {
+  function Probe() {
+    return <p>{useLocation().pathname}</p>;
+  }
+
+  it('has one Appearance… item that opens Settings → Appearance', async () => {
+    renderWithProviders(
+      <>
+        <CommandPalette open onOpenChange={vi.fn()} onNewChat={vi.fn()} />
+        <Routes>
+          <Route path="*" element={<Probe />} />
+        </Routes>
+      </>,
+    );
+    expect(screen.queryByRole('option', { name: /theme/i })).toBeNull();
+    await userEvent.click(screen.getByRole('option', { name: 'Appearance…' }));
+    expect(screen.getByText('/settings/appearance')).toBeInTheDocument();
+  });
+});

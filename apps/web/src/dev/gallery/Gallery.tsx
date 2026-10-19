@@ -4,13 +4,16 @@
  * Registered only when `import.meta.env.DEV`; never in production bundles.
  * No network, no auth, no encryption engine.
  *
- * URL state: `?theme=light|dark` and `?contrast=high`, so screenshots are repeatable.
+ * URL state: `?look=velvet|aurora|bloom`, `?theme=light|dark` and `?contrast=high`, so
+ * screenshots are repeatable.
  */
+import { LOOKS, looks, type Look } from '@vybora/config';
 import { useEffect, useLayoutEffect, useRef, type ComponentType } from 'react';
 import { useSearchParams } from 'react-router';
 import { Toggle } from '@/components/ui/Field';
 import { Segmented } from '@/components/ui/Segmented';
 import { useA11y } from '@/features/a11y/A11yProvider';
+import { LookPicker } from '@/features/settings/AppearancePage';
 import { ChatListSection } from './sections/ChatList';
 import { FriendsSection, SealedSendSection } from './sections/Delight';
 import { EmptyStatesSection, GetStartedSection, HandleCardSection } from './sections/FirstRun';
@@ -26,8 +29,40 @@ interface GallerySection {
   Component: ComponentType;
 }
 
+function LooksSection() {
+  const [params, setParams] = useSearchParams();
+  const look = lookParam(params.get('look'));
+  return (
+    <div className="max-w-3xl">
+      <LookPicker
+        value={look}
+        onChange={(next) =>
+          setParams(
+            (p) => {
+              const q = new URLSearchParams(p);
+              q.set('look', next);
+              return q;
+            },
+            { replace: true },
+          )
+        }
+      />
+    </div>
+  );
+}
+
+const lookParam = (v: string | null): Look =>
+  v && (LOOKS as readonly string[]).includes(v) ? (v as Look) : 'velvet';
+
 /** Add new sections here, in reading order. */
 const SECTIONS: GallerySection[] = [
+  {
+    id: 'looks',
+    title: 'Looks',
+    description:
+      'Settings → Appearance: each card is its own data-look scope, drawn in that look’s tokens, type and shape, in the current mode.',
+    Component: LooksSection,
+  },
   {
     id: 'tones',
     title: 'Personal tones',
@@ -106,9 +141,10 @@ export default function Gallery() {
   const [params, setParams] = useSearchParams();
   const theme: Theme = params.get('theme') === 'light' ? 'light' : 'dark';
   const highContrast = params.get('contrast') === 'high';
+  const look = lookParam(params.get('look'));
   const { prefs, setPrefs } = useA11y();
 
-  const set = (key: 'theme' | 'contrast', value: string | null) =>
+  const set = (key: 'look' | 'theme' | 'contrast', value: string | null) =>
     setParams(
       (p) => {
         const next = new URLSearchParams(p);
@@ -119,15 +155,17 @@ export default function Gallery() {
       { replace: true },
     );
 
-  // Theme is local to this page: the saved app preference is restored on the way out.
+  // Look and theme are local to this page: the saved appearance is restored on the way out.
   useLayoutEffect(() => {
     const html = document.documentElement;
-    const before = html.dataset.theme;
+    const before = { theme: html.dataset.theme, look: html.dataset.look };
     html.dataset.theme = theme;
+    html.dataset.look = look;
     return () => {
-      if (before) html.dataset.theme = before;
+      if (before.theme) html.dataset.theme = before.theme;
+      if (before.look) html.dataset.look = before.look;
     };
-  }, [theme]);
+  }, [theme, look]);
 
   // High contrast goes through the real setting (bubbles read it); restored on unmount.
   const savedContrast = useRef(prefs.highContrast);
@@ -158,6 +196,14 @@ export default function Gallery() {
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <div className="w-64">
+              <Segmented
+                label="Look"
+                value={look}
+                options={LOOKS.map((l) => ({ value: l, label: looks[l].name }))}
+                onChange={(v) => set('look', v)}
+              />
+            </div>
             <div className="w-40">
               <Segmented
                 label="Theme"

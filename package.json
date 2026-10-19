@@ -25,7 +25,8 @@
     "db:status": "npx supabase@latest migration list",
     "seed:demo": "node scripts/seed-demo.mjs",
     "brand:assets": "node scripts/generate-brand-assets.mjs",
-    "brand:tones": "node scripts/generate-tones.mjs"
+    "brand:tones": "node scripts/generate-tones.mjs",
+    "theme:css": "node scripts/gen-look-css.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.4",

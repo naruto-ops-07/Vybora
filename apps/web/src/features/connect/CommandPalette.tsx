@@ -1,13 +1,11 @@
 import {
   ChatCircleIcon,
-  DesktopIcon,
   EyeIcon,
   GearSixIcon,
   KeyboardIcon,
-  MoonIcon,
   NotePencilIcon,
+  PaletteIcon,
   ShieldCheckIcon,
-  SunIcon,
   UserPlusIcon,
   UsersThreeIcon,
 } from '@phosphor-icons/react';
@@ -15,7 +13,6 @@ import { Command } from 'cmdk';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { useMe } from '@/features/auth/AuthProvider';
-import { useTheme } from '@/lib/theme';
 import { conversationTitle, useNicknames, useSecureInbox } from './hooks';
 
 function Item({
@@ -76,7 +73,6 @@ export function CommandPalette({
   const { userId } = useMe();
   const inbox = useSecureInbox();
   const nicknames = useNicknames();
-  const { setTheme } = useTheme();
   const run = (fn: () => void) => {
     onOpenChange(false);
     fn();
@@ -158,25 +154,11 @@ export function CommandPalette({
             Accessibility
           </Item>
           <Item
-            value="theme dark"
-            icon={<MoonIcon size={18} />}
-            onSelect={() => run(() => setTheme('dark'))}
+            value="appearance look theme dark light mode velvet aurora bloom"
+            icon={<PaletteIcon size={18} />}
+            onSelect={() => run(() => navigate('/settings/appearance'))}
           >
-            Dark theme
-          </Item>
-          <Item
-            value="theme light"
-            icon={<SunIcon size={18} />}
-            onSelect={() => run(() => setTheme('light'))}
-          >
-            Light theme
-          </Item>
-          <Item
-            value="theme system"
-            icon={<DesktopIcon size={18} />}
-            onSelect={() => run(() => setTheme('system'))}
-          >
-            Match system theme
+            Appearance…
           </Item>
         </Command.Group>
 

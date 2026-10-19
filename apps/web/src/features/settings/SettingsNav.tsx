@@ -1,6 +1,7 @@
 import {
   CaretRightIcon,
   EyeIcon,
+  PaletteIcon,
   ShieldCheckIcon,
   UserCircleIcon,
   UserGearIcon,
@@ -17,6 +18,12 @@ const SECTIONS: { to: string; label: string; description: string; icon: ReactNod
     icon: <UserCircleIcon size={20} />,
   },
   {
+    to: '/settings/appearance',
+    label: 'Appearance',
+    description: 'Look, light and dark',
+    icon: <PaletteIcon size={20} />,
+  },
+  {
     to: '/settings/privacy',
     label: 'Privacy & security',
     description: 'Devices, receipts, notifications, blocked',
@@ -31,7 +38,7 @@ const SECTIONS: { to: string; label: string; description: string; icon: ReactNod
   {
     to: '/settings/account',
     label: 'Account',
-    description: 'Appearance, sign out, delete account',
+    description: 'Sign out, delete account',
     icon: <UserGearIcon size={20} />,
   },
 ];

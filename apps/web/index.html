@@ -7,26 +7,63 @@
       name="description"
       content="VYBORA — private messaging with end-to-end encryption, on the web and on your phone."
     />
-    <meta name="theme-color" content="#0A0E0F" />
+    <meta name="theme-color" content="#0F0D0B" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..700&family=IBM+Plex+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
     <title>VYBORA</title>
     <script>
-      // Apply the saved theme before first paint to avoid a flash.
-      try {
-        var t = localStorage.getItem('vybora-theme');
-        var dark =
-          t === 'dark' ||
-          ((!t || t === 'system') && matchMedia('(prefers-color-scheme: dark)').matches);
-        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-      } catch (e) {}
+      // Apply the saved look and mode before first paint, so the wrong look never
+      // flashes. Mirrors initialAppearance() in src/lib/theme.ts (theme.test.ts runs
+      // this script against it). The colours are each look's background.
+      (function () {
+        var C = {
+          velvet: { light: '#FBF8F2', dark: '#0F0D0B' },
+          aurora: { light: '#F3F6F6', dark: '#0A0E0F' },
+          bloom: { light: '#F7F5FC', dark: '#17121F' },
+        };
+        function read(key) {
+          try {
+            return localStorage.getItem(key);
+          } catch (e) {
+            return null;
+          }
+        }
+        var d = null;
+        try {
+          var raw = read('vybora.appearance');
+          d = raw ? JSON.parse(raw) : null;
+        } catch (e) {
+          d = null;
+        }
+        if (!d || typeof d !== 'object' || Array.isArray(d)) d = {};
+        var legacy = read('vybora-theme');
+        var look =
+          typeof d.look === 'string' && Object.prototype.hasOwnProperty.call(C, d.look)
+            ? d.look
+            : 'velvet';
+        var mode =
+          d.mode === 'system' || d.mode === 'light' || d.mode === 'dark'
+            ? d.mode
+            : legacy === 'light' || legacy === 'dark'
+              ? legacy
+              : 'system';
+        var dark = mode === 'dark';
+        if (mode === 'system') {
+          try {
+            dark = !!matchMedia('(prefers-color-scheme: dark)').matches;
+          } catch (e) {
+            dark = false;
+          }
+        }
+        var theme = dark ? 'dark' : 'light';
+        try {
+          document.documentElement.setAttribute('data-look', look);
+          document.documentElement.setAttribute('data-theme', theme);
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', C[look][theme]);
+        } catch (e) {}
+      })();
     </script>
   </head>
   <body>

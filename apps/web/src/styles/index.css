@@ -1,99 +1,13 @@
 @import 'tailwindcss';
+/*
+ * VYBORA design tokens. Colours, tones, radii, shadows and fonts per look (Velvet,
+ * Aurora, Bloom) × mode are generated from packages/config by `pnpm theme:css`.
+ * Rules: docs/DESIGN_SYSTEM.md. High contrast is flat: no gradient, glow or shadow.
+ */
+@import './looks.generated.css';
 
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
-/*
- * VYBORA design tokens — mirror packages/config/src/index.ts.
- * Rules: docs/DESIGN_SYSTEM.md. Flat surfaces, borders for separation,
- * no gradients, no shadows.
- */
-:root {
-  --vy-bg: #f3f6f6;
-  --vy-surface: #ffffff;
-  --vy-surface-muted: #edf2f2;
-  --vy-surface-strong: #e2eaea;
-  --vy-border: #dce4e4;
-  --vy-border-strong: #c2cfcf;
-  --vy-text: #0b1416;
-  --vy-text-muted: #4b5c5e;
-  --vy-text-subtle: #5f7173;
-  --vy-accent: #0f766e;
-  --vy-accent-hover: #115e59;
-  --vy-accent-soft: #ddf3f0;
-  --vy-on-accent: #ffffff;
-  --vy-bubble-in: #edf2f2;
-  --vy-danger: #b42318;
-  --vy-danger-soft: #fdecea;
-  --vy-success: #047857;
-  --vy-warning: #b45309;
-  --vy-warning-soft: #fdf3e2;
-  --vy-scrim: rgb(11 20 22 / 0.55);
-  color-scheme: light;
-}
-
-[data-theme='dark'] {
-  --vy-bg: #0a0e0f;
-  --vy-surface: #0f1517;
-  --vy-surface-muted: #151d1f;
-  --vy-surface-strong: #1b2528;
-  --vy-border: #1f2a2d;
-  --vy-border-strong: #2e3d41;
-  --vy-text: #e6eeee;
-  --vy-text-muted: #9aacad;
-  --vy-text-subtle: #75898b;
-  --vy-accent: #2dd4bf;
-  --vy-accent-hover: #5eead4;
-  --vy-accent-soft: #0e2b2a;
-  --vy-on-accent: #04201d;
-  --vy-bubble-in: #1b2528;
-  --vy-danger: #f87171;
-  --vy-danger-soft: #2a1414;
-  --vy-success: #34d399;
-  --vy-warning: #fbbf24;
-  --vy-warning-soft: #2a2110;
-  --vy-scrim: rgb(0 0 0 / 0.6);
-  color-scheme: dark;
-}
-
-/* Accessibility → High contrast (values mirror highContrastThemes in packages/config). */
-:root[data-contrast='high'] {
-  --vy-bg: #ffffff;
-  --vy-surface: #ffffff;
-  --vy-surface-muted: #f1f5f5;
-  --vy-surface-strong: #e2eaea;
-  --vy-border: #5f7173;
-  --vy-border-strong: #2e3d41;
-  --vy-text: #0b1416;
-  --vy-text-muted: #2e3d41;
-  --vy-text-subtle: #3e4f52;
-  --vy-accent: #115e59;
-  --vy-accent-hover: #0f4c47;
-  --vy-accent-soft: #cdedea;
-  --vy-on-accent: #ffffff;
-  --vy-bubble-in: #e2eaea;
-  --vy-danger: #8f1b12;
-  --vy-success: #065f46;
-  --vy-warning: #7c3a06;
-}
-:root[data-theme='dark'][data-contrast='high'] {
-  --vy-bg: #000000;
-  --vy-surface: #0a0e0f;
-  --vy-surface-muted: #151d1f;
-  --vy-surface-strong: #1f2a2d;
-  --vy-border: #75898b;
-  --vy-border-strong: #9aacad;
-  --vy-text: #ffffff;
-  --vy-text-muted: #c9d6d6;
-  --vy-text-subtle: #afc0c1;
-  --vy-accent: #5eead4;
-  --vy-accent-hover: #99f6e4;
-  --vy-accent-soft: #0e2b2a;
-  --vy-on-accent: #04201d;
-  --vy-bubble-in: #1f2a2d;
-  --vy-danger: #fca5a5;
-  --vy-success: #6ee7b7;
-  --vy-warning: #fcd34d;
-}
 /*
  * Chat rows are whole-row links, and button-styled links already read as
  * controls (border or fill); underlining them hurts more than it helps.
@@ -101,100 +15,6 @@
 :root[data-contrast='high'] a:not([data-chat-link]):not([data-button]) {
   text-decoration: underline;
   text-underline-offset: 2px;
-}
-
-/*
- * Personal tones (mirror personTones in packages/config). Identity only: avatar
- * fallbacks, group sender names, mentions. Never chrome, buttons or backgrounds.
- */
-:root {
-  --vy-tone-turquoise-fill: #99f6e4;
-  --vy-tone-turquoise-ink: #115e59;
-  --vy-tone-turquoise-name: #0f766e;
-  --vy-tone-emerald-fill: #a7f3d0;
-  --vy-tone-emerald-ink: #065f46;
-  --vy-tone-emerald-name: #047857;
-  --vy-tone-lime-fill: #d9f99d;
-  --vy-tone-lime-ink: #3f6212;
-  --vy-tone-lime-name: #3f6212;
-  --vy-tone-aqua-fill: #a5f3fc;
-  --vy-tone-aqua-ink: #155e75;
-  --vy-tone-aqua-name: #0e7490;
-  --vy-tone-sky-fill: #bae6fd;
-  --vy-tone-sky-ink: #075985;
-  --vy-tone-sky-name: #0369a1;
-  --vy-tone-mint-fill: #d1fae5;
-  --vy-tone-mint-ink: #065f46;
-  --vy-tone-mint-name: #065f46;
-  --vy-tone-ocean-fill: #bfdbfe;
-  --vy-tone-ocean-ink: #1d4ed8;
-  --vy-tone-ocean-name: #1d4ed8;
-  --vy-tone-glacier-fill: #e0e7ff;
-  --vy-tone-glacier-ink: #4338ca;
-  --vy-tone-glacier-name: #4338ca;
-}
-[data-theme='dark'] {
-  --vy-tone-turquoise-fill: #2dd4bf;
-  --vy-tone-turquoise-ink: #0a0e0f;
-  --vy-tone-turquoise-name: #2dd4bf;
-  --vy-tone-emerald-fill: #34d399;
-  --vy-tone-emerald-ink: #0a0e0f;
-  --vy-tone-emerald-name: #34d399;
-  --vy-tone-lime-fill: #a3e635;
-  --vy-tone-lime-ink: #0a0e0f;
-  --vy-tone-lime-name: #a3e635;
-  --vy-tone-aqua-fill: #22d3ee;
-  --vy-tone-aqua-ink: #0a0e0f;
-  --vy-tone-aqua-name: #22d3ee;
-  --vy-tone-sky-fill: #38bdf8;
-  --vy-tone-sky-ink: #0a0e0f;
-  --vy-tone-sky-name: #38bdf8;
-  --vy-tone-mint-fill: #6ee7b7;
-  --vy-tone-mint-ink: #0a0e0f;
-  --vy-tone-mint-name: #6ee7b7;
-  --vy-tone-ocean-fill: #60a5fa;
-  --vy-tone-ocean-ink: #0a0e0f;
-  --vy-tone-ocean-name: #60a5fa;
-  --vy-tone-glacier-fill: #a5b4fc;
-  --vy-tone-glacier-ink: #0a0e0f;
-  --vy-tone-glacier-name: #a5b4fc;
-}
-/* High contrast: fills stay; initials take the theme ink (≥ 7:1), names the text colour. */
-:root[data-contrast='high'] {
-  --vy-tone-turquoise-ink: #0b1416;
-  --vy-tone-turquoise-name: var(--vy-text);
-  --vy-tone-emerald-ink: #0b1416;
-  --vy-tone-emerald-name: var(--vy-text);
-  --vy-tone-lime-ink: #0b1416;
-  --vy-tone-lime-name: var(--vy-text);
-  --vy-tone-aqua-ink: #0b1416;
-  --vy-tone-aqua-name: var(--vy-text);
-  --vy-tone-sky-ink: #0b1416;
-  --vy-tone-sky-name: var(--vy-text);
-  --vy-tone-mint-ink: #0b1416;
-  --vy-tone-mint-name: var(--vy-text);
-  --vy-tone-ocean-ink: #0b1416;
-  --vy-tone-ocean-name: var(--vy-text);
-  --vy-tone-glacier-ink: #0b1416;
-  --vy-tone-glacier-name: var(--vy-text);
-}
-:root[data-theme='dark'][data-contrast='high'] {
-  --vy-tone-turquoise-ink: #0a0e0f;
-  --vy-tone-turquoise-name: var(--vy-text);
-  --vy-tone-emerald-ink: #0a0e0f;
-  --vy-tone-emerald-name: var(--vy-text);
-  --vy-tone-lime-ink: #0a0e0f;
-  --vy-tone-lime-name: var(--vy-text);
-  --vy-tone-aqua-ink: #0a0e0f;
-  --vy-tone-aqua-name: var(--vy-text);
-  --vy-tone-sky-ink: #0a0e0f;
-  --vy-tone-sky-name: var(--vy-text);
-  --vy-tone-mint-ink: #0a0e0f;
-  --vy-tone-mint-name: var(--vy-text);
-  --vy-tone-ocean-ink: #0a0e0f;
-  --vy-tone-ocean-name: var(--vy-text);
-  --vy-tone-glacier-ink: #0a0e0f;
-  --vy-tone-glacier-name: var(--vy-text);
 }
 
 /* Accessibility → Text size (message text, chat rows, composer). */
@@ -225,7 +45,10 @@
   --color-accent-hover: var(--vy-accent-hover);
   --color-accent-soft: var(--vy-accent-soft);
   --color-on-accent: var(--vy-on-accent);
+  --color-on-primary: var(--vy-on-primary);
   --color-bubble-in: var(--vy-bubble-in);
+  --color-bubble-out-text: var(--vy-bubble-out-text);
+  --color-panel: var(--vy-panel);
   --color-danger: var(--vy-danger);
   --color-danger-soft: var(--vy-danger-soft);
   --color-success: var(--vy-success);
@@ -233,38 +56,48 @@
   --color-warning-soft: var(--vy-warning-soft);
   --color-scrim: var(--vy-scrim);
 
-  --font-sans: 'Archivo', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-display: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+  /* Each look's own shape: sm controls, md bubbles and cards, lg panels and dialogs. */
+  --radius-sm: var(--vy-radius-sm);
+  --radius-md: var(--vy-radius-md);
+  --radius-lg: var(--vy-radius-lg);
+
+  /* Elevation 1 bubbles, buttons, cards · 2 menus, popovers, toasts · 3 dialogs, sheets. */
+  --shadow-sm: var(--vy-shadow-1);
+  --shadow-md: var(--vy-shadow-2);
+  --shadow-lg: var(--vy-shadow-3);
+
+  --font-sans: var(--vy-font-text);
+  --font-display: var(--vy-font-display);
+  /* Data only: timestamps, counts, codes. */
   --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 }
 
-/* Radius guardrails: three radii only (4 / 8 / 12). Larger utilities collapse to 12. */
 @theme {
-  --radius-xs: 4px;
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 12px;
-  --radius-2xl: 12px;
-  --radius-3xl: 12px;
-
-  /* No shadows anywhere: hierarchy comes from borders and surface tone. */
-  --shadow-2xs: none;
-  --shadow-xs: none;
-  --shadow-sm: none;
-  --shadow-md: none;
-  --shadow-lg: none;
-  --shadow-xl: none;
-  --shadow-2xl: none;
-  --drop-shadow-xs: none;
-  --drop-shadow-sm: none;
-  --drop-shadow-md: none;
-  --drop-shadow-lg: none;
-  --drop-shadow-xl: none;
-  --drop-shadow-2xl: none;
-
   --text-2xs: 11px;
   --text-2xs--line-height: 16px;
+}
+
+/* Gradients and depth. Under high contrast the stops are one colour and shadows none. */
+@utility bg-primary-gradient {
+  background-color: var(--vy-primary-to);
+  background-image: linear-gradient(135deg, var(--vy-primary-from), var(--vy-primary-to));
+}
+@utility bg-bubble-out {
+  background-color: var(--vy-bubble-out-to);
+  background-image: linear-gradient(
+    var(--vy-bubble-out-angle),
+    var(--vy-bubble-out-from),
+    var(--vy-bubble-out-to)
+  );
+}
+@utility shadow-1 {
+  box-shadow: var(--vy-shadow-1);
+}
+@utility shadow-2 {
+  box-shadow: var(--vy-shadow-2);
+}
+@utility shadow-3 {
+  box-shadow: var(--vy-shadow-3);
 }
 
 @layer base {
@@ -277,6 +110,7 @@
     font-size: 15px;
     line-height: 1.5;
     font-feature-settings: 'kern';
+    font-optical-sizing: auto;
   }
   :focus-visible {
     outline: 2px solid var(--vy-accent);
@@ -335,17 +169,15 @@
   .break-anywhere {
     overflow-wrap: anywhere;
   }
-  /* Expanded Archivo (variable width axis): the brand's display voice. */
+  /* The look's display face (Fraunces, Sora or Plus Jakarta Sans): titles and names. */
   .type-wide {
-    font-stretch: 125%;
-    font-variation-settings: 'wdth' 125;
+    font-family: var(--vy-font-display);
   }
   .type-display {
-    font-stretch: 125%;
-    font-variation-settings: 'wdth' 125;
+    font-family: var(--vy-font-display);
     font-weight: 600;
-    letter-spacing: -0.025em;
-    line-height: 1.02;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
   }
 }
 

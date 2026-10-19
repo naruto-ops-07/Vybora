@@ -13,10 +13,13 @@
  *   desktop-hc.png     1440×900, dark + high contrast
  *   mobile-light.png   390×844, light
  *   mobile-hc.png      390×844, dark + high contrast
+ *   desktop-{aurora,bloom}[-light].png  1440×900, the other looks, dark and light
  *   landing.png        1440×900, the signed-out landing page (`/`)
  *
- * Requests to anything other than the dev server and Google Fonts are blocked, so a
- * stray call can never reach a hosted backend.
+ * Without `?look=` the gallery shows Velvet, the default look.
+ *
+ * Requests to anything other than the dev server are blocked (fonts are self-hosted), so
+ * a stray call can never reach a hosted backend.
  */
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -27,7 +30,7 @@ const base = new URL(process.argv[2] ?? 'http://localhost:5173');
 const out = join(dirname(fileURLToPath(import.meta.url)), '..', '.impeccable', 'review');
 mkdirSync(out, { recursive: true });
 
-const ALLOWED_HOSTS = new Set([base.host, 'fonts.googleapis.com', 'fonts.gstatic.com']);
+const ALLOWED_HOSTS = new Set([base.host]);
 
 const SHOTS = [
   { file: 'desktop.png', viewport: { width: 1440, height: 900 }, query: 'theme=dark' },
@@ -50,6 +53,13 @@ const SHOTS = [
     query: 'theme=dark&contrast=high',
     mobile: true,
   },
+  ...['aurora', 'bloom'].flatMap((look) =>
+    ['dark', 'light'].map((theme) => ({
+      file: `desktop-${look}${theme === 'light' ? '-light' : ''}.png`,
+      viewport: { width: 1440, height: 900 },
+      query: `look=${look}&theme=${theme}`,
+    })),
+  ),
   // Signed out (a fresh context has no session), so `/` renders the landing page.
   { file: 'landing.png', viewport: { width: 1440, height: 900 }, path: '/' },
 ];
