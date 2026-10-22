@@ -313,3 +313,79 @@
     0 0 0 1px rgba(255, 255, 255, 0.05),
     var(--vy-shadow-2);
 }
+
+/* ── App lock: the lock screen ──────────────────────────────────────── */
+.vy-lock-badge {
+  background: linear-gradient(145deg, var(--vy-primary-from), var(--vy-primary-to));
+  color: var(--vy-on-primary);
+  box-shadow:
+    0 0 0 8px color-mix(in srgb, var(--vy-accent) 10%, transparent),
+    var(--vy-shadow-2);
+}
+.vy-lock-slot {
+  background: var(--vy-surface);
+  border: 1px solid var(--vy-border);
+  box-shadow: var(--vy-shadow-1);
+  transition:
+    border-color 150ms ease,
+    transform 150ms ease;
+}
+.vy-lock-slot[data-current] {
+  border-color: var(--vy-edge);
+}
+.vy-lock-slots:focus-within .vy-lock-slot[data-current] {
+  border-color: var(--vy-accent);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--vy-accent) 35%, transparent),
+    var(--vy-shadow-1);
+}
+.vy-lock-dot {
+  background: var(--vy-border);
+  transition:
+    background-color 150ms ease,
+    transform 150ms ease;
+}
+.vy-lock-slot[data-filled] .vy-lock-dot {
+  background: var(--vy-text);
+  transform: scale(1.25);
+}
+.vy-lock-shake {
+  animation: vy-lock-shake 320ms ease;
+}
+@keyframes vy-lock-shake {
+  20%,
+  60% {
+    transform: translateX(-6px);
+  }
+  40%,
+  80% {
+    transform: translateX(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vy-lock-shake {
+    animation: none;
+  }
+  .vy-lock-slot,
+  .vy-lock-dot {
+    transition: none;
+  }
+}
+:root[data-reduce-motion='true'] .vy-lock-shake {
+  animation: none;
+}
+/* High contrast: flat, no gradient, shadow or glow. */
+:root[data-contrast='high'] .vy-lock-badge {
+  background: var(--vy-surface);
+  color: var(--vy-text);
+  border: 2px solid var(--vy-text);
+  box-shadow: none;
+}
+:root[data-contrast='high'] .vy-lock-slot {
+  box-shadow: none;
+  border: 2px solid var(--vy-border-strong);
+}
+:root[data-contrast='high'] .vy-lock-slots:focus-within .vy-lock-slot[data-current] {
+  border-color: var(--vy-accent);
+  box-shadow: none;
+}

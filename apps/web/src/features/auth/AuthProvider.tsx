@@ -3,6 +3,7 @@ import { clearSignedUrlCache, fetchMyProfile, getMyRoles, qk } from '@vybora/api
 import { isAdmin, isStaff } from '@vybora/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { clearLock } from '@/features/applock/store';
 import { supabase } from '@/lib/supabase';
 
 export interface MyProfile {
@@ -39,13 +40,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
+    // The last signed-in user on this device: signing out clears their app lock.
+    let lastUser: string | null = null;
     supabase.auth.getSession().then(({ data }) => {
       if (active) setSession(data.session);
+      lastUser = data.session?.user.id ?? lastUser;
     });
     const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       setSession(next);
+      if (next?.user.id) lastUser = next.user.id;
       if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true);
       if (event === 'SIGNED_OUT') {
+        if (lastUser) clearLock(lastUser);
+        lastUser = null;
         clearSignedUrlCache();
         qc.clear();
       }

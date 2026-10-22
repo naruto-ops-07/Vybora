@@ -14,6 +14,7 @@ import { Toggle } from '@/components/ui/Field';
 import { Segmented } from '@/components/ui/Segmented';
 import { useA11y } from '@/features/a11y/A11yProvider';
 import { LookPicker } from '@/features/settings/AppearancePage';
+import { AppLockSection } from './sections/AppLock';
 import { ChatListSection } from './sections/ChatList';
 import { FriendsSection, SealedSendSection } from './sections/Delight';
 import { EmptyStatesSection, GetStartedSection, HandleCardSection } from './sections/FirstRun';
@@ -148,6 +149,13 @@ const SECTIONS: GallerySection[] = [
     description:
       'The friendship-joined card, requests in Received and Sent tabs, and friend rows. The two avatars slide together once; under reduced motion they start joined.',
     Component: FriendsSection,
+  },
+  {
+    id: 'app-lock',
+    title: 'App lock',
+    description:
+      'The lock screen (locked, wrong passcode, waiting with sign out offered) and Settings → Privacy & security → App lock (off, choosing, mismatch, on, turning off).',
+    Component: AppLockSection,
   },
 ];
 

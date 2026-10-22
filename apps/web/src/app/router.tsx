@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate, Outlet, type RouteObject } from 'react-router';
 import { PageSpinner } from '@/components/ui/Spinner';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { AppLockGate } from '@/features/applock/AppLockGate';
 import { RedirectIfAuthed, RequireAuth } from '@/features/auth/guards';
 import { RouteError } from '@/routes/RouteError';
 import { PUBLIC_PAGES } from '@/site/meta';
@@ -81,23 +82,32 @@ export const routes: RouteObject[] = [
         element: <RequireAuth />,
         children: [
           {
-            element: <Workspace />,
+            // This device's app lock covers everything signed in.
+            element: <AppLockGate />,
             children: [
-              { path: 'messages', element: <MessagesWelcome /> },
-              { path: 'messages/privacy', element: <Navigate to="/settings/privacy" replace /> },
-              { path: 'messages/legacy', element: <LegacyInbox /> },
-              { path: 'messages/legacy/:conversationId', element: <LegacyConversation /> },
-              { path: 'messages/:conversationId', element: <ChatPane /> },
-              { path: 'friends', element: <FriendsWelcome /> },
               {
-                path: 'settings',
+                element: <Workspace />,
                 children: [
-                  { index: true, element: <SettingsIndex /> },
-                  { path: 'profile', element: <ProfileSettings /> },
-                  { path: 'appearance', element: <AppearanceSettings /> },
-                  { path: 'privacy', element: <PrivacySettings /> },
-                  { path: 'accessibility', element: <AccessibilitySettings /> },
-                  { path: 'account', element: <AccountSettings /> },
+                  { path: 'messages', element: <MessagesWelcome /> },
+                  {
+                    path: 'messages/privacy',
+                    element: <Navigate to="/settings/privacy" replace />,
+                  },
+                  { path: 'messages/legacy', element: <LegacyInbox /> },
+                  { path: 'messages/legacy/:conversationId', element: <LegacyConversation /> },
+                  { path: 'messages/:conversationId', element: <ChatPane /> },
+                  { path: 'friends', element: <FriendsWelcome /> },
+                  {
+                    path: 'settings',
+                    children: [
+                      { index: true, element: <SettingsIndex /> },
+                      { path: 'profile', element: <ProfileSettings /> },
+                      { path: 'appearance', element: <AppearanceSettings /> },
+                      { path: 'privacy', element: <PrivacySettings /> },
+                      { path: 'accessibility', element: <AccessibilitySettings /> },
+                      { path: 'account', element: <AccountSettings /> },
+                    ],
+                  },
                 ],
               },
             ],

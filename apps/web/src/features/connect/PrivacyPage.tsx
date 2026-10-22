@@ -34,6 +34,7 @@ import { ConfirmDialog } from '@/components/ui/Dialog';
 import { Input, Toggle } from '@/components/ui/Field';
 import { Segmented } from '@/components/ui/Segmented';
 import { useToast } from '@/components/ui/Toast';
+import { AppLockSection } from '@/features/applock/AppLockSection';
 import { useMe } from '@/features/auth/AuthProvider';
 import { SettingsPage } from '@/features/settings/SettingsNav';
 import { cn } from '@/lib/cn';
@@ -154,6 +155,8 @@ export default function PrivacyPage() {
           </p>
         </div>
       </div>
+
+      <AppLockSection />
 
       <Section
         title="Encryption"
