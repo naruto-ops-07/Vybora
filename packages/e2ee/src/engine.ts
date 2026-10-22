@@ -32,6 +32,7 @@ import {
   type StoredIdentity,
 } from './identity';
 import {
+  UUID_RE,
   openPayload,
   sealPayload,
   type AttachmentRef,
@@ -41,6 +42,7 @@ import {
 import { getJson, setJson, type KeyValueStore } from './store';
 import {
   ConnectError,
+  isTransient,
   toConnectError,
   type ConnectTransport,
   type ConversationInfo,
@@ -197,6 +199,12 @@ export class ConnectEngine {
   private readonly config: ClientConfig;
   private listeners = new Set<(conversationId: string) => void>();
   private readonly infoCache = new Map<string, ConversationInfo>();
+  /**
+   * Bumped whenever a directory lookup fails transiently. MLS may wrap the
+   * error it gets from our lookup, so processing compares this counter
+   * instead of relying on the error type alone.
+   */
+  private transientLookups = 0;
 
   constructor(
     private readonly transport: ConnectTransport,
@@ -349,8 +357,6 @@ export class ConnectEngine {
         );
         this.emit(conversationId);
       }
-      await setJson(this.store, `pp/${conversationId}/${id}`, payload);
-      return this.deliverLocked(conversationId, id, attachmentPaths);
       await setJson(this.store, `pp/${conversationId}/${id}`, payload);
       return this.deliverLocked(conversationId, id, attachmentPaths);
     });
@@ -674,9 +680,16 @@ export class ConnectEngine {
   }
 
   private async lookupDevice(deviceId: string): Promise<DirectoryDevice | null> {
+    if (!UUID_RE.test(deviceId)) return null; // never send crafted ids to the server
     const cached = this.directoryCache.get(deviceId);
     if (cached) return cached;
-    const d = await this.transport.getDevice(deviceId);
+    let d;
+    try {
+      d = await this.transport.getDevice(deviceId);
+    } catch (error) {
+      if (isTransient(error)) this.transientLookups++;
+      throw error;
+    }
     if (!d) return null;
     const entry: DirectoryDevice = {
       deviceId: d.id,
@@ -930,6 +943,9 @@ export class ConnectEngine {
     me: string,
     info: ConversationInfo,
   ): Promise<ClientState | 'broken'> {
+    const lookupsBefore = this.transientLookups;
+    const transient = (error: unknown) =>
+      isTransient(error) || this.transientLookups !== lookupsBefore;
     if (env.kind === 'commit') {
       if (env.epoch < epochOf(state)) return state; // already past this epoch (e.g. joined later)
       if (env.senderDeviceId === me) {
@@ -945,7 +961,9 @@ export class ConnectEngine {
       }
       try {
         return (await processIncoming(state, b64.decode(env.ciphertext))).state;
-      } catch {
+      } catch (error) {
+        // Transient (e.g. a directory lookup failed): abort; retry the commit later.
+        if (transient(error)) throw error;
         return 'broken';
       }
     }
@@ -974,13 +992,23 @@ export class ConnectEngine {
         });
       return state;
     }
+    // Once MLS has decrypted the message its ratchet has moved on: even if the
+    // payload is then rejected, keep the advanced state or the sender's next
+    // messages can't be decrypted.
+    let advanced = state;
     try {
       const r = await processIncoming(state, b64.decode(env.ciphertext));
+      advanced = r.state;
       if (r.kind !== 'application') return r.state;
-      const opened = await openPayload(conversationId, r.plaintext, async (deviceId) => {
-        const d = await this.lookupDevice(deviceId);
-        return d ? b64.decode(d.identityKey) : null;
-      });
+      const opened = await openPayload(
+        conversationId,
+        r.plaintext,
+        env.senderDeviceId,
+        async (deviceId) => {
+          const d = await this.lookupDevice(deviceId);
+          return d ? b64.decode(d.identityKey) : null;
+        },
+      );
       const device = await this.lookupDevice(opened.deviceId);
       // The signed device must be the envelope's sender device and belong to the sender.
       if (opened.deviceId !== env.senderDeviceId || device?.userId !== env.senderId)
@@ -988,9 +1016,10 @@ export class ConnectEngine {
       await this.applyIncoming(conversationId, env, opened.payload, info);
       return r.state;
     } catch (error) {
-      // A transport failure (e.g. directory lookup) must not turn a good
+      // A transient failure (e.g. directory lookup offline) must not turn a good
       // message into a permanent placeholder: abort; the cursor stays put.
-      if (error instanceof ConnectError) throw error;
+      // Anything else is final for this envelope, so no input can freeze the chat.
+      if (transient(error)) throw error;
       await this.saveMessage({
         id: env.clientId,
         conversationId,
@@ -1003,7 +1032,7 @@ export class ConnectEngine {
         kind: 'undecryptable',
         reactions: {},
       });
-      return state;
+      return advanced;
     }
   }
 
@@ -1275,14 +1304,21 @@ export class ConnectEngine {
         }
         await this.store.delete(`ob/${conversationId}/${id}`);
         await this.store.delete(`pp/${conversationId}/${id}`);
-        if (DEFERRED.has(payload.t))
-          await this.applyControl(
+        if (
+          DEFERRED.has(payload.t) &&
+          !(await this.applyControl(
             conversationId,
             payload,
             this.userId,
             posted.createdAt,
             await this.cachedInfo(conversationId),
-          );
+          ))
+        ) {
+          // Posted, but by server time it isn't allowed (e.g. edit window passed):
+          // receivers ignore it too. Tell the caller so the UI can say so.
+          this.emit(conversationId);
+          throw new ConnectError('forbidden', `${payload.t}_not_allowed`);
+        }
         const local = await this.getMessage(conversationId, id);
         if (local) {
           const sent: LocalMessage = {
@@ -1304,6 +1340,13 @@ export class ConnectEngine {
           outbound = null; // re-encrypt under the new epoch after syncing
           await this.store.delete(`ob/${conversationId}/${id}`);
           continue;
+        }
+        if (!isContent(payload) && e.code !== 'network') {
+          // A control that definitely failed (refused, never posted) has no
+          // message to retry from: drop its pending records. A network error
+          // may be a lost response, so those stay for sync/retry to resolve.
+          await this.store.delete(`ob/${conversationId}/${id}`);
+          await this.store.delete(`pp/${conversationId}/${id}`);
         }
         const local = await this.getMessage(conversationId, id);
         if (local) {

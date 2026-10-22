@@ -56,7 +56,7 @@ export async function sendRawPayload(
   d: TestDevice,
   conv: string,
   payload: Record<string, unknown> & { id: string },
-  forge: { badSignature?: boolean; signAs?: TestDevice } = {},
+  forge: { badSignature?: boolean; signAs?: TestDevice; d?: string } = {},
 ) {
   await d.engine.sync(conv);
   const identity = deserializeIdentity((await getJson<StoredIdentity>(d.store, 'identity'))!);
@@ -73,7 +73,7 @@ export async function sendRawPayload(
   const sig = ed25519.sign(input, ed25519Seed(signer.signKey));
   if (forge.badSignature) sig[0]! ^= 0xff;
   const sealed = utf8.encode(
-    JSON.stringify({ d: signer.deviceId, s: b64.encode(sig), p: payload }),
+    JSON.stringify({ d: forge.d ?? signer.deviceId, s: b64.encode(sig), p: payload }),
   );
   const enc = await encryptApplication(state, sealed);
   await d.store.set(`g/${conv}`, encodeState(enc.state));

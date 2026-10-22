@@ -210,17 +210,24 @@ const envelopeHead = z.object({
   silent: z.literal(true).optional(),
 });
 
-/** Does this build's schema for the kind know the (dotted) field path? */
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const own = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k);
+
+/** Does this build's schema for the kind know the (dotted) field path? Own keys only. */
 function knowsField(variant: Variant, path: string): boolean {
   const [first, ...rest] = path.split('.');
   if (!rest.length && HEAD_FIELDS.has(first!)) return true;
-  let node: z.ZodTypeAny | undefined = (variant.shape as Record<string, z.ZodTypeAny>)[first!];
+  const shape = variant.shape as Record<string, z.ZodTypeAny>;
+  if (!own(shape, first!)) return false;
+  let node: z.ZodTypeAny = shape[first!]!;
   for (const part of rest) {
     while (node instanceof z.ZodOptional || node instanceof z.ZodNullable) node = node.unwrap();
     if (!(node instanceof z.ZodObject)) return false;
-    node = (node.shape as Record<string, z.ZodTypeAny>)[part];
+    const inner = node.shape as Record<string, z.ZodTypeAny>;
+    if (!own(inner, part)) return false;
+    node = inner[part]!;
   }
-  return node !== undefined;
+  return true;
 }
 
 /**
@@ -232,10 +239,15 @@ function knowsField(variant: Variant, path: string): boolean {
 export async function openPayload(
   conversationId: string,
   plaintext: Uint8Array,
+  expectedDeviceId: string | null,
   resolveKey: (deviceId: string) => Promise<Uint8Array | null>,
 ): Promise<{ deviceId: string; payload: OpenedPayload }> {
   const raw = JSON.parse(utf8.decode(plaintext)) as Partial<SignedEnvelope>;
   if (typeof raw.d !== 'string' || typeof raw.s !== 'string') throw new Error('malformed_payload');
+  // The signer must be the envelope's sender device, checked BEFORE any
+  // directory lookup so crafted ids never reach the server.
+  if (!expectedDeviceId || raw.d !== expectedDeviceId || !UUID_RE.test(raw.d))
+    throw new Error('sender_mismatch');
   if (!raw.p || typeof raw.p !== 'object' || Array.isArray(raw.p))
     throw new Error('malformed_payload');
   const head = envelopeHead.parse(raw.p);

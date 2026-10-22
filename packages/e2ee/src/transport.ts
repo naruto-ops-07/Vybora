@@ -124,6 +124,16 @@ export class ConnectError extends Error {
   }
 }
 
+/**
+ * Transient failures (connectivity, or this device not ready yet) are worth
+ * retrying: the engine aborts the sync without advancing the cursor. Every
+ * other error is final for that envelope (placeholder / broken group), so a
+ * malicious member can't make a chat fail forever with a crafted input.
+ */
+export function isTransient(error: unknown): boolean {
+  return error instanceof ConnectError && (error.code === 'network' || error.code === 'not_ready');
+}
+
 /** Map a server/database error message to a ConnectError (shared by transports). */
 export function toConnectError(error: unknown): ConnectError {
   if (error instanceof ConnectError) return error;

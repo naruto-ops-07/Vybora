@@ -87,7 +87,7 @@ describe('MLS on Hermes-like runtime (no native WebCrypto)', () => {
         const r = await processIncoming(state, msg.ciphertext);
         expect(r.kind).toBe('application');
         if (r.kind !== 'application') return;
-        const opened = await openPayload(conv, r.plaintext, keyOf);
+        const opened = await openPayload(conv, r.plaintext, alice.identity.deviceId, keyOf);
         expect(opened.payload).toMatchObject({ t: 'text', body: 'hello from hermes' });
         expect(opened.deviceId).toBe(alice.identity.deviceId);
         if (who === 'bob') B = r.state;
@@ -138,7 +138,9 @@ describe('cross-platform interop (native WebCrypto ↔ Hermes adapter)', () => {
     const r1 = await as('hermes', () => processIncoming(P, m1.ciphertext));
     if (r1.kind !== 'application') throw new Error('expected app message');
     P = r1.state;
-    expect((await openPayload(conv, r1.plaintext, keyOf)).payload).toMatchObject({
+    expect(
+      (await openPayload(conv, r1.plaintext, web.identity.deviceId, keyOf)).payload,
+    ).toMatchObject({
       body: 'web → phone',
     });
 
@@ -150,7 +152,9 @@ describe('cross-platform interop (native WebCrypto ↔ Hermes adapter)', () => {
     );
     const r2 = await as('web', () => processIncoming(W, m2.ciphertext));
     if (r2.kind !== 'application') throw new Error('expected app message');
-    expect((await openPayload(conv, r2.plaintext, keyOf)).payload).toMatchObject({
+    expect(
+      (await openPayload(conv, r2.plaintext, phone.identity.deviceId, keyOf)).payload,
+    ).toMatchObject({
       body: 'phone → web',
     });
   });
@@ -194,10 +198,38 @@ describe('security properties', () => {
       mallory.identity.signKey,
       text('I am alice'),
     );
-    await expect(openPayload(conv, forged, keyOf)).rejects.toThrow('bad_sender_signature');
+    await expect(openPayload(conv, forged, a.identity.deviceId, keyOf)).rejects.toThrow(
+      'bad_sender_signature',
+    );
     // A valid payload replayed into another conversation is rejected too.
     const genuine = sealPayload(conv, a.identity.deviceId, a.identity.signKey, text('hi'));
-    await expect(openPayload(randomId(), genuine, keyOf)).rejects.toThrow('bad_sender_signature');
+    await expect(openPayload(randomId(), genuine, a.identity.deviceId, keyOf)).rejects.toThrow(
+      'bad_sender_signature',
+    );
+  });
+
+  it('binds the signer to the envelope sender before any directory lookup', async () => {
+    const [a, b] = [await makeDevice(), await makeDevice()];
+    const genuine = sealPayload(conv, a.identity.deviceId, a.identity.signKey, text('hi'));
+    let lookups = 0;
+    const counting = async (id: string) => {
+      lookups++;
+      return keyOf(id);
+    };
+    await expect(openPayload(conv, genuine, b.identity.deviceId, counting)).rejects.toThrow(
+      'sender_mismatch',
+    );
+    await expect(openPayload(conv, genuine, null, counting)).rejects.toThrow('sender_mismatch');
+    const crafted = utf8.encode(
+      JSON.stringify({ ...JSON.parse(utf8.decode(genuine)), d: 'not-a-uuid' }),
+    );
+    await expect(openPayload(conv, crafted, 'not-a-uuid', counting)).rejects.toThrow(
+      'sender_mismatch',
+    );
+    expect(lookups).toBe(0);
+    expect((await openPayload(conv, genuine, a.identity.deviceId, counting)).deviceId).toBe(
+      a.identity.deviceId,
+    );
   });
 
   it('does not decrypt a message twice (replay within the group)', async () => {

@@ -84,6 +84,10 @@ export class MemoryServer {
           s.keyPackages.push({ id: randomId(), deviceId, userId, kp, claimed: false });
       },
       async getDevice(deviceId) {
+        fault('getDevice');
+        // Like PostgREST: a non-uuid id is a query error, not "not found".
+        if (!/^[0-9a-f-]{36}$/i.test(deviceId))
+          throw new ConnectError('unknown', 'invalid input syntax for type uuid');
         const d = s.devices.get(deviceId);
         return d ? pub(d) : null;
       },
@@ -163,6 +167,8 @@ export class MemoryServer {
       },
       async postApplication(input): Promise<PostedEnvelope> {
         fault('postApplication');
+        if (s.failNext.delete('postApplicationForbidden'))
+          throw new ConnectError('forbidden', 'injected refusal');
         const c = conv(input.conversationId);
         if (c.epoch !== input.epoch) throw new ConnectError('epoch_stale', 'epoch_stale');
         if (

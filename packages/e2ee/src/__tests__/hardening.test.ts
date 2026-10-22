@@ -163,7 +163,8 @@ describe('edit / pin / vote apply only after the server has them', () => {
     const { server, alice, bob, conv } = await pair();
     const m = (await alice.engine.send(conv, { t: 'text', body: 'v1' }))!;
     later(server, 16); // device clock still says "now"; server says 16 min later
-    await alice.engine.edit(conv, m.id, 'late');
+    // Posted (receivers ignore it too), but the caller learns it was too late.
+    await expect(alice.engine.edit(conv, m.id, 'late')).rejects.toThrow(/edit_not_allowed/);
     const mine = (await alice.engine.getMessage(conv, m.id))!;
     expect(mine.body).toBe('v1');
     expect((await read(bob, conv))[0]!.body).toBe('v1');
@@ -265,5 +266,100 @@ describe('negative rules', () => {
     await alice.engine.pin(conv, a.id, true);
     await alice.store.delete(`msg/${conv}/${a.id}`); // e.g. disappearing-message purge
     expect(await alice.engine.listPins(conv)).toEqual([]);
+  });
+});
+
+describe('fix round 2: no member can freeze a chat', () => {
+  it('a crafted or mismatched device id becomes a placeholder; later messages still arrive', async () => {
+    const { server, alice, bob, conv } = await pair();
+    // getDevice('not-a-uuid') is a query error (ConnectError 'unknown') on this server.
+    await sendRawPayload(
+      server,
+      alice,
+      conv,
+      { v: 1, t: 'text', id: randomId(), body: 'x' },
+      {
+        d: 'not-a-uuid',
+      },
+    );
+    await sendRawPayload(
+      server,
+      alice,
+      conv,
+      { v: 1, t: 'text', id: randomId(), body: 'y' },
+      {
+        d: randomId(),
+      },
+    );
+    await alice.engine.send(conv, { t: 'text', body: 'still here' });
+    const msgs = await read(bob, conv);
+    expect(msgs.map((m) => m.kind)).toEqual(['undecryptable', 'undecryptable', 'text']);
+    expect(msgs[2]!.body).toBe('still here');
+    // Sending still works for everyone (deliver syncs first).
+    await bob.engine.send(conv, { t: 'text', body: 'reply' });
+    expect((await read(alice, conv)).at(-1)!.body).toBe('reply');
+  });
+
+  it('a transient directory failure inside processing aborts the sync; nothing is lost', async () => {
+    const { server, alice, bob, conv } = await pair();
+    await alice.engine.send(conv, { t: 'text', body: 'hello' });
+    // Force a fresh directory lookup during processing.
+    (bob.engine as unknown as { directoryCache: Map<string, unknown> }).directoryCache.clear();
+    server.failNext.add('getDevice');
+    await expect(bob.engine.sync(conv)).rejects.toThrow(/injected getDevice/);
+    expect(await bob.engine.listMessages(conv)).toEqual([]);
+    const msgs = await read(bob, conv);
+    expect(msgs.map((m) => [m.kind, m.body])).toEqual([['text', 'hello']]);
+  });
+
+  it('a transient failure on the commit path does not mark the group broken', async () => {
+    const { server, alice, bob, conv } = await pair();
+    const alice2 = await device(server, alice.userId);
+    await alice.engine.sync(conv); // commit adding alice2
+    (bob.engine as unknown as { directoryCache: Map<string, unknown> }).directoryCache.clear();
+    server.failNext.add('getDevice');
+    await expect(bob.engine.sync(conv)).rejects.toThrow();
+    expect(await bob.store.get(`g/${conv}`)).not.toBeNull(); // group state kept
+    expect((await bob.engine.sync(conv)).status).toBe('ready');
+    await alice2.engine.sync(conv);
+    await alice2.engine.send(conv, { t: 'text', body: 'from the new device' });
+    expect((await read(bob, conv)).map((m) => m.body)).toEqual(['from the new device']);
+  });
+
+  it('treats inherited names (constructor, __proto__) in crit as unknown', async () => {
+    const { server, alice, bob, conv } = await pair();
+    for (const field of [
+      'constructor',
+      '__proto__',
+      'replyTo.toString',
+      'attachment.hasOwnProperty',
+    ])
+      await sendRawPayload(server, alice, conv, {
+        v: 1,
+        t: 'text',
+        id: randomId(),
+        body: 'x',
+        crit: [field],
+      });
+    expect((await read(bob, conv)).map((m) => m.kind)).toEqual([
+      'unsupported',
+      'unsupported',
+      'unsupported',
+      'unsupported',
+    ]);
+  });
+
+  it('a control refused by the server leaves no pending records; a lost one keeps them', async () => {
+    const { server, alice, conv } = await pair();
+    const m = (await alice.engine.send(conv, { t: 'text', body: 'v1' }))!;
+    server.failNext.add('postApplicationForbidden');
+    await expect(alice.engine.edit(conv, m.id, 'v2')).rejects.toThrow(/injected refusal/);
+    expect(await alice.store.list(`pp/${conv}/`)).toEqual([]);
+    expect(await alice.store.list(`ob/${conv}/`)).toEqual([]);
+    expect((await alice.engine.getMessage(conv, m.id))!.body).toBe('v1');
+
+    server.failNext.add('postApplication'); // network: may have been stored → keep for retry
+    await expect(alice.engine.pin(conv, m.id, true)).rejects.toThrow(/injected/);
+    expect((await alice.store.list(`pp/${conv}/`)).length).toBe(1);
   });
 });
