@@ -44,6 +44,7 @@ export class MemoryServer {
   }
 
   transport(userId: string): ConnectTransport {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- closures below share this server
     const s = this;
     const conv = (id: string) => {
       const c = s.conversations.get(id);

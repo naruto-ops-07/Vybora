@@ -21,7 +21,19 @@ export const attachmentSchema = z.object({
   width: z.number().int().positive().max(10000).optional(),
   height: z.number().int().positive().max(10000).optional(),
   durationMs: z.number().int().nonnegative().max(600_000).optional(),
+  /** Recipient devices drop the key and blob reference after one open. */
+  viewOnce: z.literal(true).optional(),
 });
+
+/** Mentioned member user ids (rendered from `@[userId]` tokens in the body). */
+const mentions = z.array(z.string().uuid()).max(50).optional();
+const forwarded = z.literal(true).optional();
+const finite = z.number().finite();
+const pollOptions = z
+  .array(z.string().trim().min(1).max(100))
+  .min(2)
+  .max(12)
+  .refine((o) => new Set(o.map((x) => x.toLowerCase())).size === o.length, 'duplicate_options');
 
 export const payloadSchema = z.discriminatedUnion('t', [
   z.object({
@@ -30,6 +42,8 @@ export const payloadSchema = z.discriminatedUnion('t', [
     id,
     body: z.string().min(1).max(4000),
     replyTo,
+    mentions,
+    forwarded,
   }),
   z.object({
     v: z.literal(1),
@@ -38,6 +52,7 @@ export const payloadSchema = z.discriminatedUnion('t', [
     attachment: attachmentSchema,
     caption: z.string().max(2000).optional(),
     replyTo,
+    forwarded,
   }),
   z.object({
     v: z.literal(1),
@@ -48,6 +63,50 @@ export const payloadSchema = z.discriminatedUnion('t', [
     remove: z.boolean().optional(),
   }),
   z.object({ v: z.literal(1), t: z.literal('delete'), id, target: id }),
+  /** Replace the body (text) or caption (attachment) of the sender's own message. */
+  z.object({
+    v: z.literal(1),
+    t: z.literal('edit'),
+    id,
+    target: id,
+    body: z.string().min(1).max(4000),
+    mentions,
+  }),
+  z.object({ v: z.literal(1), t: z.literal('pin'), id, target: id, pinned: z.boolean() }),
+  z.object({
+    v: z.literal(1),
+    t: z.literal('contact'),
+    id,
+    userId: z.string().uuid(),
+    username: z.string().min(1).max(40),
+    displayName: z.string().max(100),
+    forwarded,
+  }),
+  z.object({
+    v: z.literal(1),
+    t: z.literal('location'),
+    id,
+    lat: finite.min(-90).max(90),
+    lng: finite.min(-180).max(180),
+    label: z.string().max(200).optional(),
+    forwarded,
+  }),
+  z.object({
+    v: z.literal(1),
+    t: z.literal('poll'),
+    id,
+    question: z.string().trim().min(1).max(300),
+    options: pollOptions,
+    multi: z.boolean(),
+  }),
+  /** The voter's full current choice set (empty = vote withdrawn). Latest wins. */
+  z.object({
+    v: z.literal(1),
+    t: z.literal('vote'),
+    id,
+    target: id,
+    choices: z.array(z.number().int().min(0).max(11)).max(12),
+  }),
 ]);
 
 export type Payload = z.infer<typeof payloadSchema>;

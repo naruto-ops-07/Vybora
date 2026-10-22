@@ -153,19 +153,24 @@ export function createSupabaseConnectTransport(
       const conv = await runMaybe(() =>
         client
           .from('conversations')
-          .select('id, kind, mls_epoch')
+          .select('id, kind, mls_epoch, settings_policy')
           .eq('id', conversationId)
           .maybeSingle(),
       );
       if (!conv) throw toConnectError({ message: 'not_a_member' });
       const members = await run(() =>
-        client.from('conversation_members').select('user_id').eq('conversation_id', conversationId),
+        client
+          .from('conversation_members')
+          .select('user_id, role')
+          .eq('conversation_id', conversationId),
       );
       return {
         id: conv.id,
         kind: conv.kind as 'direct' | 'group',
         epoch: Number(conv.mls_epoch),
         memberIds: members.map((m) => m.user_id),
+        adminIds: members.filter((m) => m.role === 'admin').map((m) => m.user_id),
+        settingsPolicy: conv.settings_policy === 'admins' ? 'admins' : 'everyone',
       };
     },
     async listWelcomes(conversationId, deviceId): Promise<WelcomeRecord[]> {

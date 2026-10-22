@@ -14,7 +14,11 @@ export {
 export { MAX_ATTACHMENT_BYTES, decryptAttachment, encryptAttachment } from './attachments';
 export {
   ConnectEngine,
+  searchableText,
+  type ContactCard,
   type ContactKeyStatus,
+  type LocalPoll,
+  type LocationPin,
   type LocalMessage,
   type MessageStatus,
   type OutgoingContent,
@@ -33,3 +37,14 @@ export {
   type PostedEnvelope,
   type WelcomeRecord,
 } from './transport';
+export {
+  EDIT_WINDOW_MS,
+  MAX_PINS,
+  applyPin,
+  mayPin,
+  mentionTokens,
+  normalizeVote,
+  validMentions,
+  withinEditWindow,
+  type PinEntry,
+} from './rules';

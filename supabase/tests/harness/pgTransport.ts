@@ -109,13 +109,16 @@ export class PgTransport implements ConnectTransport {
     }));
   }
   async getConversation(conversationId: string) {
-    const [c] = await this.q<{ kind: 'direct' | 'group'; mls_epoch: string }>(
-      `select kind, mls_epoch from conversations where id = $1`,
-      [conversationId],
-    );
+    const [c] = await this.q<{
+      kind: 'direct' | 'group';
+      mls_epoch: string;
+      settings_policy: string;
+    }>(`select kind, mls_epoch, settings_policy from conversations where id = $1`, [
+      conversationId,
+    ]);
     if (!c) throw toConnectError({ message: 'not_a_member' });
-    const members = await this.q<{ user_id: string }>(
-      `select user_id from conversation_members where conversation_id = $1`,
+    const members = await this.q<{ user_id: string; role: string }>(
+      `select user_id, role from conversation_members where conversation_id = $1`,
       [conversationId],
     );
     return {
@@ -123,6 +126,9 @@ export class PgTransport implements ConnectTransport {
       kind: c.kind,
       epoch: num(c.mls_epoch),
       memberIds: members.map((m) => m.user_id),
+      adminIds: members.filter((m) => m.role === 'admin').map((m) => m.user_id),
+      settingsPolicy: (c.settings_policy === 'admins' ? 'admins' : 'everyone') as
+        'admins' | 'everyone',
     };
   }
   async listWelcomes(conversationId: string, deviceId: string): Promise<WelcomeRecord[]> {

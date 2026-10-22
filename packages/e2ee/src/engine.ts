@@ -43,9 +43,18 @@ import {
   ConnectError,
   toConnectError,
   type ConnectTransport,
+  type ConversationInfo,
   type EnvelopeRecord,
   type OwnDeviceRecord,
 } from './transport';
+import {
+  applyPin,
+  mayPin,
+  normalizeVote,
+  validMentions,
+  withinEditWindow,
+  type PinEntry,
+} from './rules';
 
 export type MessageStatus = 'sending' | 'sent' | 'failed' | 'received' | 'undecryptable';
 
@@ -66,20 +75,91 @@ export interface LocalMessage {
   expiresAt: string | null;
   status: MessageStatus;
   /** 'unsupported': a newer kind this build can't show ("Update VYBORA to see this message"). */
-  kind: 'text' | 'attachment' | 'undecryptable' | 'unsupported';
+  kind: 'text' | 'attachment' | 'contact' | 'location' | 'poll' | 'undecryptable' | 'unsupported';
   body?: string;
   attachment?: AttachmentRef;
   caption?: string;
   replyTo?: ReplyRef;
   reactions: Record<string, string[]>;
   deleted?: boolean;
+  /** Validated mentioned member ids (`@[userId]` tokens in `body`). */
+  mentions?: string[];
+  forwarded?: boolean;
+  /** Body/caption was replaced by the sender (history is not kept). */
+  edited?: boolean;
+  editedAt?: string;
+  contact?: ContactCard;
+  location?: LocationPin;
+  poll?: LocalPoll;
+  /**
+   * View-once attachment. `consumed` is true once this device has opened it
+   * (or always, for the sender); `attachment` (key + blob path) is then gone.
+   */
+  viewOnce?: { kind: AttachmentRef['kind']; consumed: boolean };
+  /** Starred on this device only (never synced). */
+  starred?: boolean;
+}
+
+export interface ContactCard {
+  userId: string;
+  username: string;
+  displayName: string;
+}
+
+export interface LocationPin {
+  lat: number;
+  lng: number;
+  label?: string;
+}
+
+export interface LocalPoll {
+  question: string;
+  options: string[];
+  multi: boolean;
+  /** Each voter's current choice indexes (latest vote wins; absent = not voted). */
+  votes: Record<string, number[]>;
 }
 
 export type OutgoingContent =
-  | { t: 'text'; body: string; replyTo?: ReplyRef }
-  | { t: 'attachment'; attachment: AttachmentRef; caption?: string; replyTo?: ReplyRef }
+  | { t: 'text'; body: string; replyTo?: ReplyRef; mentions?: string[]; forwarded?: true }
+  | {
+      t: 'attachment';
+      attachment: AttachmentRef;
+      caption?: string;
+      replyTo?: ReplyRef;
+      forwarded?: true;
+    }
   | { t: 'reaction'; target: string; emoji: string; remove?: boolean }
-  | { t: 'delete'; target: string };
+  | { t: 'delete'; target: string }
+  | { t: 'edit'; target: string; body: string; mentions?: string[] }
+  | { t: 'pin'; target: string; pinned: boolean }
+  | { t: 'contact'; userId: string; username: string; displayName: string; forwarded?: true }
+  | { t: 'location'; lat: number; lng: number; label?: string; forwarded?: true }
+  | { t: 'poll'; question: string; options: string[]; multi: boolean }
+  | { t: 'vote'; target: string; choices: number[] };
+
+type ContentPayload = Extract<
+  Payload,
+  { t: 'text' | 'attachment' | 'contact' | 'location' | 'poll' }
+>;
+const CONTENT_KINDS = new Set(['text', 'attachment', 'contact', 'location', 'poll']);
+const isContent = (p: Payload): p is ContentPayload => CONTENT_KINDS.has(p.t);
+const fold = (s: string) => s.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
+
+/** The text a message can be found by in local search. */
+export function searchableText(m: LocalMessage): string {
+  if (m.deleted) return '';
+  return [
+    m.body?.replace(/@\[[0-9a-f-]{36}\]/gi, ' '),
+    m.caption,
+    m.attachment?.name,
+    m.contact && `${m.contact.displayName} ${m.contact.username}`,
+    m.location?.label,
+    m.poll && [m.poll.question, ...m.poll.options].join(' '),
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
 
 export type SyncStatus = 'ready' | 'waiting_for_access' | 'broken';
 
@@ -119,6 +199,7 @@ export class ConnectEngine {
   private readonly locks = new Map<string, Promise<unknown>>();
   private readonly config: ClientConfig;
   private listeners = new Set<(conversationId: string) => void>();
+  private readonly infoCache = new Map<string, ConversationInfo>();
 
   constructor(
     private readonly transport: ConnectTransport,
@@ -228,30 +309,34 @@ export class ConnectEngine {
   ): Promise<LocalMessage | null> {
     return this.locked(conversationId, async () => {
       const id = randomId();
-      const payload = { v: 1, id, ...content } as Payload;
-      let local: LocalMessage | null = null;
-      if (content.t === 'text' || content.t === 'attachment') {
-        local = {
+      let payload = { v: 1, id, ...content } as Payload;
+      const now = new Date().toISOString();
+      if ((payload.t === 'text' || payload.t === 'edit') && payload.mentions?.length) {
+        const members = (await this.infoOf(conversationId)).memberIds;
+        const mentions = validMentions(payload.body, payload.mentions, members);
+        if (mentions?.length !== new Set(payload.mentions.map((m) => m.toLowerCase())).size)
+          throw new ConnectError('forbidden', 'invalid_mentions');
+        payload = { ...payload, mentions };
+      }
+      if (isContent(payload)) {
+        const local: LocalMessage = {
           id,
           conversationId,
           seq: null,
           senderId: this.userId,
           senderDeviceId: this.deviceId,
-          createdAt: new Date().toISOString(),
+          createdAt: now,
           expiresAt: null,
           status: 'sending',
-          kind: content.t,
-          body: content.t === 'text' ? content.body : undefined,
-          attachment: content.t === 'attachment' ? content.attachment : undefined,
-          caption: content.t === 'attachment' ? content.caption : undefined,
-          replyTo: content.replyTo,
-          reactions: {},
+          ...this.contentFields(payload, true),
         };
         await this.saveMessage(local);
         this.emit(conversationId);
       } else {
-        // Reactions/deletes apply locally right away, too.
-        await this.applyControl(conversationId, payload, this.userId);
+        // Controls are checked like a receiver would, then apply locally right away.
+        const applied = await this.applyControl(conversationId, payload, this.userId, now);
+        if (!applied) throw new ConnectError('forbidden', `${payload.t}_not_allowed`);
+        this.emit(conversationId);
       }
       await setJson(this.store, `pp/${conversationId}/${id}`, payload);
       return this.deliverLocked(conversationId, id, attachmentPaths);
@@ -299,6 +384,144 @@ export class ConnectEngine {
     return out;
   }
 
+  /** Edit my own text (body) or attachment (caption) within the edit window. */
+  edit(conversationId: string, target: string, body: string, mentions?: string[]) {
+    return this.send(conversationId, { t: 'edit', target, body, mentions });
+  }
+
+  /** Pin or unpin a message for everyone in the chat (max 3; oldest drops). */
+  pin(conversationId: string, target: string, pinned: boolean) {
+    return this.send(conversationId, { t: 'pin', target, pinned });
+  }
+
+  /** Cast (or with `[]`, withdraw) my vote; replaces any earlier vote of mine. */
+  vote(conversationId: string, pollId: string, choices: number[]) {
+    return this.send(conversationId, { t: 'vote', target: pollId, choices });
+  }
+
+  /** Current pins, oldest first. */
+  async listPins(conversationId: string): Promise<PinEntry[]> {
+    return (await getJson<PinEntry[]>(this.store, `pins/${conversationId}`)) ?? [];
+  }
+
+  /**
+   * Forward a message into another chat. Content is re-sent (never the
+   * original ciphertext); attachments are downloaded, decrypted and
+   * re-encrypted + re-uploaded under the target chat. Mention tokens become
+   * plain `@Name` text. Polls, view-once and deleted messages can't be forwarded.
+   */
+  async forward(
+    fromConversationId: string,
+    messageId: string,
+    toConversationId: string,
+    options: { nameOf?: (userId: string) => string } = {},
+  ): Promise<LocalMessage | null> {
+    const m = await this.getMessage(fromConversationId, messageId);
+    if (!m || m.deleted || m.viewOnce || m.status === 'sending' || m.status === 'failed')
+      throw new ConnectError('forbidden', 'not_forwardable');
+    if (m.kind === 'text' && m.body) {
+      const body = m.body.replace(
+        /@\[([0-9a-f-]{36})\]/gi,
+        (_, id: string) => `@${options.nameOf?.(id.toLowerCase()) ?? 'someone'}`,
+      );
+      return this.send(toConversationId, { t: 'text', body, forwarded: true });
+    }
+    if (m.kind === 'attachment' && m.attachment) {
+      const bytes = await this.openAttachment(m.attachment);
+      const {
+        path: _p,
+        key: _k,
+        nonce: _n,
+        sha256: _s,
+        size: _z,
+        viewOnce: _v,
+        ...meta
+      } = m.attachment;
+      return this.sendAttachment(toConversationId, bytes, meta, {
+        caption: m.caption,
+        forwarded: true,
+      });
+    }
+    if (m.kind === 'contact' && m.contact)
+      return this.send(toConversationId, { t: 'contact', ...m.contact, forwarded: true });
+    if (m.kind === 'location' && m.location)
+      return this.send(toConversationId, { t: 'location', ...m.location, forwarded: true });
+    throw new ConnectError('forbidden', 'not_forwardable');
+  }
+
+  /**
+   * Open a received view-once attachment exactly once: returns the plaintext
+   * and forgets the key and blob reference on this device. Null if already
+   * opened (or not a view-once message).
+   */
+  consumeViewOnce(conversationId: string, messageId: string): Promise<Uint8Array | null> {
+    return this.locked(conversationId, async () => {
+      const m = await this.getMessage(conversationId, messageId);
+      if (!m?.viewOnce || m.viewOnce.consumed || !m.attachment) return null;
+      const bytes = await this.openAttachment(m.attachment);
+      await setJson(this.store, `msg/${conversationId}/${m.id}`, {
+        ...m,
+        attachment: undefined,
+        viewOnce: { ...m.viewOnce, consumed: true },
+      } satisfies LocalMessage);
+      this.emit(conversationId);
+      return bytes;
+    });
+  }
+
+  /** Star or unstar a message on this device only. */
+  async star(conversationId: string, messageId: string, starred: boolean): Promise<void> {
+    await this.locked(conversationId, async () => {
+      const m = await this.getMessage(conversationId, messageId);
+      if (!m) return;
+      await setJson(this.store, `msg/${conversationId}/${m.id}`, {
+        ...m,
+        starred: starred || undefined,
+      } satisfies LocalMessage);
+      if (starred)
+        await setJson(this.store, `star/${conversationId}/${m.id}`, new Date().toISOString());
+      else await this.store.delete(`star/${conversationId}/${m.id}`);
+    });
+    this.emit(conversationId);
+  }
+
+  /** Starred messages (all chats, or one), most recently starred first. */
+  async listStarred(conversationId?: string): Promise<LocalMessage[]> {
+    const rows: { at: string; m: LocalMessage }[] = [];
+    for (const k of await this.store.list(conversationId ? `star/${conversationId}/` : 'star/')) {
+      const [, conv, id] = k.split('/');
+      const m = await this.getMessage(conv!, id!);
+      const at = await getJson<string>(this.store, k);
+      if (m && at) rows.push({ at, m });
+      else await this.store.delete(k);
+    }
+    return rows.sort((a, b) => b.at.localeCompare(a.at)).map((r) => r.m);
+  }
+
+  /**
+   * Search decrypted local history (one chat or all), newest first.
+   * Case- and accent-insensitive; every word of the query must match.
+   */
+  async searchMessages(
+    query: string,
+    options: { conversationId?: string; limit?: number } = {},
+  ): Promise<LocalMessage[]> {
+    const words = fold(query).split(/\s+/).filter(Boolean);
+    if (!words.length) return [];
+    const now = Date.now();
+    const out: LocalMessage[] = [];
+    const prefix = options.conversationId ? `msg/${options.conversationId}/` : 'msg/';
+    for (const k of await this.store.list(prefix)) {
+      const m = await getJson<LocalMessage>(this.store, k);
+      if (!m || (m.expiresAt && Date.parse(m.expiresAt) <= now)) continue;
+      const text = fold(searchableText(m));
+      if (words.every((w) => text.includes(w))) out.push(m);
+    }
+    return out
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, options.limit ?? 100);
+  }
+
   async getMessage(conversationId: string, id: string): Promise<LocalMessage | null> {
     return getJson<LocalMessage>(this.store, `msg/${conversationId}/${id}`);
   }
@@ -310,9 +533,11 @@ export class ConnectEngine {
       `ord/${conversationId}/`,
       `out/${conversationId}/`,
       `pp/${conversationId}/`,
+      `star/${conversationId}/`,
     ]) {
       for (const k of await this.store.list(prefix)) await this.store.delete(k);
     }
+    await this.store.delete(`pins/${conversationId}`);
     this.emit(conversationId);
   }
 
@@ -325,7 +550,7 @@ export class ConnectEngine {
     conversationId: string,
     file: Uint8Array,
     meta: Omit<AttachmentRef, 'path' | 'key' | 'nonce' | 'sha256' | 'size'>,
-    extra: { caption?: string; replyTo?: ReplyRef } = {},
+    extra: { caption?: string; replyTo?: ReplyRef; forwarded?: true } = {},
   ): Promise<LocalMessage | null> {
     const enc = encryptAttachment(file);
     const path = `${conversationId}/${this.userId}/${randomId()}.bin`;
@@ -409,6 +634,17 @@ export class ConnectEngine {
       run.catch(() => undefined),
     );
     return run;
+  }
+
+  /** Conversation roster/roles, cached and refreshed on every sync. */
+  private async infoOf(conversationId: string): Promise<ConversationInfo> {
+    return this.infoCache.get(conversationId) ?? this.getInfo(conversationId);
+  }
+
+  private async getInfo(conversationId: string): Promise<ConversationInfo> {
+    const info = await this.transport.getConversation(conversationId);
+    this.infoCache.set(conversationId, info);
+    return info;
   }
 
   private async lookupDevice(deviceId: string): Promise<DirectoryDevice | null> {
@@ -507,7 +743,7 @@ export class ConnectEngine {
       }
     }
 
-    const info = await this.transport.getConversation(conversationId);
+    const info = await this.getInfo(conversationId);
     if (info.epoch !== 0) return null; // others must add this device
     const fresh = await createGroupState(identity, conversationId, this.config);
     const outcome = await this.reconcile(conversationId, fresh, 0, info.memberIds, true);
@@ -647,7 +883,7 @@ export class ConnectEngine {
         if (page.length < FETCH_PAGE) break;
       }
 
-      const info = await this.transport.getConversation(conversationId);
+      const info = await this.getInfo(conversationId);
       if (epochOf(state!) !== info.epoch) continue; // a commit landed meanwhile — fetch again
       const reconciled = await this.reconcile(conversationId, state!, info.epoch, info.memberIds);
       if (reconciled === 'conflict') continue;
@@ -746,8 +982,18 @@ export class ConnectEngine {
       });
       return;
     }
-    if (payload.t === 'text' || payload.t === 'attachment') {
+    if (isContent(payload)) {
       if (await getJson(this.store, `msg/${conversationId}/${payload.id}`)) return; // duplicate
+      let p: ContentPayload = payload;
+      if (p.t === 'text' && p.mentions)
+        p = {
+          ...p,
+          mentions: validMentions(
+            p.body,
+            p.mentions,
+            (await this.infoOf(conversationId)).memberIds,
+          ),
+        };
       await this.saveMessage({
         id: payload.id,
         conversationId,
@@ -757,49 +1003,162 @@ export class ConnectEngine {
         createdAt: env.createdAt,
         expiresAt: env.expiresAt,
         status: 'received',
-        kind: payload.t,
-        body: payload.t === 'text' ? payload.body : undefined,
-        attachment: payload.t === 'attachment' ? payload.attachment : undefined,
-        caption: payload.t === 'attachment' ? payload.caption : undefined,
-        replyTo: payload.replyTo,
-        reactions: {},
+        ...this.contentFields(p, false),
       });
       return;
     }
-    await this.applyControl(conversationId, payload, env.senderId);
+    await this.applyControl(conversationId, payload, env.senderId, env.createdAt);
   }
 
-  /** Reactions and deletions (only the original sender may delete). */
-  private async applyControl(conversationId: string, payload: Payload, actorId: string) {
-    if (payload.t !== 'reaction' && payload.t !== 'delete') return;
-    const target = await getJson<LocalMessage>(
-      this.store,
-      `msg/${conversationId}/${payload.target}`,
-    );
-    if (!target) return;
-    if (payload.t === 'delete') {
-      if (target.senderId !== actorId) return;
-      await setJson(this.store, `msg/${conversationId}/${target.id}`, {
-        ...target,
-        deleted: true,
-        body: undefined,
-        attachment: undefined,
-        caption: undefined,
-      } satisfies LocalMessage);
-      return;
+  /** LocalMessage fields for a content payload (shared by send and receive). */
+  private contentFields(
+    p: ContentPayload,
+    mine: boolean,
+  ): Pick<LocalMessage, 'kind' | 'reactions'> & Partial<LocalMessage> {
+    const base = { kind: p.t, reactions: {} as Record<string, string[]> };
+    switch (p.t) {
+      case 'text':
+        return {
+          ...base,
+          body: p.body,
+          replyTo: p.replyTo,
+          mentions: p.mentions?.length ? p.mentions : undefined,
+          forwarded: p.forwarded,
+        };
+      case 'attachment': {
+        const viewOnce = p.attachment.viewOnce
+          ? { kind: p.attachment.kind, consumed: mine }
+          : undefined;
+        return {
+          ...base,
+          // The sender never re-opens a view-once photo; keep no key for it.
+          attachment: viewOnce && mine ? undefined : p.attachment,
+          viewOnce,
+          caption: p.caption,
+          replyTo: p.replyTo,
+          forwarded: p.forwarded,
+        };
+      }
+      case 'contact':
+        return {
+          ...base,
+          contact: { userId: p.userId, username: p.username, displayName: p.displayName },
+          forwarded: p.forwarded,
+        };
+      case 'location':
+        return {
+          ...base,
+          location: { lat: p.lat, lng: p.lng, ...(p.label ? { label: p.label } : {}) },
+          forwarded: p.forwarded,
+        };
+      case 'poll':
+        return {
+          ...base,
+          poll: { question: p.question, options: p.options, multi: p.multi, votes: {} },
+        };
     }
-    const users = new Set(target.reactions[payload.emoji] ?? []);
-    if (payload.remove) users.delete(actorId);
-    else {
-      // One reaction per person: remove theirs elsewhere first.
-      for (const [emoji, list] of Object.entries(target.reactions))
-        target.reactions[emoji] = list.filter((u) => u !== actorId);
-      users.add(actorId);
+  }
+
+  /**
+   * Apply a control payload, enforcing the same rules on every device.
+   * Returns false (and changes nothing) when the actor isn't allowed.
+   *  - delete / edit: only the original sender; edit within 15 minutes
+   *  - pin: anyone in a direct chat; groups follow the admins-only setting
+   *  - vote: a valid choice set for the target poll; latest vote wins
+   */
+  private async applyControl(
+    conversationId: string,
+    payload: Payload,
+    actorId: string,
+    at: string,
+  ): Promise<boolean> {
+    if (isContent(payload)) return false;
+    const key = `msg/${conversationId}/${payload.target}`;
+    const target = await getJson<LocalMessage>(this.store, key);
+    if (payload.t === 'pin') {
+      if (payload.pinned && (!target || target.deleted)) return false;
+      if (!mayPin(await this.infoOf(conversationId), actorId)) return false;
+      const pins = applyPin(await this.listPins(conversationId), {
+        messageId: payload.target,
+        pinned: payload.pinned,
+        by: actorId,
+        at,
+      });
+      await setJson(this.store, `pins/${conversationId}`, pins);
+      return true;
     }
-    target.reactions[payload.emoji] = [...users];
-    for (const [emoji, list] of Object.entries(target.reactions))
-      if (!list.length) delete target.reactions[emoji];
-    await setJson(this.store, `msg/${conversationId}/${target.id}`, target);
+    if (!target || target.deleted) return false;
+    switch (payload.t) {
+      case 'delete': {
+        if (target.senderId !== actorId) return false;
+        await setJson(this.store, key, {
+          ...target,
+          deleted: true,
+          body: undefined,
+          attachment: undefined,
+          caption: undefined,
+          mentions: undefined,
+          contact: undefined,
+          location: undefined,
+          poll: undefined,
+          viewOnce: undefined,
+        } satisfies LocalMessage);
+        const pins = await this.listPins(conversationId);
+        if (pins.some((p) => p.messageId === target.id))
+          await setJson(
+            this.store,
+            `pins/${conversationId}`,
+            pins.filter((p) => p.messageId !== target.id),
+          );
+        return true;
+      }
+      case 'edit': {
+        if (target.senderId !== actorId) return false;
+        if (target.kind !== 'text' && target.kind !== 'attachment') return false;
+        if (target.viewOnce) return false;
+        if (!withinEditWindow(target.createdAt, at)) return false;
+        if (target.editedAt && Date.parse(at) < Date.parse(target.editedAt)) return false;
+        const edited: LocalMessage =
+          target.kind === 'text'
+            ? {
+                ...target,
+                body: payload.body,
+                mentions: validMentions(
+                  payload.body,
+                  payload.mentions,
+                  (await this.infoOf(conversationId)).memberIds,
+                ),
+              }
+            : { ...target, caption: payload.body };
+        await setJson(this.store, key, { ...edited, edited: true, editedAt: at });
+        return true;
+      }
+      case 'vote': {
+        if (target.kind !== 'poll' || !target.poll) return false;
+        const choices = normalizeVote(target.poll, payload.choices);
+        if (!choices) return false;
+        const votes = { ...target.poll.votes };
+        if (choices.length) votes[actorId] = choices;
+        else delete votes[actorId];
+        await setJson(this.store, key, { ...target, poll: { ...target.poll, votes } });
+        return true;
+      }
+      case 'reaction': {
+        const users = new Set(target.reactions[payload.emoji] ?? []);
+        if (payload.remove) users.delete(actorId);
+        else {
+          // One reaction per person: remove theirs elsewhere first.
+          for (const [emoji, list] of Object.entries(target.reactions))
+            target.reactions[emoji] = list.filter((u) => u !== actorId);
+          users.add(actorId);
+        }
+        target.reactions[payload.emoji] = [...users];
+        for (const [emoji, list] of Object.entries(target.reactions))
+          if (!list.length) delete target.reactions[emoji];
+        await setJson(this.store, key, target);
+        return true;
+      }
+    }
   }
 
   /**

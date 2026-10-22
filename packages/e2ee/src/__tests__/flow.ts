@@ -6,7 +6,7 @@ import { decodeState, encodeState, encryptApplication, epochOf, makeClientConfig
 import { deserializeIdentity, type StoredIdentity } from '../identity';
 import { ed25519Seed } from '../payload';
 import { getJson, MemoryStore } from '../store';
-import { MemoryServer } from './memoryServer';
+import { type MemoryServer } from './memoryServer';
 
 export interface TestDevice {
   userId: string;
