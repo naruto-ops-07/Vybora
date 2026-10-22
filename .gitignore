@@ -44,3 +44,6 @@ supabase/.temp/
 
 # design review screenshots (apps/web/scripts/gallery-shots.mjs)
 apps/web/.impeccable/review/
+
+# Build-time prerender bundle (apps/web/scripts/prerender.mjs)
+.prerender/

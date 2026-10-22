@@ -3,15 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta
-      name="description"
-      content="VYBORA — private messaging with end-to-end encryption, on the web and on your phone."
-    />
     <meta name="theme-color" content="#0F0D0B" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- head:start (scripts/prerender.mjs writes each public page's tags here) -->
     <title>VYBORA</title>
+    <meta
+      name="description"
+      content="Private messaging with end-to-end encryption, on the web and on your phone."
+    />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta property="og:site_name" content="VYBORA" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="VYBORA" />
+    <meta
+      property="og:description"
+      content="Private messaging with end-to-end encryption, on the web and on your phone."
+    />
+    <meta property="og:image" content="/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <!-- head:end -->
     <script>
       // Apply the saved look and mode, and the accessibility prefs (high contrast, text
       // size), before first paint, so the wrong look never flashes. Mirrors

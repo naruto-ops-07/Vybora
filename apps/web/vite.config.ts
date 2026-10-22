@@ -2,34 +2,64 @@
 import { fileURLToPath, URL } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
+const PUBLIC = ['/features', '/privacy-and-security', '/faq', '/download'];
+
+/**
+ * `vite preview` serves the build the way vercel.json does: prerendered public pages from
+ * their folders, the app shell (app.html) for every other route.
+ */
+function previewLikeVercel(): Plugin {
+  return {
+    name: 'vybora-preview-routes',
+    configurePreviewServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        const [path = '/', query] = (req.url ?? '/').split('?');
+        const clean = path.length > 1 ? path.replace(/\/+$/, '') : path;
+        const q = query ? `?${query}` : '';
+        if (clean === '/' || clean.includes('.') || clean.startsWith('/assets/')) return next();
+        req.url = (PUBLIC.includes(clean) ? `${clean}/index.html` : '/app.html') + q;
+        next();
+      });
+    },
+  };
+}
+
+export default defineConfig(({ isSsrBuild }) => ({
+  plugins: [react(), tailwindcss(), previewLikeVercel()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   server: { port: 5173 },
   build: {
     sourcemap: true,
+    // Read by scripts/prerender.mjs (module preloads per page), then removed from dist.
+    manifest: !isSsrBuild,
     rollupOptions: {
-      output: {
-        // Long-lived vendor chunks so app deploys don't invalidate cached vendor code.
-        manualChunks(id) {
-          // Keep Vite's preload helper out of lazy chunks so the entry never pulls them in.
-          if (id.includes('vite/preload-helper')) return 'runtime';
-          // E2EE stack: only downloaded when Messages opens.
-          if (/[\\/]node_modules[\\/](?:.*[\\/])?(ts-mls|@hpke|@noble|@scure)[\\/]/.test(id))
-            return 'e2ee';
-          if (!id.includes('node_modules')) return undefined;
-          if (/[\\/](react|react-dom|scheduler|react-router)[\\/]/.test(id)) return 'react';
-          if (id.includes('@supabase')) return 'supabase';
-          if (id.includes('@tanstack')) return 'query';
-          if (/[\\/](framer-motion|motion|motion-dom|motion-utils)[\\/]/.test(id)) return 'motion';
-          if (/[\\/](zod|react-hook-form|@hookform)[\\/]/.test(id)) return 'forms';
-          return undefined;
-        },
-      },
+      // The prerender's Node build is one bundle; chunking is for browsers.
+      output: isSsrBuild
+        ? {}
+        : {
+            // Long-lived vendor chunks so app deploys don't invalidate cached vendor code.
+            manualChunks(id) {
+              // Keep Vite's preload helper out of lazy chunks so the entry never pulls them in.
+              if (id.includes('vite/preload-helper')) return 'runtime';
+              // E2EE stack: only downloaded when Messages opens.
+              if (/[\\/]node_modules[\\/](?:.*[\\/])?(ts-mls|@hpke|@noble|@scure)[\\/]/.test(id))
+                return 'e2ee';
+              if (!id.includes('node_modules')) return undefined;
+              // node_modules/<name>/ only, so `@phosphor-icons/react/` stays out of it.
+              if (/[\\/]node_modules[\\/](react|react-dom|scheduler|react-router)[\\/]/.test(id))
+                return 'react';
+              if (id.includes('@supabase')) return 'supabase';
+              if (id.includes('@tanstack')) return 'query';
+              if (/[\\/](framer-motion|motion|motion-dom|motion-utils)[\\/]/.test(id))
+                return 'motion';
+              if (/[\\/](zod|react-hook-form|@hookform)[\\/]/.test(id)) return 'forms';
+              return undefined;
+            },
+          },
     },
   },
   test: {
@@ -46,4 +76,4 @@ export default defineConfig({
     // passed 5 s and timed out. 15 s matches the mobile Jest budget.
     testTimeout: 15_000,
   },
-});
+}));

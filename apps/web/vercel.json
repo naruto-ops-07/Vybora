@@ -5,7 +5,14 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [
-    { "source": "/((?!assets/|favicon|icon|robots|manifest).*)", "destination": "/index.html" }
+    { "source": "/features", "destination": "/features/index.html" },
+    { "source": "/privacy-and-security", "destination": "/privacy-and-security/index.html" },
+    { "source": "/faq", "destination": "/faq/index.html" },
+    { "source": "/download", "destination": "/download/index.html" },
+    {
+      "source": "/((?!assets/|favicon|icon|apple-touch-icon|og\.png|robots\.txt|sitemap\.xml|manifest|tones/).+)",
+      "destination": "/app.html"
+    }
   ],
   "headers": [
     {
@@ -16,6 +23,10 @@
         { "key": "X-Frame-Options", "value": "DENY" },
         { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
       ]
+    },
+    {
+      "source": "/app.html",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
     },
     {
       "source": "/assets/(.*)",
