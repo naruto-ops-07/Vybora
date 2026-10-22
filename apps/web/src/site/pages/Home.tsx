@@ -202,7 +202,7 @@ function Moments() {
           </div>
           <div className="grid gap-4 sm:grid-cols-[1.1fr_0.9fr]" data-ui="" aria-hidden="true">
             <div className="site-photo row-span-2 flex min-h-[18rem] flex-col justify-end overflow-hidden rounded-xl rounded-br-sm shadow-2">
-              <span className="m-3 self-end rounded-full bg-black/45 px-2.5 py-1 font-mono text-[11px] text-white">
+              <span className="m-3 self-end rounded-full bg-black/70 px-2.5 py-1 font-mono text-[11px] text-white">
                 Photo · 15:12
               </span>
             </div>

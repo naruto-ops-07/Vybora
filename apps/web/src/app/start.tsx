@@ -15,4 +15,6 @@ export function startApp(root: HTMLElement) {
       <App />
     </StrictMode>,
   );
+  // index.html hid the root for a signed-in visitor on "/" (data-app); the app owns it now.
+  document.documentElement.removeAttribute('data-app');
 }

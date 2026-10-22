@@ -10,7 +10,7 @@
     { "source": "/faq", "destination": "/faq/index.html" },
     { "source": "/download", "destination": "/download/index.html" },
     {
-      "source": "/((?!assets/|favicon|icon|apple-touch-icon|og\.png|robots\.txt|sitemap\.xml|manifest|tones/).+)",
+      "source": "/(messages|friends|settings|login|signup|forgot-password|reset-password|auth/callback)(/.*)?",
       "destination": "/app.html"
     }
   ],
@@ -25,7 +25,7 @@
       ]
     },
     {
-      "source": "/app.html",
+      "source": "/(app|404).html",
       "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
     },
     {

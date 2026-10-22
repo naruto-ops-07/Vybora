@@ -33,7 +33,7 @@ function In({
           {from.name}
         </span>
         {children}
-        <span className="mt-0.5 block text-right font-mono text-[10px] text-subtle">{time}</span>
+        <span className="mt-0.5 block text-right font-mono text-[11px] text-muted">{time}</span>
       </div>
     </div>
   );
@@ -84,7 +84,7 @@ export function PhonePreview() {
             </span>
             <span className="min-w-0">
               <span className="type-wide block text-[15px] leading-tight">Saturday crew</span>
-              <span className="flex items-center gap-1 text-[11px] text-subtle">
+              <span className="flex items-center gap-1 text-[11px] text-muted">
                 <LockSimpleIcon size={10} /> End-to-end encrypted
               </span>
             </span>
@@ -124,9 +124,7 @@ export function PhonePreview() {
               style={{ ['--i' as string]: 3 }}
             >
               Count me in. I’ll make the playlist
-              <span className="mt-0.5 block text-right font-mono text-[10px] opacity-80">
-                18:04 · read
-              </span>
+              <span className="mt-0.5 block text-right font-mono text-[11px]">18:04 · read</span>
             </div>
           </div>
           <div className="vy-panel flex items-center gap-2 border-t px-3 py-2.5">

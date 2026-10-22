@@ -5,6 +5,9 @@ import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
 
 const PUBLIC = ['/features', '/privacy-and-security', '/faq', '/download'];
+/** The app's routes (vercel.json rewrites the same set to app.html; the rest is a 404). */
+const APP =
+  /^\/(messages|friends|settings|login|signup|forgot-password|reset-password|auth\/callback)(\/|$)/;
 
 /**
  * `vite preview` serves the build the way vercel.json does: prerendered public pages from
@@ -18,8 +21,13 @@ function previewLikeVercel(): Plugin {
         const [path = '/', query] = (req.url ?? '/').split('?');
         const clean = path.length > 1 ? path.replace(/\/+$/, '') : path;
         const q = query ? `?${query}` : '';
-        if (clean === '/' || clean.includes('.') || clean.startsWith('/assets/')) return next();
-        req.url = (PUBLIC.includes(clean) ? `${clean}/index.html` : '/app.html') + q;
+        if (clean === '/' || clean.includes('.')) return next();
+        req.url =
+          (PUBLIC.includes(clean)
+            ? `${clean}/index.html`
+            : APP.test(clean)
+              ? '/app.html'
+              : '/404.html') + q;
         next();
       });
     },
@@ -31,6 +39,8 @@ export default defineConfig(({ isSsrBuild }) => ({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
+  // The footer's year, fixed at build time so prerendered and hydrated markup agree.
+  define: { __BUILD_YEAR__: JSON.stringify(new Date().getFullYear()) },
   server: { port: 5173 },
   build: {
     sourcemap: true,

@@ -131,7 +131,7 @@ function Footer() {
         </p>
         <div className="mt-8 flex flex-wrap justify-between gap-x-8 gap-y-2 text-sm text-muted">
           <p>Encryption not yet independently audited.</p>
-          <p>© {new Date().getFullYear()} VYBORA</p>
+          <p>© {__BUILD_YEAR__} VYBORA</p>
         </div>
       </div>
     </footer>

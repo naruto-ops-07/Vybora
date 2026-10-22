@@ -95,6 +95,26 @@
         } catch (e) {}
       })();
     </script>
+    <style>
+      /* A signed-in visitor on "/" gets the app: hide the prerendered homepage until it mounts. */
+      html[data-app] #root {
+        visibility: hidden;
+      }
+    </style>
+    <script id="app-gate">
+      // Mirrors hasStoredSession() in src/main.tsx. Signed-out visitors are never hidden.
+      (function () {
+        try {
+          if (location.pathname !== '/') return;
+          for (var i = 0; i < localStorage.length; i++) {
+            if (/^sb-.+-auth-token$/.test(localStorage.key(i) || '')) {
+              document.documentElement.setAttribute('data-app', '');
+              return;
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

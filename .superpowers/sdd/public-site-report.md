@@ -73,3 +73,22 @@ privacy H1 measure, active nav state, phone height on mobile, display tracking.
 2. Deploy and check `/features` etc. serve their prerendered HTML and `/friends?add=x` serves app.html.
 3. Submit sitemap.xml in Search Console; validate the card with a social preview debugger.
 4. Optionally `pnpm --filter @vybora/web remove lenis`; re-run `node apps/web/scripts/og-image.mjs` after brand changes.
+
+## Fix round 1
+1. Signed-in flash on `/`: inline `#app-gate` script in index.html (same `sb-*-auth-token` test as main.tsx)
+   sets `data-app` so `#root` is hidden until `startApp` mounts and removes it. Signed-out visitors are
+   never hidden (verified in a prod preview with JS blocked: signed-in hidden, signed-out visible). Tested.
+2. Soft 404s: vercel.json now rewrites only the app prefixes (/messages, /friends, /settings, /login,
+   /signup, /forgot-password, /reset-password, /auth/callback) to app.html; the prerender also writes
+   `dist/404.html` (noindex app shell), so unknown paths get a real 404 and the app's NotFound
+   ("This page isn't here", robots noindex, verified in preview). `X-Robots-Tag` on app.html and 404.html.
+3. Footer year is a build-time constant (`__BUILD_YEAR__` via Vite `define`).
+4. Prerender throws on missing Velvet fonts and on page sources missing from the manifest; `.prerender/`
+   is removed in a `finally`.
+5. Rewrite exclusion list removed: only the app prefixes are rewritten (so files never are).
+6. Phone preview timestamps and the "End-to-end encrypted" caption: 10 px subtle → 11 px muted ink;
+   outgoing timestamp at full opacity; photo caption scrim 45% → 70%. Server-sees list text is already
+   16 px body / muted ink (its icons are decorative).
+7. The build prints a loud warning when VITE_SITE_URL is unset or local (it is, here).
+`pnpm check` exit 0: web 311/311, core 201, api 36, validation 22, e2ee 23, db 267, mobile 176.
+Homepage shots recaptured: `apps/web/.impeccable/review/site/home-*.png`.

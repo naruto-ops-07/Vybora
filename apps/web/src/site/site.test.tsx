@@ -231,3 +231,58 @@ describe('reduced motion', () => {
     expect(src).not.toMatch(/from 'motion|lenis/);
   });
 });
+
+describe('fix round 1', () => {
+  const html = readFileSync(join(__dirname, '..', '..', 'index.html'), 'utf8');
+  const gate = html.match(/<script id="app-gate">([\s\S]*?)<\/script>/)![1]!;
+
+  const runGate = (path: string, keys: string[]) => {
+    const store = keys;
+    const root = { attrs: {} as Record<string, string> };
+    new Function('location', 'localStorage', 'document', gate)(
+      { pathname: path },
+      { length: store.length, key: (i: number) => store[i] ?? null },
+      { documentElement: { setAttribute: (k: string, v: string) => (root.attrs[k] = v) } },
+    );
+    return 'data-app' in root.attrs;
+  };
+
+  it('hides the prerendered homepage only for a signed-in visitor on "/"', () => {
+    expect(runGate('/', ['sb-abc-auth-token'])).toBe(true);
+    expect(runGate('/', ['vybora.appearance'])).toBe(false);
+    expect(runGate('/', [])).toBe(false);
+    expect(runGate('/features', ['sb-abc-auth-token'])).toBe(false);
+    expect(html).toMatch(/html\[data-app\] #root \{\s*visibility: hidden;/);
+  });
+
+  it('the app reveals the root when it mounts', () => {
+    const start = readFileSync(join(__dirname, '..', 'app', 'start.tsx'), 'utf8');
+    expect(start).toContain("removeAttribute('data-app')");
+  });
+
+  it('vercel only rewrites app routes to the shell; other paths 404', () => {
+    const vercel = JSON.parse(readFileSync(join(__dirname, '..', '..', 'vercel.json'), 'utf8'));
+    const shell = vercel.rewrites.filter(
+      (r: { destination: string }) => r.destination === '/app.html',
+    );
+    expect(shell).toHaveLength(1);
+    const re = new RegExp(`^${shell[0].source}$`);
+    for (const p of [
+      '/messages',
+      '/messages/abc',
+      '/friends',
+      '/settings/privacy',
+      '/login',
+      '/auth/callback',
+    ])
+      expect(re.test(p), p).toBe(true);
+    for (const p of ['/nope', '/robots.txt', '/og.png', '/assets/x.js', '/__gallery'])
+      expect(re.test(p), p).toBe(false);
+    expect(JSON.stringify(vercel.headers)).toContain('/(app|404).html');
+  });
+
+  it('the footer year is fixed at build time', () => {
+    renderAt('/');
+    expect(screen.getByText(`© ${__BUILD_YEAR__} VYBORA`)).toBeInTheDocument();
+  });
+});
