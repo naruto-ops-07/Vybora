@@ -4,9 +4,11 @@ import { PageSpinner } from '@/components/ui/Spinner';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { RedirectIfAuthed, RequireAuth } from '@/features/auth/guards';
 import { RouteError } from '@/routes/RouteError';
+import { PUBLIC_PAGES } from '@/site/meta';
+import { LAZY_PAGES } from '@/site/routes';
+import { SiteLayout } from '@/site/SiteLayout';
 
 // Route-level code splitting. The encryption engine is only loaded inside the workspace.
-const Landing = lazy(() => import('@/routes/Landing'));
 const Login = lazy(() => import('@/routes/auth/Login'));
 const Signup = lazy(() => import('@/routes/auth/Signup'));
 const ForgotPassword = lazy(() => import('@/routes/auth/ForgotPassword'));
@@ -38,10 +40,17 @@ function Lazy() {
   );
 }
 
+const Home = LAZY_PAGES['/']!;
+
+/** Signed in: your chats. Otherwise (and while the session is read) the homepage. */
 function RootIndex() {
   const { session } = useAuth();
-  if (session === undefined) return <PageSpinner />;
-  return session ? <Navigate to="/messages" replace /> : <Landing />;
+  if (session) return <Navigate to="/messages" replace />;
+  return (
+    <SiteLayout>
+      <Home />
+    </SiteLayout>
+  );
 }
 
 export const routes: RouteObject[] = [
@@ -50,6 +59,14 @@ export const routes: RouteObject[] = [
     errorElement: <RouteError />,
     children: [
       { index: true, element: <RootIndex /> },
+      // The public pages, also reachable from inside the app (the same chunks).
+      {
+        element: <SiteLayout />,
+        children: PUBLIC_PAGES.filter((p) => p.path !== '/').map((p) => {
+          const Page = LAZY_PAGES[p.path]!;
+          return { path: p.path.slice(1), element: <Page /> };
+        }),
+      },
       { path: 'auth/callback', element: <AuthCallback /> },
       { path: 'reset-password', element: <ResetPassword /> },
       {

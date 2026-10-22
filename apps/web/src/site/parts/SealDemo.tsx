@@ -1,11 +1,44 @@
 import { LockSimpleIcon } from '@phosphor-icons/react';
-import { motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
-import { ButtonLink } from '@/components/ui/Button';
-import { Ambient } from '@/components/Ambient';
-import { EASE_OUT, useScramble } from './motion';
 
-const LINES = ['Your words', 'leave this', 'device sealed.'];
+const prefersReducedMotion = () => {
+  const attr =
+    typeof document !== 'undefined' ? document.documentElement.dataset.reduceMotion : undefined;
+  if (attr) return attr === 'true';
+  return (
+    typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+};
+
+const GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+/**
+ * Settles text into `target` with a brief left-to-right scramble, so a change
+ * in ciphertext reads as "re-sealed". Instant with reduced motion.
+ */
+export function useScramble(target: string, duration = 420) {
+  const [shown, setShown] = useState(target);
+  const frame = useRef(0);
+  useEffect(() => {
+    if (prefersReducedMotion() || !target) {
+      setShown(target);
+      return;
+    }
+    const start = performance.now();
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - start) / duration);
+      const settled = Math.floor(target.length * p);
+      let out = target.slice(0, settled);
+      for (let i = settled; i < target.length; i++)
+        out += target[i] === '=' ? '=' : GLYPHS[(Math.random() * GLYPHS.length) | 0];
+      setShown(out);
+      if (p < 1) frame.current = requestAnimationFrame(tick);
+    };
+    frame.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame.current);
+  }, [target, duration]);
+  return shown;
+}
 
 const toBase64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
 
@@ -14,7 +47,7 @@ const toBase64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
  * shown the way a server would see it. Illustrative; real chats use MLS keys
  * held only by the members' devices.
  */
-function SealDemo() {
+export function SealDemo() {
   const [text, setText] = useState('Meet at 7. Bring the signed copy.');
   const [sealed, setSealed] = useState('');
   const key = useRef<Promise<CryptoKey> | null>(null);
@@ -91,57 +124,5 @@ function SealDemo() {
         hold.
       </p>
     </div>
-  );
-}
-
-export function Hero() {
-  return (
-    <section className="relative overflow-hidden">
-      <Ambient />
-      <div className="vy-canvas-layer mx-auto grid max-w-6xl items-center gap-14 px-5 pb-20 pt-14 md:grid-cols-[1.15fr_1fr] md:pb-32 md:pt-24">
-        <div className="min-w-0">
-          <h1 className="type-display text-[2.75rem] sm:text-6xl lg:text-[5.5rem]">
-            {LINES.map((line, i) => (
-              <span key={line} className="block overflow-hidden pb-[0.06em]">
-                <motion.span
-                  className={i === LINES.length - 1 ? 'block text-accent' : 'block'}
-                  initial={{ y: '105%' }}
-                  animate={{ y: 0 }}
-                  transition={{ duration: 0.9, ease: EASE_OUT, delay: 0.1 + i * 0.09 }}
-                >
-                  {line}
-                </motion.span>
-              </span>
-            ))}
-          </h1>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.55 }}
-          >
-            <p className="mt-7 max-w-[50ch] text-lg leading-relaxed text-muted">
-              Chat with your friends and groups on your phone and the web. Every message, photo and
-              voice note is sealed on your device before it’s sent, and only the people in the chat
-              can open it.
-            </p>
-            <div className="mt-9 flex flex-wrap gap-3">
-              <ButtonLink to="/signup" size="lg">
-                Create your account
-              </ButtonLink>
-              <ButtonLink to="/login" size="lg" variant="outline">
-                Sign in
-              </ButtonLink>
-            </div>
-          </motion.div>
-        </div>
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: EASE_OUT, delay: 0.35 }}
-        >
-          <SealDemo />
-        </motion.div>
-      </div>
-    </section>
   );
 }

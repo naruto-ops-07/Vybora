@@ -7,11 +7,9 @@ const noHorizontalOverflow = () =>
 
 test('landing page presents the messaging product and its calls to action', async ({ page }) => {
   await page.goto('/');
-  await expect(
-    page.getByRole('heading', { name: /Your words leave this device sealed/ }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Your people, in colour/ })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Create your account' }).first()).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'What our servers can see' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'What our servers can’t see' })).toBeVisible();
   expect(await page.evaluate(noHorizontalOverflow)).toBeLessThanOrEqual(0);
 });
 
@@ -23,7 +21,16 @@ for (const [name, size] of [
 ] as const) {
   test(`public pages fit a ${name} viewport without horizontal scrolling`, async ({ page }) => {
     await page.setViewportSize(size);
-    for (const path of ['/', '/login', '/signup', '/forgot-password']) {
+    for (const path of [
+      '/',
+      '/features',
+      '/privacy-and-security',
+      '/faq',
+      '/download',
+      '/login',
+      '/signup',
+      '/forgot-password',
+    ]) {
       await page.goto(path);
       await expect(page.locator('main')).toBeVisible();
       expect(await page.evaluate(noHorizontalOverflow), path).toBeLessThanOrEqual(0);
@@ -85,7 +92,7 @@ test('keyboard users can reach the sign-in fields with a visible focus indicator
 });
 
 test('the interface uses the VYBORA type system (Archivo, IBM Plex Mono)', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/privacy-and-security');
   await expect(page.getByText('What the server stores')).toBeVisible();
   const fonts = await page.evaluate(() => ({
     body: getComputedStyle(document.body).fontFamily,

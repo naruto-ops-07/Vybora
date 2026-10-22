@@ -9,6 +9,8 @@
 @import './primitives.css' layer(components);
 /* The messaging workspace: canvas glow, panels, bubbles, rows, chips (plain CSS too). */
 @import './workspace.css' layer(components);
+/* The public site: the hero phone, the privacy diagram, disclosures (plain CSS too). */
+@import './site.css' layer(components);
 
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
