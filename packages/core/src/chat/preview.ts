@@ -1,3 +1,4 @@
+import { renderMentions } from './features';
 import { formatClock, formatLastSeen, type TimeOpts } from './time';
 
 export type Receipt = 'sending' | 'failed' | 'sent' | 'delivered' | 'read';
@@ -20,11 +21,15 @@ export function receiptOf(
 
 export interface PreviewMessageLike {
   senderId: string;
-  kind: 'text' | 'attachment' | 'undecryptable' | 'unsupported';
+  kind: 'text' | 'attachment' | 'contact' | 'location' | 'poll' | 'undecryptable' | 'unsupported';
   body?: string;
   caption?: string;
   attachment?: { kind: string; name?: string };
   deleted?: boolean;
+  contact?: { displayName: string; username: string };
+  location?: { label?: string };
+  poll?: { question: string };
+  viewOnce?: { kind: string; consumed: boolean };
 }
 
 const ATTACHMENT_LABEL: Record<string, string> = {
@@ -36,18 +41,34 @@ const ATTACHMENT_LABEL: Record<string, string> = {
 /** Shown for a message kind this build can't display (sent by a newer client). */
 export const UNSUPPORTED_TEXT = 'Update VYBORA to see this message';
 
-/** One-line description of a decrypted message (never more than the device already shows). */
-export function messageSummary(m: PreviewMessageLike): string {
+/**
+ * One-line description of a decrypted message (never more than the device
+ * already shows). Local only: never put this in a push or a log.
+ * `nameOf` turns `@[userId]` mention tokens into `@Name`.
+ */
+export function messageSummary(
+  m: PreviewMessageLike,
+  opts: { nameOf?: (userId: string) => string } = {},
+): string {
   if (m.deleted) return 'This message was deleted';
   if (m.kind === 'undecryptable') return 'Message couldn’t be decrypted';
   if (m.kind === 'unsupported') return UNSUPPORTED_TEXT;
+  if (m.viewOnce) {
+    const what = m.viewOnce.kind === 'video' ? 'video' : 'photo';
+    return m.viewOnce.consumed ? 'Opened' : `View once ${what}`;
+  }
+  if (m.kind === 'contact')
+    return `Contact: ${m.contact?.displayName || m.contact?.username || ''}`;
+  if (m.kind === 'location')
+    return m.location?.label ? `Location: ${m.location.label}` : 'Location';
+  if (m.kind === 'poll') return `Poll: ${m.poll?.question ?? ''}`;
   if (m.kind === 'attachment') {
     const caption = m.caption?.trim();
     if (caption) return caption;
     const k = m.attachment?.kind ?? 'file';
     return ATTACHMENT_LABEL[k] ?? `File: ${m.attachment?.name ?? 'attachment'}`;
   }
-  return m.body ?? '';
+  return m.body ? renderMentions(m.body, opts.nameOf) : '';
 }
 
 export interface RowPreview {
@@ -80,7 +101,7 @@ export function chatRowPreview(
   const mine = last.senderId === opts.myUserId;
   return {
     prefix: mine ? 'You' : opts.isGroup ? opts.nameOf(last.senderId) : null,
-    text: messageSummary(last),
+    text: messageSummary(last, { nameOf: opts.nameOf }),
     receipt: mine && !last.deleted ? (opts.receipt ?? null) : null,
     typing: false,
   };
@@ -93,7 +114,8 @@ export function selectionToText(
 ): string {
   return messages
     .map(
-      (m) => `[${formatClock(m.createdAt, opts)}] ${opts.nameOf(m.senderId)}: ${messageSummary(m)}`,
+      (m) =>
+        `[${formatClock(m.createdAt, opts)}] ${opts.nameOf(m.senderId)}: ${messageSummary(m, opts)}`,
     )
     .join('\n');
 }
