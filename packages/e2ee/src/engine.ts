@@ -92,8 +92,9 @@ export interface LocalMessage {
   location?: LocationPin;
   poll?: LocalPoll;
   /**
-   * View-once attachment. `consumed` is true once this device has opened it
-   * (or always, for the sender); `attachment` (key + blob path) is then gone.
+   * View-once attachment. Its key and blob path are never on the message: they
+   * live under a separate store key that only `consumeViewOnce` reads (and then
+   * deletes). `consumed` is true once opened, and always on the sender's devices.
    */
   viewOnce?: { kind: AttachmentRef['kind']; consumed: boolean };
   /** Starred on this device only (never synced). */
@@ -144,22 +145,7 @@ type ContentPayload = Extract<
 >;
 const CONTENT_KINDS = new Set(['text', 'attachment', 'contact', 'location', 'poll']);
 const isContent = (p: Payload): p is ContentPayload => CONTENT_KINDS.has(p.t);
-const fold = (s: string) => s.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
-
-/** The text a message can be found by in local search. */
-export function searchableText(m: LocalMessage): string {
-  if (m.deleted) return '';
-  return [
-    m.body?.replace(/@\[[0-9a-f-]{36}\]/gi, ' '),
-    m.caption,
-    m.attachment?.name,
-    m.contact && `${m.contact.displayName} ${m.contact.username}`,
-    m.location?.label,
-    m.poll && [m.poll.question, ...m.poll.options].join(' '),
-  ]
-    .filter(Boolean)
-    .join(' ');
-}
+const DEFERRED = new Set(['edit', 'pin', 'vote']);
 
 export type SyncStatus = 'ready' | 'waiting_for_access' | 'broken';
 
@@ -192,6 +178,17 @@ const pad = (n: number) => n.toString().padStart(16, '0');
  * Per-device messaging engine. Owns identity, key packages, MLS group state
  * and the local decrypted history; talks to the server only through a
  * ConnectTransport. All mutations of a conversation are serialized.
+ *
+ * What the engine trusts the server for (it can't verify these):
+ *  - `createdAt` of envelopes: the edit window is measured between the
+ *    original's and the edit's server timestamps, so a dishonest server could
+ *    stretch or shrink it (it cannot forge or alter content).
+ *  - `seq` order: "latest wins" for votes, edits and pins follows server order.
+ *  - roster, admin role and `settings_policy` (from getConversation): decide
+ *    who may pin in admins-only groups and which mentions are members. These
+ *    are read at sync time, so a pin is judged by the current policy.
+ * Everything else (who sent what, content, targets) is checked end to end via
+ * MLS and the inner Ed25519 signature.
  */
 export class ConnectEngine {
   private identity: DeviceIdentity | null = null;
@@ -311,9 +308,12 @@ export class ConnectEngine {
       const id = randomId();
       let payload = { v: 1, id, ...content } as Payload;
       const now = new Date().toISOString();
+      const needsInfo =
+        DEFERRED.has(payload.t) ||
+        ((payload.t === 'text' || payload.t === 'edit') && !!payload.mentions?.length);
+      const info = needsInfo ? await this.getInfo(conversationId) : null;
       if ((payload.t === 'text' || payload.t === 'edit') && payload.mentions?.length) {
-        const members = (await this.infoOf(conversationId)).memberIds;
-        const mentions = validMentions(payload.body, payload.mentions, members);
+        const mentions = validMentions(payload.body, payload.mentions, info!.memberIds);
         if (mentions?.length !== new Set(payload.mentions.map((m) => m.toLowerCase())).size)
           throw new ConnectError('forbidden', 'invalid_mentions');
         payload = { ...payload, mentions };
@@ -332,14 +332,25 @@ export class ConnectEngine {
         };
         await this.saveMessage(local);
         this.emit(conversationId);
+      } else if (DEFERRED.has(payload.t)) {
+        // Edit/pin/vote: check now like a receiver would (device clock, UX only),
+        // but change nothing until the server has stored it; then apply with
+        // the server's createdAt, exactly as every receiver will.
+        const ok = await this.applyControl(conversationId, payload, this.userId, now, info!, true);
+        if (!ok) throw new ConnectError('forbidden', `${payload.t}_not_allowed`);
       } else {
-        // Controls are checked like a receiver would, then apply locally right away.
-        // Reactions/deletes keep their old behaviour (sent anyway; receivers ignore).
-        const applied = await this.applyControl(conversationId, payload, this.userId, now);
-        if (!applied && payload.t !== 'reaction' && payload.t !== 'delete')
-          throw new ConnectError('forbidden', `${payload.t}_not_allowed`);
+        // Reactions/deletes apply locally right away (sent anyway; receivers ignore if not allowed).
+        await this.applyControl(
+          conversationId,
+          payload,
+          this.userId,
+          now,
+          await this.cachedInfo(conversationId),
+        );
         this.emit(conversationId);
       }
+      await setJson(this.store, `pp/${conversationId}/${id}`, payload);
+      return this.deliverLocked(conversationId, id, attachmentPaths);
       await setJson(this.store, `pp/${conversationId}/${id}`, payload);
       return this.deliverLocked(conversationId, id, attachmentPaths);
     });
@@ -403,7 +414,14 @@ export class ConnectEngine {
 
   /** Current pins, oldest first. */
   async listPins(conversationId: string): Promise<PinEntry[]> {
-    return (await getJson<PinEntry[]>(this.store, `pins/${conversationId}`)) ?? [];
+    const pins = (await getJson<PinEntry[]>(this.store, `pins/${conversationId}`)) ?? [];
+    const live: PinEntry[] = [];
+    for (const p of pins) {
+      const m = await this.getMessage(conversationId, p.messageId);
+      if (m && !m.deleted && !(m.expiresAt && Date.parse(m.expiresAt) <= Date.now())) live.push(p);
+    }
+    if (live.length !== pins.length) await setJson(this.store, `pins/${conversationId}`, live);
+    return live;
   }
 
   /**
@@ -422,9 +440,9 @@ export class ConnectEngine {
     if (!m || m.deleted || m.viewOnce || m.status === 'sending' || m.status === 'failed')
       throw new ConnectError('forbidden', 'not_forwardable');
     if (m.kind === 'text' && m.body) {
-      const body = m.body.replace(
-        /@\[([0-9a-f-]{36})\]/gi,
-        (_, id: string) => `@${options.nameOf?.(id.toLowerCase()) ?? 'someone'}`,
+      const valid = new Set(m.mentions ?? []);
+      const body = m.body.replace(/@\[([0-9a-f-]{36})\]/gi, (token, id: string) =>
+        valid.has(id.toLowerCase()) ? `@${options.nameOf?.(id.toLowerCase()) ?? 'someone'}` : token,
       );
       return this.send(toConversationId, { t: 'text', body, forwarded: true });
     }
@@ -459,13 +477,18 @@ export class ConnectEngine {
   consumeViewOnce(conversationId: string, messageId: string): Promise<Uint8Array | null> {
     return this.locked(conversationId, async () => {
       const m = await this.getMessage(conversationId, messageId);
-      if (!m?.viewOnce || m.viewOnce.consumed || !m.attachment) return null;
-      const bytes = await this.openAttachment(m.attachment);
+      const voKey = `vo/${conversationId}/${messageId}`;
+      const ref = await getJson<AttachmentRef>(this.store, voKey);
+      if (!m?.viewOnce || m.viewOnce.consumed || !ref) {
+        await this.store.delete(voKey);
+        return null;
+      }
+      const bytes = await this.openAttachment(ref);
       await setJson(this.store, `msg/${conversationId}/${m.id}`, {
         ...m,
-        attachment: undefined,
         viewOnce: { ...m.viewOnce, consumed: true },
       } satisfies LocalMessage);
+      await this.store.delete(voKey);
       this.emit(conversationId);
       return bytes;
     });
@@ -501,27 +524,27 @@ export class ConnectEngine {
   }
 
   /**
-   * Search decrypted local history (one chat or all), newest first.
-   * Case- and accent-insensitive; every word of the query must match.
+   * Local history for search and other views (one chat or all), newest
+   * first, expired messages excluded. Matching is done by @vybora/core's
+   * `searchMessages(messages, query)` so there is a single implementation.
    */
-  async searchMessages(
-    query: string,
-    options: { conversationId?: string; limit?: number } = {},
+  async queryMessages(
+    options: {
+      conversationId?: string;
+      filter?: (m: LocalMessage) => boolean;
+      limit?: number;
+    } = {},
   ): Promise<LocalMessage[]> {
-    const words = fold(query).split(/\s+/).filter(Boolean);
-    if (!words.length) return [];
     const now = Date.now();
     const out: LocalMessage[] = [];
     const prefix = options.conversationId ? `msg/${options.conversationId}/` : 'msg/';
     for (const k of await this.store.list(prefix)) {
       const m = await getJson<LocalMessage>(this.store, k);
       if (!m || (m.expiresAt && Date.parse(m.expiresAt) <= now)) continue;
-      const text = fold(searchableText(m));
-      if (words.every((w) => text.includes(w))) out.push(m);
+      if (!options.filter || options.filter(m)) out.push(m);
     }
-    return out
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .slice(0, options.limit ?? 100);
+    out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return options.limit ? out.slice(0, options.limit) : out;
   }
 
   async getMessage(conversationId: string, id: string): Promise<LocalMessage | null> {
@@ -536,6 +559,7 @@ export class ConnectEngine {
       `out/${conversationId}/`,
       `pp/${conversationId}/`,
       `star/${conversationId}/`,
+      `vo/${conversationId}/`,
     ]) {
       for (const k of await this.store.list(prefix)) await this.store.delete(k);
     }
@@ -638,8 +662,8 @@ export class ConnectEngine {
     return run;
   }
 
-  /** Conversation roster/roles, cached and refreshed on every sync. */
-  private async infoOf(conversationId: string): Promise<ConversationInfo> {
+  /** Roster/roles as of the last sync (fetched if never loaded). Never call inside envelope processing. */
+  private async cachedInfo(conversationId: string): Promise<ConversationInfo> {
     return this.infoCache.get(conversationId) ?? this.getInfo(conversationId);
   }
 
@@ -715,6 +739,7 @@ export class ConnectEngine {
 
   private async deleteLocalMessage(m: LocalMessage, ordKey?: string) {
     await this.store.delete(`msg/${m.conversationId}/${m.id}`);
+    await this.store.delete(`vo/${m.conversationId}/${m.id}`);
     if (ordKey) await this.store.delete(ordKey);
     await this.store.delete(`out/${m.conversationId}/${m.id}`);
   }
@@ -864,12 +889,15 @@ export class ConnectEngine {
     const me = this.requireIdentity().deviceId;
 
     for (let attempt = 0; attempt < 4; attempt++) {
+      // Loaded once, before any envelope is processed: a transport failure here
+      // (or anywhere below) aborts the sync without advancing the cursor.
+      const roster = await this.getInfo(conversationId);
       let cursor = await this.cursorOf(conversationId);
       for (;;) {
         const page = await this.transport.fetchEnvelopes(conversationId, cursor, FETCH_PAGE);
         let changed = false;
         for (const env of page) {
-          const next = await this.processEnvelope(conversationId, state!, env, me);
+          const next = await this.processEnvelope(conversationId, state!, env, me, roster);
           if (next === 'broken') {
             await this.store.delete(`g/${conversationId}`);
             await this.store.delete(`cur/${conversationId}`);
@@ -900,6 +928,7 @@ export class ConnectEngine {
     state: ClientState,
     env: EnvelopeRecord,
     me: string,
+    info: ConversationInfo,
   ): Promise<ClientState | 'broken'> {
     if (env.kind === 'commit') {
       if (env.epoch < epochOf(state)) return state; // already past this epoch (e.g. joined later)
@@ -923,6 +952,14 @@ export class ConnectEngine {
 
     // Application message.
     if (env.senderDeviceId === me) {
+      // A deferred control of ours whose post response was lost: apply it now.
+      const pending = await getJson<Payload>(this.store, `pp/${conversationId}/${env.clientId}`);
+      if (pending && DEFERRED.has(pending.t)) {
+        await this.applyControl(conversationId, pending, this.userId, env.createdAt, info);
+        await this.store.delete(`ob/${conversationId}/${env.clientId}`);
+        await this.store.delete(`pp/${conversationId}/${env.clientId}`);
+        return state;
+      }
       const local = await getJson<LocalMessage>(
         this.store,
         `msg/${conversationId}/${env.clientId}`,
@@ -948,9 +985,12 @@ export class ConnectEngine {
       // The signed device must be the envelope's sender device and belong to the sender.
       if (opened.deviceId !== env.senderDeviceId || device?.userId !== env.senderId)
         throw new Error('sender_mismatch');
-      await this.applyIncoming(conversationId, env, opened.payload);
+      await this.applyIncoming(conversationId, env, opened.payload, info);
       return r.state;
-    } catch {
+    } catch (error) {
+      // A transport failure (e.g. directory lookup) must not turn a good
+      // message into a permanent placeholder: abort; the cursor stays put.
+      if (error instanceof ConnectError) throw error;
       await this.saveMessage({
         id: env.clientId,
         conversationId,
@@ -967,7 +1007,13 @@ export class ConnectEngine {
     }
   }
 
-  private async applyIncoming(conversationId: string, env: EnvelopeRecord, payload: OpenedPayload) {
+  private async applyIncoming(
+    conversationId: string,
+    env: EnvelopeRecord,
+    payload: OpenedPayload,
+    info: ConversationInfo,
+  ) {
+    if (payload.t === 'ignored') return; // a newer client's silent control
     if (payload.t === 'unsupported') {
       if (await getJson(this.store, `msg/${conversationId}/${payload.id}`)) return;
       await this.saveMessage({
@@ -990,12 +1036,11 @@ export class ConnectEngine {
       if (p.t === 'text' && p.mentions)
         p = {
           ...p,
-          mentions: validMentions(
-            p.body,
-            p.mentions,
-            (await this.infoOf(conversationId)).memberIds,
-          ),
+          mentions: validMentions(p.body, p.mentions, info.memberIds),
         };
+      const mine = env.senderId === this.userId; // my other device sent it
+      if (p.t === 'attachment' && p.attachment.viewOnce && !mine)
+        await setJson(this.store, `vo/${conversationId}/${p.id}`, p.attachment);
       await this.saveMessage({
         id: payload.id,
         conversationId,
@@ -1005,11 +1050,11 @@ export class ConnectEngine {
         createdAt: env.createdAt,
         expiresAt: env.expiresAt,
         status: 'received',
-        ...this.contentFields(p, false),
+        ...this.contentFields(p, mine),
       });
       return;
     }
-    await this.applyControl(conversationId, payload, env.senderId, env.createdAt);
+    await this.applyControl(conversationId, payload, env.senderId, env.createdAt, info);
   }
 
   /** LocalMessage fields for a content payload (shared by send and receive). */
@@ -1033,8 +1078,8 @@ export class ConnectEngine {
           : undefined;
         return {
           ...base,
-          // The sender never re-opens a view-once photo; keep no key for it.
-          attachment: viewOnce && mine ? undefined : p.attachment,
+          // View-once: never on the message (key kept apart, see consumeViewOnce).
+          attachment: viewOnce ? undefined : p.attachment,
           viewOnce,
           caption: p.caption,
           replyTo: p.replyTo,
@@ -1063,8 +1108,12 @@ export class ConnectEngine {
 
   /**
    * Apply a control payload, enforcing the same rules on every device.
-   * Returns false (and changes nothing) when the actor isn't allowed.
-   *  - delete / edit: only the original sender; edit within 15 minutes
+   * Returns false (and changes nothing) when the actor isn't allowed; with
+   * `dryRun` it only checks.
+   *  - delete: only the original sender (also unpins)
+   *  - edit: only the sender, on a delivered text/attachment that isn't
+   *    view-once or deleted, within 15 min (server times); captions ≤ 2000;
+   *    an older edit never replaces a newer one
    *  - pin: anyone in a direct chat; groups follow the admins-only setting
    *  - vote: a valid choice set for the target poll; latest vote wins
    */
@@ -1073,13 +1122,16 @@ export class ConnectEngine {
     payload: Payload,
     actorId: string,
     at: string,
+    info: ConversationInfo,
+    dryRun = false,
   ): Promise<boolean> {
     if (isContent(payload)) return false;
     const key = `msg/${conversationId}/${payload.target}`;
     const target = await getJson<LocalMessage>(this.store, key);
     if (payload.t === 'pin') {
       if (payload.pinned && (!target || target.deleted)) return false;
-      if (!mayPin(await this.infoOf(conversationId), actorId)) return false;
+      if (!mayPin(info, actorId)) return false;
+      if (dryRun) return true;
       const pins = applyPin(await this.listPins(conversationId), {
         messageId: payload.target,
         pinned: payload.pinned,
@@ -1093,6 +1145,7 @@ export class ConnectEngine {
     switch (payload.t) {
       case 'delete': {
         if (target.senderId !== actorId) return false;
+        if (dryRun) return true;
         await setJson(this.store, key, {
           ...target,
           deleted: true,
@@ -1104,8 +1157,11 @@ export class ConnectEngine {
           location: undefined,
           poll: undefined,
           viewOnce: undefined,
+          edited: undefined,
+          editedAt: undefined,
         } satisfies LocalMessage);
-        const pins = await this.listPins(conversationId);
+        await this.store.delete(`vo/${conversationId}/${target.id}`);
+        const pins = (await getJson<PinEntry[]>(this.store, `pins/${conversationId}`)) ?? [];
         if (pins.some((p) => p.messageId === target.id))
           await setJson(
             this.store,
@@ -1118,18 +1174,17 @@ export class ConnectEngine {
         if (target.senderId !== actorId) return false;
         if (target.kind !== 'text' && target.kind !== 'attachment') return false;
         if (target.viewOnce) return false;
+        if (target.status === 'sending' || target.status === 'failed') return false;
+        if (target.kind === 'attachment' && payload.body.length > 2000) return false;
         if (!withinEditWindow(target.createdAt, at)) return false;
         if (target.editedAt && Date.parse(at) < Date.parse(target.editedAt)) return false;
+        if (dryRun) return true;
         const edited: LocalMessage =
           target.kind === 'text'
             ? {
                 ...target,
                 body: payload.body,
-                mentions: validMentions(
-                  payload.body,
-                  payload.mentions,
-                  (await this.infoOf(conversationId)).memberIds,
-                ),
+                mentions: validMentions(payload.body, payload.mentions, info.memberIds),
               }
             : { ...target, caption: payload.body };
         await setJson(this.store, key, { ...edited, edited: true, editedAt: at });
@@ -1139,6 +1194,7 @@ export class ConnectEngine {
         if (target.kind !== 'poll' || !target.poll) return false;
         const choices = normalizeVote(target.poll, payload.choices);
         if (!choices) return false;
+        if (dryRun) return true;
         const votes = { ...target.poll.votes };
         if (choices.length) votes[actorId] = choices;
         else delete votes[actorId];
@@ -1146,6 +1202,7 @@ export class ConnectEngine {
         return true;
       }
       case 'reaction': {
+        if (dryRun) return true;
         const users = new Set(target.reactions[payload.emoji] ?? []);
         if (payload.remove) users.delete(actorId);
         else {
@@ -1184,6 +1241,9 @@ export class ConnectEngine {
         const synced = await this.syncLocked(conversationId);
         if (synced.status !== 'ready')
           throw new ConnectError('not_ready', 'Secure session is not ready yet');
+        // Sync may have found our own already-posted control (lost response) and applied it.
+        if (!(await getJson(this.store, `pp/${conversationId}/${id}`)))
+          return this.getMessage(conversationId, id);
         const state = (await this.loadState(conversationId))!;
         if (!outbound || outbound.epoch !== epochOf(state)) {
           const sealed = sealPayload(conversationId, identity.deviceId, identity.signKey, payload);
@@ -1215,6 +1275,14 @@ export class ConnectEngine {
         }
         await this.store.delete(`ob/${conversationId}/${id}`);
         await this.store.delete(`pp/${conversationId}/${id}`);
+        if (DEFERRED.has(payload.t))
+          await this.applyControl(
+            conversationId,
+            payload,
+            this.userId,
+            posted.createdAt,
+            await this.cachedInfo(conversationId),
+          );
         const local = await this.getMessage(conversationId, id);
         if (local) {
           const sent: LocalMessage = {

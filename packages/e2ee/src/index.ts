@@ -7,6 +7,7 @@ export {
   attachmentSchema,
   payloadSchema,
   type AttachmentRef,
+  type IgnoredPayload,
   type OpenedPayload,
   type Payload,
   type UnsupportedPayload,
@@ -14,7 +15,6 @@ export {
 export { MAX_ATTACHMENT_BYTES, decryptAttachment, encryptAttachment } from './attachments';
 export {
   ConnectEngine,
-  searchableText,
   type ContactCard,
   type ContactKeyStatus,
   type LocalPoll,

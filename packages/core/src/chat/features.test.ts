@@ -95,7 +95,11 @@ describe('mentions', () => {
       { type: 'mention', userId: B, valid: false },
       { type: 'text', text: '!' },
     ]);
-    expect(renderMentions(body, (id) => (id === A ? 'Maya' : 'Sam'))).toBe('hey @Maya and @Sam!');
+    const names = (id: string) => (id === A ? 'Maya' : 'Sam');
+    expect(renderMentions(body, [A, B], names)).toBe('hey @Maya and @Sam!');
+    // Unvalidated tokens stay literal: never shown as someone's name.
+    expect(renderMentions(body, [A], names)).toBe(`hey @Maya and @[${B}]!`);
+    expect(renderMentions(body, undefined, names)).toBe(body);
     expect(mentionIdsIn(body)).toEqual([A, B]);
     expect(mentionsMe({ mentions: [A] }, A)).toBe(true);
     expect(mentionsMe({}, A)).toBe(false);
@@ -122,9 +126,10 @@ describe('messageSummary for new kinds (local previews)', () => {
       'View once photo',
     );
     expect(s({ kind: 'attachment', viewOnce: { kind: 'image', consumed: true } })).toBe('Opened');
-    expect(s({ body: `hi @[${A}]` })).toBe('hi @someone');
+    expect(s({ body: `hi @[${A}]`, mentions: [A] })).toBe('hi @someone');
+    expect(s({ body: `hi @[${A}]` })).toBe(`hi @[${A}]`);
     const row = chatRowPreview(
-      { senderId: B, kind: 'text', body: `hi @[${A}]` },
+      { senderId: B, kind: 'text', body: `hi @[${A}]`, mentions: [A] },
       { myUserId: A, isGroup: true, typingUserIds: [], nameOf: () => 'Maya' },
     );
     expect(row.text).toBe('hi @Maya');
@@ -134,7 +139,13 @@ describe('messageSummary for new kinds (local previews)', () => {
 describe('local search', () => {
   const msgs = [
     { id: '1', createdAt: '2026-10-01T00:00:00Z', body: 'Café at noon?' },
-    { id: '2', createdAt: '2026-10-02T00:00:00Z', body: 'cafe tomorrow with @[' + A + ']' },
+    {
+      id: '2',
+      createdAt: '2026-10-02T00:00:00Z',
+      body: 'cafe tomorrow with @[' + A + ']',
+      mentions: [A],
+    },
+    { id: '5', createdAt: '2026-10-05T00:00:00Z', body: 'forged @[' + B + ']' },
     { id: '3', createdAt: '2026-10-03T00:00:00Z', poll: { question: 'Which?', options: ['Cafe'] } },
     { id: '4', createdAt: '2026-10-04T00:00:00Z', body: 'cafe', deleted: true },
   ];
@@ -146,6 +157,8 @@ describe('local search', () => {
       searchMessages(msgs, 'cafe maya', { nameOf: () => 'Maya' }).map((h) => h.message.id),
     ).toEqual(['2']);
     expect(searchMessages(msgs, '   ')).toEqual([]);
+    // An unvalidated token isn't searchable by the name it claims.
+    expect(searchMessages(msgs, 'forged sam', { nameOf: () => 'Sam' })).toEqual([]);
   });
   it('builds a snippet around the first match', () => {
     const text = `${'x'.repeat(100)} needle ${'y'.repeat(100)}`;

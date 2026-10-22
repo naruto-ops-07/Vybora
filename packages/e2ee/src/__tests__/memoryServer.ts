@@ -30,6 +30,8 @@ export class MemoryServer {
   envelopes: (EnvelopeRecord & { attachmentPaths: string[] })[] = [];
   welcomes: (WelcomeRecord & { deviceId: string })[] = [];
   blobs = new Map<string, Uint8Array>();
+  /** Transport methods that fail once with a network error (fault injection). */
+  failNext = new Set<string>();
   /** Server clock (overridable to test time windows). */
   now = () => new Date();
   private seq = 0;
@@ -46,6 +48,10 @@ export class MemoryServer {
   transport(userId: string): ConnectTransport {
     // eslint-disable-next-line @typescript-eslint/no-this-alias -- closures below share this server
     const s = this;
+    const fault = (method: string) => {
+      if (s.failNext.delete(method))
+        throw new ConnectError('network', `injected ${method} failure`);
+    };
     const conv = (id: string) => {
       const c = s.conversations.get(id);
       if (!c || !c.members.has(userId)) throw new ConnectError('forbidden', 'not_a_member');
@@ -101,6 +107,7 @@ export class MemoryServer {
         });
       },
       async getConversation(id): Promise<ConversationInfo> {
+        fault('getConversation');
         const c = conv(id);
         return {
           id,
@@ -155,6 +162,7 @@ export class MemoryServer {
         return seq;
       },
       async postApplication(input): Promise<PostedEnvelope> {
+        fault('postApplication');
         const c = conv(input.conversationId);
         if (c.epoch !== input.epoch) throw new ConnectError('epoch_stale', 'epoch_stale');
         if (
@@ -177,6 +185,8 @@ export class MemoryServer {
           attachmentPaths: input.attachmentPaths,
         };
         s.envelopes.push(e);
+        if (s.failNext.delete('postApplicationResponse'))
+          throw new ConnectError('network', 'injected lost response'); // stored, reply lost
         return { seq: e.seq, createdAt: e.createdAt, expiresAt: null };
       },
       async findOwnEnvelope(deviceId, clientId) {

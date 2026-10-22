@@ -175,9 +175,20 @@ export function parseMentions(body: string, mentions?: readonly string[]): Menti
   return out;
 }
 
-/** Body as plain text with `@Name` for every token (previews, copy, search). */
-export function renderMentions(body: string, nameOf?: (userId: string) => string): string {
-  return body.replace(MENTION_RE, (_, id: string) => `@${nameOf?.(id.toLowerCase()) ?? 'someone'}`);
+/**
+ * Body as plain text for previews, copy and search: `@Name` for each
+ * VALIDATED mention (ids in `mentions`, the engine's checked list). Tokens
+ * that aren't validated stay as their literal text, never a name.
+ */
+export function renderMentions(
+  body: string,
+  mentions: readonly string[] | undefined,
+  nameOf?: (userId: string) => string,
+): string {
+  return body.replace(MENTION_RE, (token, id: string) => {
+    const uid = id.toLowerCase();
+    return mentions?.includes(uid) ? `@${nameOf?.(uid) ?? 'someone'}` : token;
+  });
 }
 
 /** User ids mentioned by token, in order (what to pass as `mentions` when sending). */
@@ -218,6 +229,7 @@ export interface SearchableLike {
   createdAt: string;
   deleted?: boolean;
   body?: string;
+  mentions?: readonly string[];
   caption?: string;
   attachment?: { name?: string };
   contact?: { displayName: string; username: string };
@@ -232,7 +244,7 @@ export const foldText = (s: string) => s.normalize('NFKD').replace(/\p{M}/gu, ''
 export function searchableTextOf(m: SearchableLike, nameOf?: (userId: string) => string): string {
   if (m.deleted) return '';
   return [
-    m.body && renderMentions(m.body, nameOf),
+    m.body && renderMentions(m.body, m.mentions, nameOf),
     m.caption,
     m.attachment?.name,
     m.contact && `${m.contact.displayName} @${m.contact.username}`,

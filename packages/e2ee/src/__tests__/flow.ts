@@ -56,18 +56,24 @@ export async function sendRawPayload(
   d: TestDevice,
   conv: string,
   payload: Record<string, unknown> & { id: string },
+  forge: { badSignature?: boolean; signAs?: TestDevice } = {},
 ) {
   await d.engine.sync(conv);
   const identity = deserializeIdentity((await getJson<StoredIdentity>(d.store, 'identity'))!);
+  // signAs: sign as another (registered) device than the one sending the envelope.
+  const signer = forge.signAs
+    ? deserializeIdentity((await getJson<StoredIdentity>(forge.signAs.store, 'identity'))!)
+    : identity;
   const config = makeClientConfig({ lookup: async () => null });
   const state = decodeState((await d.store.get(`g/${conv}`))!, config);
   const digest = sha256(utf8.encode(JSON.stringify(payload)));
   const input = utf8.encode(
-    `vybora-msg-v1|${conv}|${identity.deviceId}|${payload.id}|${b64.encode(digest)}`,
+    `vybora-msg-v1|${conv}|${signer.deviceId}|${payload.id}|${b64.encode(digest)}`,
   );
-  const sig = ed25519.sign(input, ed25519Seed(identity.signKey));
+  const sig = ed25519.sign(input, ed25519Seed(signer.signKey));
+  if (forge.badSignature) sig[0]! ^= 0xff;
   const sealed = utf8.encode(
-    JSON.stringify({ d: identity.deviceId, s: b64.encode(sig), p: payload }),
+    JSON.stringify({ d: signer.deviceId, s: b64.encode(sig), p: payload }),
   );
   const enc = await encryptApplication(state, sealed);
   await d.store.set(`g/${conv}`, encodeState(enc.state));

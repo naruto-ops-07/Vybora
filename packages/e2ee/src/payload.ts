@@ -158,30 +158,76 @@ export function sealPayload(
 }
 
 /**
- * A payload kind this build doesn't know (sent by a newer client). Its
- * signature has still been verified; it is shown as "update to see this".
- * Never sealed or sent.
+ * Forward-compatibility contract (every build follows it, `v` stays 1):
+ *
+ *  - The Ed25519 signature covers the exact payload object the sender sent,
+ *    and is verified BEFORE schema parsing. Unknown kinds and unknown fields
+ *    therefore still verify (and forged ones still fail).
+ *  - An unknown `t` is shown as an "Update VYBORA to see this message"
+ *    placeholder (`UnsupportedPayload`), unless the payload carries
+ *    `silent: true`: then it is dropped without a trace (for future control
+ *    kinds such as read-state or settings that have nothing to show).
+ *  - Unknown fields on a known kind are ignored (stripped) by default. A
+ *    newer client that adds a field older builds MUST NOT ignore (for
+ *    example a privacy-relevant `expiresInSec`) lists it in `crit: string[]`
+ *    (dotted paths reach into objects, e.g. `attachment.expiresInSec`). If
+ *    this build doesn't know any listed field, the whole message becomes an
+ *    `UnsupportedPayload` (or is dropped when `silent`), never a stripped copy.
+ *  - `crit` and `silent` are head fields: they sit next to `v`, `t` and `id`.
+ */
+
+/**
+ * A payload kind this build doesn't know (sent by a newer client), or a known
+ * kind with a critical field this build doesn't understand. Its signature has
+ * still been verified; it is shown as "update to see this". Never sealed or sent.
  */
 export interface UnsupportedPayload {
   v: 1;
   t: 'unsupported';
   id: string;
-  /** The unknown `t` as received (for diagnostics only; never displayed). */
+  /** The `t` as received (for diagnostics only; never displayed). */
   kind: string;
 }
 
-export type OpenedPayload = Payload | UnsupportedPayload;
+/** A verified payload a newer client marked `silent` that this build can't use: drop it. */
+export interface IgnoredPayload {
+  v: 1;
+  t: 'ignored';
+  id: string;
+  kind: string;
+}
 
-const KNOWN_KINDS: ReadonlySet<string> = new Set(payloadSchema.options.map((o) => o.shape.t.value));
-const envelopeHead = z.object({ v: z.literal(1), t: z.string().min(1).max(40), id });
+export type OpenedPayload = Payload | UnsupportedPayload | IgnoredPayload;
+
+type Variant = (typeof payloadSchema.options)[number];
+const VARIANTS = new Map<string, Variant>(payloadSchema.options.map((o) => [o.shape.t.value, o]));
+const HEAD_FIELDS = new Set(['v', 't', 'id', 'crit', 'silent']);
+const envelopeHead = z.object({
+  v: z.literal(1),
+  t: z.string().min(1).max(40),
+  id,
+  crit: z.array(z.string().min(1).max(80)).max(20).optional(),
+  silent: z.literal(true).optional(),
+});
+
+/** Does this build's schema for the kind know the (dotted) field path? */
+function knowsField(variant: Variant, path: string): boolean {
+  const [first, ...rest] = path.split('.');
+  if (!rest.length && HEAD_FIELDS.has(first!)) return true;
+  let node: z.ZodTypeAny | undefined = (variant.shape as Record<string, z.ZodTypeAny>)[first!];
+  for (const part of rest) {
+    while (node instanceof z.ZodOptional || node instanceof z.ZodNullable) node = node.unwrap();
+    if (!(node instanceof z.ZodObject)) return false;
+    node = (node.shape as Record<string, z.ZodTypeAny>)[part];
+  }
+  return node !== undefined;
+}
 
 /**
  * Validate and verify a decrypted payload. `resolveKey` returns the
  * registered identity key for a device id (from the device directory).
- * The signature is checked over the exact payload object the sender signed,
- * before any schema parsing, so unknown kinds (and unknown future fields)
- * still verify. Throws if the envelope or a known kind is malformed or the
- * signature doesn't verify.
+ * See the forward-compatibility contract above. Throws if the envelope or a
+ * known kind is malformed or the signature doesn't verify.
  */
 export async function openPayload(
   conversationId: string,
@@ -197,7 +243,11 @@ export async function openPayload(
   if (!key) throw new Error('unknown_sender_device');
   const ok = ed25519.verify(b64.decode(raw.s), signingInput(conversationId, raw.d, raw.p), key);
   if (!ok) throw new Error('bad_sender_signature');
-  if (!KNOWN_KINDS.has(head.t))
-    return { deviceId: raw.d, payload: { v: 1, t: 'unsupported', id: head.id, kind: head.t } };
+  const variant = VARIANTS.get(head.t);
+  const understood = !!variant && (head.crit ?? []).every((f) => knowsField(variant, f));
+  if (!understood) {
+    const t = head.silent ? ('ignored' as const) : ('unsupported' as const);
+    return { deviceId: raw.d, payload: { v: 1, t, id: head.id, kind: head.t } };
+  }
   return { deviceId: raw.d, payload: payloadSchema.parse(raw.p) };
 }

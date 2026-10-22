@@ -23,6 +23,8 @@ export interface PreviewMessageLike {
   senderId: string;
   kind: 'text' | 'attachment' | 'contact' | 'location' | 'poll' | 'undecryptable' | 'unsupported';
   body?: string;
+  /** Validated mention ids; only these tokens render as names. */
+  mentions?: readonly string[];
   caption?: string;
   attachment?: { kind: string; name?: string };
   deleted?: boolean;
@@ -68,7 +70,7 @@ export function messageSummary(
     const k = m.attachment?.kind ?? 'file';
     return ATTACHMENT_LABEL[k] ?? `File: ${m.attachment?.name ?? 'attachment'}`;
   }
-  return m.body ? renderMentions(m.body, opts.nameOf) : '';
+  return m.body ? renderMentions(m.body, m.mentions, opts.nameOf) : '';
 }
 
 export interface RowPreview {

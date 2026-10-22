@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { randomId } from '../codec';
 import type { LocalMessage } from '../engine';
+import { getJson } from '../store';
+import type { AttachmentRef } from '../payload';
 import { payloadSchema } from '../payload';
 import {
   applyPin,
@@ -172,7 +174,16 @@ describe('polls and votes (real engines)', () => {
 });
 
 describe('view once (real engines)', () => {
-  it('the recipient can open it exactly once; the key is then gone', async () => {
+  const allText = async (store: {
+    list(p: string): Promise<string[]>;
+    get(k: string): Promise<Uint8Array | null>;
+  }) => {
+    const out: string[] = [];
+    for (const k of await store.list('')) out.push(new TextDecoder().decode((await store.get(k))!));
+    return out.join('\n');
+  };
+
+  it('the recipient can open it exactly once; afterwards no key exists anywhere in the store', async () => {
     const server = new MemoryServer();
     const alice = await device(server);
     const bob = await device(server);
@@ -190,15 +201,67 @@ describe('view once (real engines)', () => {
 
     const got = byId(await read(bob, conv), sent.id);
     expect(got.viewOnce).toEqual({ kind: 'image', consumed: false });
+    // The key is never on the message itself, only under its own slot.
+    expect(got.attachment).toBeUndefined();
+    const ref = await getJson<AttachmentRef>(bob.store, `vo/${conv}/${sent.id}`);
+    expect(ref?.key).toBeTruthy();
+    expect(await allText(alice.store)).not.toContain(ref!.key);
+    await expect(bob.engine.forward(conv, sent.id, conv)).rejects.toThrow(/not_forwardable/);
+
     expect(new TextDecoder().decode((await bob.engine.consumeViewOnce(conv, sent.id))!)).toBe(
       'secret photo bytes',
     );
     expect(await bob.engine.consumeViewOnce(conv, sent.id)).toBeNull();
     const after = (await bob.engine.getMessage(conv, sent.id))!;
-    expect(after.attachment).toBeUndefined();
     expect(after.viewOnce).toEqual({ kind: 'image', consumed: true });
-    expect(JSON.stringify(after)).not.toContain(got.attachment!.key);
-    await expect(bob.engine.forward(conv, sent.id, conv)).rejects.toThrow(/not_forwardable/);
+    const dump = await allText(bob.store);
+    expect(dump).not.toContain(ref!.key);
+    expect(dump).not.toContain(ref!.path);
+  });
+
+  it("the sender's other devices get it already consumed, with no key", async () => {
+    const server = new MemoryServer();
+    const alice = await device(server);
+    const bob = await device(server);
+    const conv = await chat(server, 'direct', alice, [bob]);
+    const alice2 = await device(server, alice.userId);
+    await alice.engine.sync(conv); // adds the new device to the group
+    await alice2.engine.sync(conv);
+    const sent = (await alice.engine.sendAttachment(conv, new Uint8Array([1, 2, 3]), {
+      kind: 'video',
+      mime: 'video/mp4',
+      viewOnce: true,
+    }))!;
+    const onSecond = byId(await read(alice2, conv), sent.id);
+    expect(onSecond.viewOnce).toEqual({ kind: 'video', consumed: true });
+    expect(await alice2.store.list(`vo/`)).toEqual([]);
+    expect(await alice2.engine.consumeViewOnce(conv, sent.id)).toBeNull();
+  });
+
+  it('deleting a view-once message removes its key; it cannot be edited', async () => {
+    const server = new MemoryServer();
+    const alice = await device(server);
+    const bob = await device(server);
+    const conv = await chat(server, 'direct', alice, [bob]);
+    const sent = (await alice.engine.sendAttachment(
+      conv,
+      new Uint8Array([9]),
+      { kind: 'image', mime: 'image/png', viewOnce: true },
+      { caption: 'once' },
+    ))!;
+    await read(bob, conv);
+    await expect(alice.engine.edit(conv, sent.id, 'changed')).rejects.toThrow(/edit_not_allowed/);
+    await sendRawPayload(server, alice, conv, {
+      v: 1,
+      t: 'edit',
+      id: randomId(),
+      target: sent.id,
+      body: 'changed',
+    });
+    expect(byId(await read(bob, conv), sent.id).caption).toBe('once');
+    await alice.engine.send(conv, { t: 'delete', target: sent.id });
+    await read(bob, conv);
+    expect(await bob.store.list('vo/')).toEqual([]);
   });
 });
 
@@ -303,12 +366,20 @@ describe('mentions, contact, location, forward, search, stars (real engines)', (
     // Carol has no access to the original chat's blob.
     await expect(carol.engine.openAttachment(file.attachment!)).rejects.toThrow();
 
-    const t = (await alice.engine.send(ab, { t: 'text', body: `ask @[${bob.userId}]` }))!;
+    const t = (await alice.engine.send(ab, {
+      t: 'text',
+      body: `ask @[${bob.userId}] or @[${carol.userId}]`,
+      mentions: [bob.userId],
+    }))!;
     await alice.engine.forward(ab, t.id, ac, { nameOf: () => 'Bob' });
-    expect((await read(carol, ac)).at(-1)).toMatchObject({ body: 'ask @Bob', forwarded: true });
+    expect((await read(carol, ac)).at(-1)).toMatchObject({
+      // Only the validated mention becomes a name; the other token stays literal.
+      body: `ask @Bob or @[${carol.userId}]`,
+      forwarded: true,
+    });
   });
 
-  it('searches local history in one chat and across chats; stars stay local', async () => {
+  it('queries local history in one chat and across chats; stars stay local', async () => {
     const server = new MemoryServer();
     const alice = await device(server);
     const bob = await device(server);
@@ -326,11 +397,15 @@ describe('mentions, contact, location, forward, search, stars (real engines)', (
     await read(bob, c1);
     await read(bob, c2);
 
-    expect((await bob.engine.searchMessages('CAFE')).length).toBe(3);
-    expect(
-      (await bob.engine.searchMessages('cafe', { conversationId: c1 })).map((m) => m.body),
-    ).toEqual(['Café at noon?']);
-    expect(await bob.engine.searchMessages('  ')).toEqual([]);
+    // The engine supplies local history; matching is @vybora/core's searchMessages.
+    const all = await bob.engine.queryMessages();
+    expect(all.length).toBe(4);
+    expect(all.map((m) => m.createdAt)).toEqual([...all.map((m) => m.createdAt)].sort().reverse());
+    expect((await bob.engine.queryMessages({ conversationId: c1 })).map((m) => m.body)).toEqual([
+      'Café at noon?',
+    ]);
+    expect((await bob.engine.queryMessages({ filter: (m) => m.kind === 'poll' })).length).toBe(1);
+    expect((await bob.engine.queryMessages({ limit: 2 })).length).toBe(2);
 
     const [m] = await bob.engine.listMessages(c1);
     const envelopesBefore = server.envelopes.length;
