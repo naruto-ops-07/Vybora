@@ -1,4 +1,4 @@
-import type { MessageAction } from '@vybora/core';
+import type { BasicMessageAction as MessageAction } from '@vybora/core';
 import type { LocalMessage } from '@vybora/e2ee';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { Icon, type IconName } from '@/components/Icon';

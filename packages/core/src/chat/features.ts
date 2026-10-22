@@ -147,6 +147,26 @@ export function validatePollDraft(question: string, options: readonly string[]) 
   return null;
 }
 
+/** "No votes yet", "1 vote", "7 votes" (counts people with a current vote). */
+export const pollVotesLabel = (voters: number) =>
+  voters === 0 ? 'No votes yet' : voters === 1 ? '1 vote' : `${voters} votes`;
+
+// ---------------------------------------------------------------- location
+
+/** "51.50735, -0.12776": what a location card shows when it has no label. */
+export const formatCoordinates = (lat: number, lng: number) =>
+  `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+
+/**
+ * OpenStreetMap at the pin. Only ever opened by the person tapping "Open in
+ * Maps": the card itself draws no tiles and makes no request.
+ */
+export function mapLinkFor(lat: number, lng: number): string {
+  const a = lat.toFixed(5);
+  const b = lng.toFixed(5);
+  return `https://www.openstreetmap.org/?mlat=${a}&mlon=${b}#map=16/${a}/${b}`;
+}
+
 // ---------------------------------------------------------------- mentions
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';

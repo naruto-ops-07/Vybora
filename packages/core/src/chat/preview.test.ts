@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   chatRowPreview,
   headerStatus,
+  canForward,
   messageActions,
   messageSummary,
   receiptOf,
@@ -174,6 +175,96 @@ describe('messageActions', () => {
     expect(messageActions({ kind: 'text', status: 'failed' }, true)).toEqual([]);
     expect(messageActions({ kind: 'undecryptable', status: 'received' }, false)).toEqual([]);
     expect(messageActions({ kind: 'text', status: 'sent', deleted: true }, true)).toEqual([]);
+  });
+});
+
+describe('messageActions with context (wave A)', () => {
+  const now = new Date('2026-10-22T10:05:00Z');
+  const ctx = { myUserId: 'me', now, isGroup: false, canPin: true, pinned: false };
+  const mineText = {
+    kind: 'text',
+    status: 'sent',
+    senderId: 'me',
+    createdAt: '2026-10-22T10:00:00Z',
+  };
+  const theirs = { ...mineText, senderId: 'maya', status: 'received' };
+
+  it('adds edit, forward, star, pin and info for my recent text, in menu order', () => {
+    expect(messageActions(mineText, true, ctx)).toEqual([
+      'reply',
+      'copy',
+      'edit',
+      'forward',
+      'star',
+      'pin',
+      'info',
+      'select',
+      'delete',
+    ]);
+  });
+
+  it('offers unstar and unpin when already starred or pinned', () => {
+    const a = messageActions({ ...theirs, starred: true }, false, { ...ctx, pinned: true });
+    expect(a).toContain('unstar');
+    expect(a).toContain('unpin');
+    expect(a).not.toContain('star');
+    expect(a).not.toContain('pin');
+  });
+
+  it('offers edit only inside the window, never for others', () => {
+    expect(
+      messageActions(mineText, true, { ...ctx, now: new Date('2026-10-22T10:16:00Z') }),
+    ).not.toContain('edit');
+    expect(messageActions(theirs, false, ctx)).not.toContain('edit');
+  });
+
+  it('hides pin without permission and info for messages from others', () => {
+    expect(messageActions(theirs, false, { ...ctx, canPin: false })).not.toContain('pin');
+    expect(messageActions(theirs, false, ctx)).not.toContain('info');
+  });
+
+  it('offers reply privately only on group messages from others', () => {
+    expect(messageActions(theirs, false, { ...ctx, isGroup: true })).toEqual([
+      'reply',
+      'replyPrivately',
+      'copy',
+      'forward',
+      'star',
+      'pin',
+      'select',
+    ]);
+    expect(messageActions(mineText, true, { ...ctx, isGroup: true })).not.toContain(
+      'replyPrivately',
+    );
+    expect(messageActions(theirs, false, ctx)).not.toContain('replyPrivately');
+  });
+
+  it('never forwards polls, view once or unsupported messages', () => {
+    for (const m of [
+      { ...theirs, kind: 'poll' },
+      { ...theirs, kind: 'unsupported' },
+      { ...theirs, kind: 'attachment', viewOnce: { kind: 'image', consumed: false } },
+    ])
+      expect(messageActions(m, false, ctx)).not.toContain('forward');
+    expect(messageActions({ ...theirs, kind: 'contact' }, false, ctx)).toContain('forward');
+    expect(messageActions({ ...theirs, kind: 'location' }, false, ctx)).toContain('forward');
+  });
+
+  it('offers nothing for unsettled, deleted or undecryptable messages', () => {
+    expect(messageActions({ ...mineText, status: 'sending' }, true, ctx)).toEqual([]);
+    expect(messageActions({ ...mineText, status: 'failed' }, true, ctx)).toEqual([]);
+    expect(messageActions({ ...mineText, deleted: true }, true, ctx)).toEqual([]);
+    expect(messageActions({ ...theirs, kind: 'undecryptable' }, false, ctx)).toEqual([]);
+  });
+
+  it('canForward matches the engine’s rule', () => {
+    expect(canForward({ kind: 'text', status: 'sent' })).toBe(true);
+    expect(canForward({ kind: 'attachment', status: 'received' })).toBe(true);
+    expect(canForward({ kind: 'text', status: 'sending' })).toBe(false);
+    expect(canForward({ kind: 'text', status: 'failed' })).toBe(false);
+    expect(canForward({ kind: 'text', status: 'sent', deleted: true })).toBe(false);
+    expect(canForward({ kind: 'undecryptable', status: 'received' })).toBe(false);
+    expect(canForward({ kind: 'poll', status: 'sent' })).toBe(false);
   });
 });
 

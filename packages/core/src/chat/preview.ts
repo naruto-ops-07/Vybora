@@ -1,4 +1,4 @@
-import { renderMentions } from './features';
+import { canEditMessage, renderMentions } from './features';
 import { formatClock, formatLastSeen, type TimeOpts } from './time';
 
 export type Receipt = 'sending' | 'failed' | 'sent' | 'delivered' | 'read';
@@ -143,19 +143,95 @@ export function headerStatus(
   return 'end-to-end encrypted';
 }
 
-export type MessageAction = 'reply' | 'copy' | 'select' | 'delete';
+/** The original menu (mobile still uses only these). */
+export type BasicMessageAction = 'reply' | 'copy' | 'select' | 'delete';
 
-/** What the message menu offers. Project 2 adds forward/edit/star here. */
+/** Every message menu action, in menu order (see `messageActions`). */
+export type MessageAction =
+  | BasicMessageAction
+  | 'replyPrivately'
+  | 'edit'
+  | 'forward'
+  | 'star'
+  | 'unstar'
+  | 'pin'
+  | 'unpin'
+  | 'info';
+
+export interface ActionableLike {
+  kind: string;
+  status: string;
+  deleted?: boolean;
+  senderId?: string;
+  createdAt?: string;
+  viewOnce?: unknown;
+  starred?: boolean;
+}
+
+/** What the full menu needs to know beyond the message itself. */
+export interface MessageActionContext {
+  myUserId: string;
+  now: Date;
+  isGroup: boolean;
+  /** From `canPin` (chat kind, admins-only setting, my role). */
+  canPin: boolean;
+  /** The message is one of the chat's current pins. */
+  pinned: boolean;
+}
+
+const FORWARDABLE = new Set(['text', 'attachment', 'contact', 'location']);
+
+/** Whether a message can be forwarded (mirrors the engine's `not_forwardable` rule). */
+export function canForward(m: Omit<ActionableLike, 'senderId' | 'createdAt'>): boolean {
+  if (m.deleted || m.viewOnce || m.status === 'sending' || m.status === 'failed') return false;
+  return FORWARDABLE.has(m.kind);
+}
+
+/**
+ * What the message menu offers. Without `ctx`, only the original four (reply,
+ * copy, select, delete); with it, also reply privately, edit, forward, star,
+ * pin and message info, each only where it applies.
+ */
+export function messageActions(m: ActionableLike, mine: boolean): BasicMessageAction[];
 export function messageActions(
-  m: { kind: string; deleted?: boolean; status: string },
+  m: ActionableLike,
   mine: boolean,
+  ctx: MessageActionContext,
+): MessageAction[];
+export function messageActions(
+  m: ActionableLike,
+  mine: boolean,
+  ctx?: MessageActionContext,
 ): MessageAction[] {
   if (m.deleted || m.kind === 'undecryptable' || m.status === 'sending' || m.status === 'failed')
     return [];
-  return [
-    'reply',
-    ...(m.kind === 'text' ? (['copy'] as const) : []),
-    'select',
-    ...(mine ? (['delete'] as const) : []),
-  ];
+  if (!ctx)
+    return [
+      'reply',
+      ...(m.kind === 'text' ? (['copy'] as const) : []),
+      'select',
+      ...(mine ? (['delete'] as const) : []),
+    ];
+  const out: MessageAction[] = ['reply'];
+  if (ctx.isGroup && !mine) out.push('replyPrivately');
+  if (m.kind === 'text') out.push('copy');
+  if (
+    mine &&
+    m.senderId !== undefined &&
+    m.createdAt !== undefined &&
+    canEditMessage(
+      { ...m, senderId: m.senderId, createdAt: m.createdAt },
+      ctx.myUserId,
+      ctx.now,
+    )
+  )
+    out.push('edit');
+  if (canForward(m)) out.push('forward');
+  out.push(m.starred ? 'unstar' : 'star');
+  if (ctx.pinned) out.push('unpin');
+  else if (ctx.canPin) out.push('pin');
+  if (mine) out.push('info');
+  out.push('select');
+  if (mine) out.push('delete');
+  return out;
 }

@@ -4,6 +4,9 @@ import {
   canEditMessage,
   canPin,
   editWindowRemainingMs,
+  formatCoordinates,
+  mapLinkFor,
+  pollVotesLabel,
   insertMention,
   mentionIdsIn,
   mentionQueryAt,
@@ -183,5 +186,26 @@ describe('message info', () => {
     expect(
       messageInfo({ senderId: A, seq: null }, [{ id: B, read_seq: 9, delivered_seq: 9 }]).pending,
     ).toHaveLength(1);
+  });
+});
+
+describe('location', () => {
+  it('formats coordinates to 5 decimals', () => {
+    expect(formatCoordinates(51.5073509, -0.1277583)).toBe('51.50735, -0.12776');
+    expect(formatCoordinates(0, 0)).toBe('0.00000, 0.00000');
+  });
+
+  it('links to OpenStreetMap at the pin, zoom 16', () => {
+    expect(mapLinkFor(51.5073509, -0.1277583)).toBe(
+      'https://www.openstreetmap.org/?mlat=51.50735&mlon=-0.12776#map=16/51.50735/-0.12776',
+    );
+  });
+});
+
+describe('pollVotesLabel', () => {
+  it('counts voters in plain words', () => {
+    expect(pollVotesLabel(0)).toBe('No votes yet');
+    expect(pollVotesLabel(1)).toBe('1 vote');
+    expect(pollVotesLabel(7)).toBe('7 votes');
   });
 });

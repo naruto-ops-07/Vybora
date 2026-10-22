@@ -18,7 +18,7 @@ import {
   receiptOf,
   selectionToText,
   type AnnounceMark,
-  type MessageAction,
+  type BasicMessageAction as MessageAction,
 } from '@vybora/core';
 import { MAX_ATTACHMENT_BYTES, type LocalMessage } from '@vybora/e2ee';
 import { useQuery } from '@tanstack/react-query';
