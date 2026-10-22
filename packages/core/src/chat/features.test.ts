@@ -119,8 +119,9 @@ describe('mentions', () => {
 describe('messageSummary for new kinds (local previews)', () => {
   it('describes each kind', () => {
     const s = (m: object) => messageSummary({ senderId: A, kind: 'text', ...m } as never);
-    expect(s({ kind: 'contact', contact: { displayName: 'Maya', username: 'maya' } })).toBe(
-      'Contact: Maya',
+    // The card's own name is sender-supplied (spoofable): previews never repeat it.
+    expect(s({ kind: 'contact', contact: { displayName: 'Your Bank', username: 'bank' } })).toBe(
+      'Contact card',
     );
     expect(s({ kind: 'location', location: { label: 'Home' } })).toBe('Location: Home');
     expect(s({ kind: 'location', location: {} })).toBe('Location');

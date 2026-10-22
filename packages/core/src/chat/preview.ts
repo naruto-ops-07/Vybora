@@ -59,8 +59,9 @@ export function messageSummary(
     const what = m.viewOnce.kind === 'video' ? 'video' : 'photo';
     return m.viewOnce.consumed ? 'Opened' : `View once ${what}`;
   }
-  if (m.kind === 'contact')
-    return `Contact: ${m.contact?.displayName || m.contact?.username || ''}`;
+  // The card's name and username come from the sender and could be anything (a
+  // spoof): only the card itself shows the person, from the server's profile.
+  if (m.kind === 'contact') return 'Contact card';
   if (m.kind === 'location')
     return m.location?.label ? `Location: ${m.location.label}` : 'Location';
   if (m.kind === 'poll') return `Poll: ${m.poll?.question ?? ''}`;
