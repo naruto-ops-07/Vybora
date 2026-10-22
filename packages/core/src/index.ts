@@ -13,3 +13,4 @@ export * from './onboarding';
 export * from './seal';
 export * from './appearance';
 export * from './chatListEmpty';
+export * from './appLock';
