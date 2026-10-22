@@ -58,6 +58,9 @@ describe('messageSummary', () => {
         attachment: { kind: 'file', name: 'a.pdf' },
       }),
     ).toBe('File: a.pdf');
+    expect(messageSummary({ senderId: 'maya', kind: 'unsupported' })).toBe(
+      'Update VYBORA to see this message',
+    );
     expect(messageSummary({ senderId: 'maya', kind: 'undecryptable' })).toBe(
       'Message couldn’t be decrypted',
     );

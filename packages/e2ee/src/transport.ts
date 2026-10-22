@@ -45,6 +45,10 @@ export interface ConversationInfo {
   kind: 'direct' | 'group';
   epoch: number;
   memberIds: string[];
+  /** Members with the admin role (groups). Optional for older transports. */
+  adminIds?: string[];
+  /** Who may change group settings (and pin messages): everyone or admins only. */
+  settingsPolicy?: 'everyone' | 'admins';
 }
 
 export interface PostedEnvelope {

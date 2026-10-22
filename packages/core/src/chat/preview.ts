@@ -20,7 +20,7 @@ export function receiptOf(
 
 export interface PreviewMessageLike {
   senderId: string;
-  kind: 'text' | 'attachment' | 'undecryptable';
+  kind: 'text' | 'attachment' | 'undecryptable' | 'unsupported';
   body?: string;
   caption?: string;
   attachment?: { kind: string; name?: string };
@@ -33,10 +33,14 @@ const ATTACHMENT_LABEL: Record<string, string> = {
   voice: 'Voice message',
 };
 
+/** Shown for a message kind this build can't display (sent by a newer client). */
+export const UNSUPPORTED_TEXT = 'Update VYBORA to see this message';
+
 /** One-line description of a decrypted message (never more than the device already shows). */
 export function messageSummary(m: PreviewMessageLike): string {
   if (m.deleted) return 'This message was deleted';
   if (m.kind === 'undecryptable') return 'Message couldn’t be decrypted';
+  if (m.kind === 'unsupported') return UNSUPPORTED_TEXT;
   if (m.kind === 'attachment') {
     const caption = m.caption?.trim();
     if (caption) return caption;

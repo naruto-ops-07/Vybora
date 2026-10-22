@@ -31,7 +31,13 @@ import {
   type GeneratedKeyPackage,
   type StoredIdentity,
 } from './identity';
-import { openPayload, sealPayload, type AttachmentRef, type Payload } from './payload';
+import {
+  openPayload,
+  sealPayload,
+  type AttachmentRef,
+  type OpenedPayload,
+  type Payload,
+} from './payload';
 import { getJson, setJson, type KeyValueStore } from './store';
 import {
   ConnectError,
@@ -59,7 +65,8 @@ export interface LocalMessage {
   createdAt: string;
   expiresAt: string | null;
   status: MessageStatus;
-  kind: 'text' | 'attachment' | 'undecryptable';
+  /** 'unsupported': a newer kind this build can't show ("Update VYBORA to see this message"). */
+  kind: 'text' | 'attachment' | 'undecryptable' | 'unsupported';
   body?: string;
   attachment?: AttachmentRef;
   caption?: string;
@@ -722,7 +729,23 @@ export class ConnectEngine {
     }
   }
 
-  private async applyIncoming(conversationId: string, env: EnvelopeRecord, payload: Payload) {
+  private async applyIncoming(conversationId: string, env: EnvelopeRecord, payload: OpenedPayload) {
+    if (payload.t === 'unsupported') {
+      if (await getJson(this.store, `msg/${conversationId}/${payload.id}`)) return;
+      await this.saveMessage({
+        id: payload.id,
+        conversationId,
+        seq: env.seq,
+        senderId: env.senderId,
+        senderDeviceId: env.senderDeviceId,
+        createdAt: env.createdAt,
+        expiresAt: env.expiresAt,
+        status: 'received',
+        kind: 'unsupported',
+        reactions: {},
+      });
+      return;
+    }
     if (payload.t === 'text' || payload.t === 'attachment') {
       if (await getJson(this.store, `msg/${conversationId}/${payload.id}`)) return; // duplicate
       await this.saveMessage({
