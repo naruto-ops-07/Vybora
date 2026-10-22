@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { A11Y_STORAGE_KEY, type AppLockAway } from '@vybora/core';
 import { AppState, Text } from 'react-native';
@@ -14,20 +15,35 @@ jest.mock('expo-local-authentication', () => ({
   isEnrolledAsync: () => Promise.resolve(true),
   authenticateAsync: (...a: unknown[]) => mockAuth(...a),
 }));
+type AuthCb = (event: string, session: unknown) => void;
+const mockAuthCb: { fn: AuthCb | null } = { fn: null };
 jest.mock('@/lib/supabase', () => ({
-  supabase: {},
+  supabase: {
+    auth: {
+      getSession: () => Promise.resolve({ data: { session: { user: { id: 'u1' } } } }),
+      onAuthStateChange: (cb: AuthCb) => {
+        mockAuthCb.fn = cb;
+        return { data: { subscription: { unsubscribe: () => undefined } } };
+      },
+    },
+  },
   supabaseConfig: { url: 'http://x', anonKey: 'k' },
 }));
-jest.mock('@/features/connect/ConnectProvider', () => ({
-  useConnect: () => ({ status: 'ready', error: null, retry: jest.fn() }),
+const mockSegments = { value: ['messages'] as string[] };
+jest.mock('expo-router', () => ({ useSegments: () => mockSegments.value }));
+const mockUser = { id: 'u1' as string | null };
+jest.mock('@/features/auth/AuthProvider', () => ({
+  ...jest.requireActual('@/features/auth/AuthProvider'),
+  useAuth: () => ({ userId: mockUser.id }),
 }));
 
 import { A11yProvider } from '@/lib/a11y';
 import * as lock from '@/lib/connect/appLock';
-import { AppLockCover } from '@/features/applock/AppLockCover';
+import { AppLockShell } from '@/features/applock/AppLockCover';
 import { LockScreen } from '@/features/applock/LockScreen';
-import { ConnectGate } from '@/features/connect/ConnectGate';
+import { AuthProvider } from '@/features/auth/AuthProvider';
 
+const ON = 'vybora.connect.applock.u1';
 type Handler = (s: string) => void;
 let handlers: Handler[] = [];
 const fire = (s: string) => act(() => handlers.slice().forEach((h) => h(s)));
@@ -36,6 +52,8 @@ beforeEach(() => {
   mockStore.clear();
   lock.resetAppLockForTests();
   mockAuth.mockResolvedValue({ success: true });
+  mockSegments.value = ['messages'];
+  mockUser.id = 'u1';
   handlers = [];
   jest.spyOn(AppState, 'addEventListener').mockImplementation(((_: string, h: Handler) => {
     handlers.push(h);
@@ -45,11 +63,21 @@ beforeEach(() => {
 afterEach(() => jest.restoreAllMocks());
 
 async function enableAndUnlock(away: AppLockAway) {
-  mockStore.set('vybora.connect.applock', '1');
+  mockStore.set(ON, '1');
+  await lock.setAppLockUser('u1');
   await lock.setAppLockAway(away);
-  expect(await lock.isUnlocked()).toBe(false); // locked when the app opens
+  expect(lock.isUnlockedNow()).toBe(false); // locked when the app opens
   expect(await lock.authenticate()).toBe(true);
 }
+
+const shell = () =>
+  render(
+    <A11yProvider>
+      <AppLockShell>
+        <Text>chat list</Text>
+      </AppLockShell>
+    </A11yProvider>,
+  );
 
 describe('app lock timing', () => {
   it.each<[AppLockAway, number, boolean]>([
@@ -65,61 +93,106 @@ describe('app lock timing', () => {
     const t0 = Date.now();
     lock.noteBackground(t0);
     lock.noteActive(t0 + ms);
-    expect(await lock.isUnlocked(t0 + ms)).toBe(stays);
+    expect(lock.isUnlockedNow()).toBe(stays);
   });
 
-  it('locks through AppState background → active (gate shows the lock screen)', async () => {
+  it('background → active locks with no frame of chat content, unlock shows it', async () => {
     await enableAndUnlock('immediately');
-    await render(
-      <A11yProvider>
-        <ConnectGate>
-          <Text>chat list</Text>
-        </ConnectGate>
-        <AppLockCover />
-      </A11yProvider>,
-    );
-    expect(await screen.findByText('chat list')).toBeTruthy();
+    await shell();
+    expect(screen.getByText('chat list')).toBeTruthy();
     const now = Date.now();
     jest.spyOn(Date, 'now').mockReturnValue(now);
     await fire('background');
+    expect(screen.queryByText('chat list')).toBeNull();
     jest.spyOn(Date, 'now').mockReturnValue(now + 1000);
+    // Synchronously, inside the same act as the `active` event: never visible.
     await fire('active');
-    await waitFor(() => expect(screen.queryByText('chat list')).toBeNull());
+    expect(screen.queryByText('chat list')).toBeNull();
     expect(screen.getByRole('button', { name: 'Unlock Messages' })).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Unlock Messages' }));
     expect(await screen.findByText('chat list')).toBeTruthy();
   });
 
-  it('settings persist and bad stored values fall back to 1 minute', async () => {
+  it('covers every messages route; other routes stay open', async () => {
+    mockStore.set(ON, '1');
+    mockSegments.value = ['messages', 'legacy', '[id]'];
+    await shell();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Unlock Messages' })).toBeTruthy(),
+    );
+    expect(screen.queryByText('chat list')).toBeNull();
+    mockSegments.value = ['settings'];
+    await shell();
+    expect(screen.getByText('chat list')).toBeTruthy();
+  });
+
+  it('settings persist per user and bad values fall back to 1 minute', async () => {
+    await lock.setAppLockUser('u1');
     await lock.setAppLockAway('5m');
-    lock.resetAppLockForTests();
-    expect(await lock.getAppLockAway()).toBe('5m');
-    mockStore.set('vybora.connect.applock.away', 'forever');
+    expect(mockStore.get('vybora.connect.applock.away.u1')).toBe('5m');
+    await lock.setAppLockUser('u2');
     expect(await lock.getAppLockAway()).toBe('1m');
+    await lock.setAppLockUser('u1');
+    expect(await lock.getAppLockAway()).toBe('5m');
+    mockStore.set('vybora.connect.applock.away.u1', 'forever');
+    expect(await lock.getAppLockAway()).toBe('1m');
+  });
+
+  it('a user switch forgets the unlock', async () => {
+    await enableAndUnlock('1h');
+    mockStore.set('vybora.connect.applock.u2', '1');
+    await lock.setAppLockUser('u2');
+    expect(lock.isUnlockedNow()).toBe(false);
+  });
+
+  it('sign out clears the lock and the unlock', async () => {
+    await enableAndUnlock('1h');
+    const qc = new QueryClient();
+    await render(
+      <QueryClientProvider client={qc}>
+        <AuthProvider>
+          <Text>app</Text>
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await act(() => mockAuthCb.fn!('SIGNED_IN', { user: { id: 'u1' } }));
+    await act(async () => mockAuthCb.fn!('SIGNED_OUT', null));
+    await waitFor(() => expect(mockStore.has(ON)).toBe(false));
+    expect(mockStore.has('vybora.connect.applock.away.u1')).toBe(false);
+    qc.clear();
+  });
+
+  it('adopts the old device-wide flag for the signed-in user', async () => {
+    mockStore.set('vybora.connect.applock', '1');
+    await lock.setAppLockUser('u1');
+    expect(lock.isUnlockedNow()).toBe(false);
+    expect(mockStore.get(ON)).toBe('1');
+    expect(mockStore.has('vybora.connect.applock')).toBe(false);
   });
 });
 
 describe('app-switcher cover', () => {
   it.each(['background', 'inactive'])('covers on %s and drops once active', async (state) => {
-    mockStore.set('vybora.connect.applock', '1');
-    await render(
-      <A11yProvider>
-        <AppLockCover />
-      </A11yProvider>,
-    );
+    mockStore.set(ON, '1');
+    mockSegments.value = ['settings'];
+    await shell();
     await waitFor(() => expect(lock.appLockEnabledNow()).toBe(true));
     await fire(state);
     expect(screen.getByTestId('app-lock-cover')).toBeTruthy();
     expect(screen.queryByRole('button')).toBeNull();
+    // Content under the cover is hidden from screen readers.
+    expect(screen.queryByText('chat list')).toBeNull();
     await fire('active');
     expect(screen.queryByTestId('app-lock-cover')).toBeNull();
+    expect(screen.getByText('chat list')).toBeTruthy();
   });
 
   it('no cover when app lock is off', async () => {
-    await render(<AppLockCover />);
-    await act(() => Promise.resolve());
+    await shell();
+    await waitFor(() => expect(lock.appLockEnabledNow()).toBe(false));
     await fire('background');
     expect(screen.queryByTestId('app-lock-cover')).toBeNull();
+    expect(screen.getByText('chat list')).toBeTruthy();
   });
 });
 
@@ -147,7 +220,6 @@ describe('lock screen look', () => {
       expect(screen.queryByTestId('lock-glow', { includeHiddenElements: true })).toBeNull(),
     );
     expect(screen.queryByTestId('gradient-fill', { includeHiddenElements: true })).toBeNull();
-    const btn = screen.getByRole('button', { name: 'Unlock Messages' });
-    expect(btn).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Unlock Messages' })).toBeTruthy();
   });
 });

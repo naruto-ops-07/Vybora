@@ -1,6 +1,6 @@
 // Must run before anything touches crypto (Connect E2EE).
 import '@/lib/connect/polyfills';
-import { AppLockCover } from '@/features/applock/AppLockCover';
+import { AppLockShell } from '@/features/applock/AppLockCover';
 import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { isRetryable } from '@vybora/core';
 import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider, useSegments } from 'expo-router';
@@ -53,31 +53,36 @@ function Navigator() {
   return (
     <ThemeProvider value={t.dark ? DarkTheme : DefaultTheme}>
       <StatusBar style={t.dark ? 'light' : 'dark'} />
-      <Stack
-        screenOptions={{
-          headerShadowVisible: false,
-          headerTintColor: t.text,
-          headerStyle: { backgroundColor: t.panel.startsWith('#') ? t.panel : t.surface },
-          headerTitleStyle: { fontFamily: t.fonts.display, fontSize: 17 },
-          headerBackButtonDisplayMode: 'minimal',
-          contentStyle: { backgroundColor: t.bg },
-        }}
-      >
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="messages/index" options={{ headerShown: false }} />
-        <Stack.Screen name="messages/[id]" options={{ title: '' }} />
-        <Stack.Screen name="messages/new" options={{ title: 'New chat', presentation: 'modal' }} />
-        <Stack.Screen name="messages/details/[id]" options={{ title: 'Chat info' }} />
-        <Stack.Screen name="messages/verify/[userId]" options={{ title: 'Safety number' }} />
-        <Stack.Screen name="messages/friends" options={{ title: 'Friends' }} />
-        <Stack.Screen name="messages/privacy" options={{ title: 'Privacy & security' }} />
-        <Stack.Screen name="messages/accessibility" options={{ title: 'Accessibility' }} />
-        <Stack.Screen name="messages/appearance" options={{ title: 'Appearance' }} />
-        <Stack.Screen name="messages/legacy/[id]" options={{ title: '' }} />
-        <Stack.Screen name="settings" options={{ title: 'Settings' }} />
-        <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
-      </Stack>
+      <AppLockShell>
+        <Stack
+          screenOptions={{
+            headerShadowVisible: false,
+            headerTintColor: t.text,
+            headerStyle: { backgroundColor: t.panel.startsWith('#') ? t.panel : t.surface },
+            headerTitleStyle: { fontFamily: t.fonts.display, fontSize: 17 },
+            headerBackButtonDisplayMode: 'minimal',
+            contentStyle: { backgroundColor: t.bg },
+          }}
+        >
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <Stack.Screen name="messages/index" options={{ headerShown: false }} />
+          <Stack.Screen name="messages/[id]" options={{ title: '' }} />
+          <Stack.Screen
+            name="messages/new"
+            options={{ title: 'New chat', presentation: 'modal' }}
+          />
+          <Stack.Screen name="messages/details/[id]" options={{ title: 'Chat info' }} />
+          <Stack.Screen name="messages/verify/[userId]" options={{ title: 'Safety number' }} />
+          <Stack.Screen name="messages/friends" options={{ title: 'Friends' }} />
+          <Stack.Screen name="messages/privacy" options={{ title: 'Privacy & security' }} />
+          <Stack.Screen name="messages/accessibility" options={{ title: 'Accessibility' }} />
+          <Stack.Screen name="messages/appearance" options={{ title: 'Appearance' }} />
+          <Stack.Screen name="messages/legacy/[id]" options={{ title: '' }} />
+          <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+          <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
+        </Stack>
+      </AppLockShell>
     </ThemeProvider>
   );
 }
@@ -153,7 +158,6 @@ export default function RootLayout() {
               ) : (
                 <SetupRequired />
               )}
-              <AppLockCover />
             </SafeAreaProvider>
           </AppearanceGate>
         </AppearanceProvider>
