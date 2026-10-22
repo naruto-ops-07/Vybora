@@ -285,3 +285,68 @@ describe('devices and groups', () => {
     expect(texts(await engine.listMessages(conv))).toEqual(['diary entry']);
   });
 });
+
+describe('wave A message features over the real database', () => {
+  it('edits within the window, and the server only ever sees ciphertext', async () => {
+    const a = await device(await db.createUser('e2e_edit_a'));
+    const b = await device(await db.createUser('e2e_edit_b'));
+    const conv = await newChat(a.user, 'direct', [b.user]);
+    const sent = (await a.engine.send(conv, { t: 'text', body: 'meet at 5' }))!;
+    await read(b, conv);
+    await a.engine.edit(conv, sent.id, 'meet at 6 instead');
+    await expect(b.engine.edit(conv, sent.id, 'not yours')).rejects.toThrow(/edit_not_allowed/);
+    const [m] = await read(b, conv);
+    expect(m).toMatchObject({ body: 'meet at 6 instead', edited: true });
+    const rows = await db.admin<{ ciphertext: string }>(
+      `select ciphertext from mls_envelopes where conversation_id = $1`,
+      [conv],
+    );
+    const dump = rows.map((r) => Buffer.from(r.ciphertext, 'base64').toString('latin1')).join();
+    expect(dump).not.toContain('instead');
+  });
+
+  it('runs a poll with one current vote per member', async () => {
+    const admin = await device(await db.createUser('e2e_poll_admin'));
+    const m1 = await device(await db.createUser('e2e_poll_m1'));
+    const m2 = await device(await db.createUser('e2e_poll_m2'));
+    const conv = await newChat(admin.user, 'group', [m1.user, m2.user], 'Poll crew');
+    const poll = (await admin.engine.send(conv, {
+      t: 'poll',
+      question: 'Where?',
+      options: ['Park', 'Beach'],
+      multi: false,
+    }))!;
+    await read(m1, conv);
+    await read(m2, conv);
+    await m1.engine.vote(conv, poll.id, [0]);
+    await m2.engine.vote(conv, poll.id, [0]);
+    await m2.engine.vote(conv, poll.id, [1]);
+    const [p] = await read(admin, conv);
+    expect(p!.poll!.votes).toEqual({ [m1.user.id]: [0], [m2.user.id]: [1] });
+  });
+
+  it('opens a view-once photo once and honours the admins-only pin setting', async () => {
+    const admin = await device(await db.createUser('e2e_vo_admin'));
+    const member = await device(await db.createUser('e2e_vo_member'));
+    const conv = await newChat(admin.user, 'group', [member.user], 'View once');
+    const photo = randomBytes(5_000);
+    const sent = (await admin.engine.sendAttachment(conv, photo, {
+      kind: 'image',
+      mime: 'image/jpeg',
+      viewOnce: true,
+    }))!;
+    await read(member, conv);
+    expect(Buffer.from((await member.engine.consumeViewOnce(conv, sent.id))!)).toEqual(photo);
+    expect(await member.engine.consumeViewOnce(conv, sent.id)).toBeNull();
+
+    const note = (await admin.engine.send(conv, { t: 'text', body: 'rules' }))!;
+    await read(member, conv);
+    await db.as(admin.user, `select public.set_group_policy($1, 'admins')`, [conv]);
+    await member.engine.sync(conv);
+    await expect(member.engine.pin(conv, note.id, true)).rejects.toThrow(/pin_not_allowed/);
+    await admin.engine.sync(conv);
+    await admin.engine.pin(conv, note.id, true);
+    await read(member, conv);
+    expect((await member.engine.listPins(conv)).map((p) => p.messageId)).toEqual([note.id]);
+  });
+});

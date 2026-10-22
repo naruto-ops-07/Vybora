@@ -334,8 +334,10 @@ export class ConnectEngine {
         this.emit(conversationId);
       } else {
         // Controls are checked like a receiver would, then apply locally right away.
+        // Reactions/deletes keep their old behaviour (sent anyway; receivers ignore).
         const applied = await this.applyControl(conversationId, payload, this.userId, now);
-        if (!applied) throw new ConnectError('forbidden', `${payload.t}_not_allowed`);
+        if (!applied && payload.t !== 'reaction' && payload.t !== 'delete')
+          throw new ConnectError('forbidden', `${payload.t}_not_allowed`);
         this.emit(conversationId);
       }
       await setJson(this.store, `pp/${conversationId}/${id}`, payload);
