@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { randomId } from '../codec';
+import { toConnectError } from '../transport';
 import { chat, device, read, sendRawPayload } from './flow';
 import { MemoryServer } from './memoryServer';
 
@@ -361,5 +362,106 @@ describe('fix round 2: no member can freeze a chat', () => {
     server.failNext.add('postApplication'); // network: may have been stored → keep for retry
     await expect(alice.engine.pin(conv, m.id, true)).rejects.toThrow(/injected/);
     expect((await alice.store.list(`pp/${conv}/`)).length).toBe(1);
+  });
+});
+
+describe('fix round 3: pending controls and transient server errors', () => {
+  it("keeps a control's records on 'unknown' (e.g. 502 after commit) and applies it on sync", async () => {
+    const { server, alice, bob, conv } = await pair();
+    const m = (await alice.engine.send(conv, { t: 'text', body: 'v1' }))!;
+    server.postFailures.push({ code: 'unknown', afterStore: true });
+    await expect(alice.engine.edit(conv, m.id, 'v2')).rejects.toThrow(/injected unknown/);
+    expect((await alice.store.list(`pp/${conv}/`)).length).toBe(1);
+    expect((await alice.engine.getMessage(conv, m.id))!.body).toBe('v1');
+    expect((await read(bob, conv))[0]!.body).toBe('v2'); // everyone else applies it…
+    await alice.engine.sync(conv);
+    expect((await alice.engine.getMessage(conv, m.id))!.body).toBe('v2'); // …and so does the sender
+    expect(await alice.store.list(`pp/${conv}/`)).toEqual([]);
+  });
+
+  it('a reaction or delete that was never stored changes nothing locally and leaves nothing pending', async () => {
+    const { server, alice, bob, conv } = await pair();
+    const m = (await alice.engine.send(conv, { t: 'text', body: 'hi' }))!;
+    await read(bob, conv);
+    server.postFailures.push({ code: 'not_ready' });
+    await expect(
+      bob.engine.send(conv, { t: 'reaction', target: m.id, emoji: '👍' }),
+    ).rejects.toThrow(/injected not_ready/);
+    expect((await bob.engine.getMessage(conv, m.id))!.reactions).toEqual({});
+    server.postFailures.push({ code: 'forbidden' });
+    await expect(alice.engine.send(conv, { t: 'delete', target: m.id })).rejects.toThrow();
+    expect((await alice.engine.getMessage(conv, m.id))!.deleted).toBeFalsy();
+    expect(await alice.store.list(`pp/${conv}/`)).toEqual([]);
+    expect(await bob.store.list(`pp/${conv}/`)).toEqual([]);
+
+    // Applied only once the server has it.
+    await bob.engine.send(conv, { t: 'reaction', target: m.id, emoji: '👍' });
+    expect((await bob.engine.getMessage(conv, m.id))!.reactions).toEqual({ '👍': [bob.userId] });
+    expect((await read(alice, conv))[0]!.reactions).toEqual({ '👍': [bob.userId] });
+  });
+
+  it('a reaction whose response was lost is kept pending, then applied by sync', async () => {
+    const { server, alice, bob, conv } = await pair();
+    const m = (await alice.engine.send(conv, { t: 'text', body: 'hi' }))!;
+    await read(bob, conv);
+    server.failNext.add('postApplicationResponse');
+    await expect(
+      bob.engine.send(conv, { t: 'reaction', target: m.id, emoji: '🔥' }),
+    ).rejects.toThrow();
+    expect((await bob.engine.getMessage(conv, m.id))!.reactions).toEqual({});
+    await bob.engine.sync(conv);
+    expect((await bob.engine.getMessage(conv, m.id))!.reactions).toEqual({ '🔥': [bob.userId] });
+  });
+
+  it('drops a control after the epoch retries are exhausted (never stored)', async () => {
+    const { server, alice, conv } = await pair();
+    const m = (await alice.engine.send(conv, { t: 'text', body: 'v1' }))!;
+    for (let i = 0; i < 4; i++) server.postFailures.push({ code: 'epoch_stale' });
+    await expect(alice.engine.edit(conv, m.id, 'v2')).rejects.toThrow(/catch up/);
+    expect(await alice.store.list(`pp/${conv}/`)).toEqual([]);
+    expect(await alice.store.list(`ob/${conv}/`)).toEqual([]);
+    expect((await alice.engine.getMessage(conv, m.id))!.body).toBe('v1');
+  });
+
+  it('maps 5xx, 429 and statement timeouts to transient by status/code only', () => {
+    expect(toConnectError({ message: 'Bad gateway' }, 502).code).toBe('network');
+    expect(toConnectError({ message: 'x' }, 503).code).toBe('network');
+    expect(toConnectError({ message: 'slow down' }, 429).code).toBe('network');
+    expect(toConnectError({ message: 'x', status: 504 }).code).toBe('network'); // storage errors
+    expect(toConnectError({ message: 'canceling statement', code: '57014' }, 500).code).toBe(
+      'network',
+    );
+    expect(toConnectError({ message: 'canceling statement', code: '57014' }).code).toBe('network');
+    // Message text never makes something transient (or a 4xx a 5xx).
+    expect(toConnectError({ message: 'status 503 57014 Bad gateway' }, 400).code).toBe('unknown');
+    expect(
+      toConnectError({ message: 'invalid input syntax for type uuid', code: '22P02' }, 400).code,
+    ).toBe('unknown');
+    expect(
+      toConnectError({ message: 'new row violates row-level security', code: '42501' }, 403).code,
+    ).toBe('forbidden');
+  });
+
+  it('a 5xx while receiving aborts the sync instead of leaving a placeholder', async () => {
+    const { server, alice, bob, conv } = await pair();
+    await alice.engine.send(conv, { t: 'text', body: 'hello' });
+    (bob.engine as unknown as { directoryCache: Map<string, unknown> }).directoryCache.clear();
+    const t = server.transport(bob.userId);
+    const flaky = {
+      ...t,
+      getDevice: (() => {
+        let failed = false;
+        return async (id: string) => {
+          if (!failed) {
+            failed = true;
+            throw toConnectError({ message: 'upstream error' }, 503);
+          }
+          return t.getDevice(id);
+        };
+      })(),
+    };
+    (bob.engine as unknown as { transport: typeof t }).transport = flaky;
+    await expect(bob.engine.sync(conv)).rejects.toThrow(/upstream/);
+    expect((await read(bob, conv)).map((m) => [m.kind, m.body])).toEqual([['text', 'hello']]);
   });
 });

@@ -134,11 +134,25 @@ export function isTransient(error: unknown): boolean {
   return error instanceof ConnectError && (error.code === 'network' || error.code === 'not_ready');
 }
 
-/** Map a server/database error message to a ConnectError (shared by transports). */
-export function toConnectError(error: unknown): ConnectError {
+/** Postgres statement timeout (57014): the server was overloaded, not a final answer. */
+const PG_TRANSIENT = new Set(['57014']);
+
+/**
+ * Map a server/database error to a ConnectError (shared by transports).
+ * `status` is the HTTP status when the transport has one. Transient server
+ * failures (5xx, 429, statement timeout) are recognized by status / PG code
+ * only, never by message text, and map to 'network' (retry; maybe stored).
+ */
+export function toConnectError(error: unknown, status?: number): ConnectError {
   if (error instanceof ConnectError) return error;
-  const e = error as { message?: string; code?: string };
+  const e = error as { message?: string; code?: string; status?: number };
   const m = e?.message ?? String(error);
+  const httpStatus = status ?? (typeof e?.status === 'number' ? e.status : undefined);
+  if (
+    (httpStatus !== undefined && (httpStatus >= 500 || httpStatus === 429)) ||
+    (typeof e?.code === 'string' && PG_TRANSIENT.has(e.code))
+  )
+    return new ConnectError('network', m);
   if (m.includes('epoch_conflict')) return new ConnectError('epoch_conflict', m);
   if (m.includes('epoch_stale')) return new ConnectError('epoch_stale', m);
   if (e?.code === '23505' || m.includes('duplicate key')) return new ConnectError('duplicate', m);

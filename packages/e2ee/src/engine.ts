@@ -147,7 +147,15 @@ type ContentPayload = Extract<
 >;
 const CONTENT_KINDS = new Set(['text', 'attachment', 'contact', 'location', 'poll']);
 const isContent = (p: Payload): p is ContentPayload => CONTENT_KINDS.has(p.t);
-const DEFERRED = new Set(['edit', 'pin', 'vote']);
+/** Controls the sender's device refuses up front (and reports if server time refuses them). */
+const CHECKED = new Set(['edit', 'pin', 'vote']);
+/**
+ * Delivery failures that mean the server did NOT store the envelope, so a
+ * control's pending records can be dropped. Anything else ('network',
+ * 'unknown': e.g. a 502 after the insert committed) may have been stored;
+ * those records stay so retry() or the next sync resolves them.
+ */
+const NOT_STORED = new Set(['forbidden', 'device_revoked', 'not_ready']);
 
 export type SyncStatus = 'ready' | 'waiting_for_access' | 'broken';
 
@@ -317,7 +325,7 @@ export class ConnectEngine {
       let payload = { v: 1, id, ...content } as Payload;
       const now = new Date().toISOString();
       const needsInfo =
-        DEFERRED.has(payload.t) ||
+        CHECKED.has(payload.t) ||
         ((payload.t === 'text' || payload.t === 'edit') && !!payload.mentions?.length);
       const info = needsInfo ? await this.getInfo(conversationId) : null;
       if ((payload.t === 'text' || payload.t === 'edit') && payload.mentions?.length) {
@@ -340,23 +348,15 @@ export class ConnectEngine {
         };
         await this.saveMessage(local);
         this.emit(conversationId);
-      } else if (DEFERRED.has(payload.t)) {
-        // Edit/pin/vote: check now like a receiver would (device clock, UX only),
-        // but change nothing until the server has stored it; then apply with
-        // the server's createdAt, exactly as every receiver will.
+      } else if (CHECKED.has(payload.t)) {
+        // Edit/pin/vote: check now like a receiver would (device clock, UX only).
         const ok = await this.applyControl(conversationId, payload, this.userId, now, info!, true);
         if (!ok) throw new ConnectError('forbidden', `${payload.t}_not_allowed`);
-      } else {
-        // Reactions/deletes apply locally right away (sent anyway; receivers ignore if not allowed).
-        await this.applyControl(
-          conversationId,
-          payload,
-          this.userId,
-          now,
-          await this.cachedInfo(conversationId),
-        );
-        this.emit(conversationId);
       }
+      // Every control (edit/pin/vote/reaction/delete) changes nothing locally
+      // until the server has stored it; it is then applied with the server's
+      // createdAt, exactly as every receiver will. So a control is never shown
+      // as done while it was never sent.
       await setJson(this.store, `pp/${conversationId}/${id}`, payload);
       return this.deliverLocked(conversationId, id, attachmentPaths);
     });
@@ -972,7 +972,7 @@ export class ConnectEngine {
     if (env.senderDeviceId === me) {
       // A deferred control of ours whose post response was lost: apply it now.
       const pending = await getJson<Payload>(this.store, `pp/${conversationId}/${env.clientId}`);
-      if (pending && DEFERRED.has(pending.t)) {
+      if (pending && !isContent(pending)) {
         await this.applyControl(conversationId, pending, this.userId, env.createdAt, info);
         await this.store.delete(`ob/${conversationId}/${env.clientId}`);
         await this.store.delete(`pp/${conversationId}/${env.clientId}`);
@@ -1304,20 +1304,20 @@ export class ConnectEngine {
         }
         await this.store.delete(`ob/${conversationId}/${id}`);
         await this.store.delete(`pp/${conversationId}/${id}`);
-        if (
-          DEFERRED.has(payload.t) &&
-          !(await this.applyControl(
+        if (!isContent(payload)) {
+          const applied = await this.applyControl(
             conversationId,
             payload,
             this.userId,
             posted.createdAt,
             await this.cachedInfo(conversationId),
-          ))
-        ) {
+          );
+          this.emit(conversationId);
           // Posted, but by server time it isn't allowed (e.g. edit window passed):
           // receivers ignore it too. Tell the caller so the UI can say so.
-          this.emit(conversationId);
-          throw new ConnectError('forbidden', `${payload.t}_not_allowed`);
+          // (Reactions/deletes keep their old contract: no error.)
+          if (!applied && CHECKED.has(payload.t))
+            throw new ConnectError('forbidden', `${payload.t}_not_allowed`);
         }
         const local = await this.getMessage(conversationId, id);
         if (local) {
@@ -1341,13 +1341,8 @@ export class ConnectEngine {
           await this.store.delete(`ob/${conversationId}/${id}`);
           continue;
         }
-        if (!isContent(payload) && e.code !== 'network') {
-          // A control that definitely failed (refused, never posted) has no
-          // message to retry from: drop its pending records. A network error
-          // may be a lost response, so those stay for sync/retry to resolve.
-          await this.store.delete(`ob/${conversationId}/${id}`);
-          await this.store.delete(`pp/${conversationId}/${id}`);
-        }
+        if (!isContent(payload) && NOT_STORED.has(e.code))
+          await this.dropPending(conversationId, id);
         const local = await this.getMessage(conversationId, id);
         if (local) {
           await this.saveMessage({ ...local, status: 'failed' });
@@ -1356,6 +1351,13 @@ export class ConnectEngine {
         throw e;
       }
     }
+    // Every attempt was rejected for a stale epoch: the server stored nothing.
+    if (!isContent(payload)) await this.dropPending(conversationId, id);
     throw new ConnectError('epoch_stale', 'Could not catch up with group changes');
+  }
+
+  private async dropPending(conversationId: string, id: string) {
+    await this.store.delete(`ob/${conversationId}/${id}`);
+    await this.store.delete(`pp/${conversationId}/${id}`);
   }
 }

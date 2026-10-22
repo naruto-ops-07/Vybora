@@ -43,7 +43,7 @@ async function settle<R extends Resp>(fn: () => PromiseLike<R>): Promise<R['data
   } catch (error) {
     throw toConnectError(error);
   }
-  if (result.error) throw toConnectError(result.error);
+  if (result.error) throw toConnectError(result.error, (result as { status?: number }).status);
   return result.data;
 }
 

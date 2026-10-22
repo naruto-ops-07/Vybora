@@ -1,6 +1,7 @@
 import { randomId } from '../codec';
 import {
   ConnectError,
+  type ConnectErrorCode,
   type ConnectTransport,
   type ConversationInfo,
   type DeviceRecord,
@@ -32,6 +33,8 @@ export class MemoryServer {
   blobs = new Map<string, Uint8Array>();
   /** Transport methods that fail once with a network error (fault injection). */
   failNext = new Set<string>();
+  /** Queued postApplication failures: code, and whether the envelope was stored first. */
+  postFailures: { code: ConnectErrorCode; afterStore?: boolean }[] = [];
   /** Server clock (overridable to test time windows). */
   now = () => new Date();
   private seq = 0;
@@ -169,6 +172,11 @@ export class MemoryServer {
         fault('postApplication');
         if (s.failNext.delete('postApplicationForbidden'))
           throw new ConnectError('forbidden', 'injected refusal');
+        const queued = s.postFailures[0];
+        if (queued && !queued.afterStore) {
+          s.postFailures.shift();
+          throw new ConnectError(queued.code, `injected ${queued.code}`);
+        }
         const c = conv(input.conversationId);
         if (c.epoch !== input.epoch) throw new ConnectError('epoch_stale', 'epoch_stale');
         if (
@@ -193,6 +201,10 @@ export class MemoryServer {
         s.envelopes.push(e);
         if (s.failNext.delete('postApplicationResponse'))
           throw new ConnectError('network', 'injected lost response'); // stored, reply lost
+        if (queued?.afterStore) {
+          s.postFailures.shift();
+          throw new ConnectError(queued.code, `injected ${queued.code} after store`);
+        }
         return { seq: e.seq, createdAt: e.createdAt, expiresAt: null };
       },
       async findOwnEnvelope(deviceId, clientId) {
