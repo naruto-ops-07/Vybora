@@ -104,15 +104,21 @@ export async function verifyAssertion(
       type?: string;
       challenge?: string;
       origin?: string;
+      crossOrigin?: boolean;
     };
     if (client.type !== 'webauthn.get') return false;
     if (client.challenge !== toB64(expected.challenge)) return false;
     if (client.origin !== expected.origin) return false;
+    // Only our own top-level page may unlock, never an embedding frame.
+    if (client.crossOrigin === true) return false;
     const auth = buf(assertion.authenticatorData);
     if (auth.length < 37) return false;
     const rpHash = await sha256(new TextEncoder().encode(expected.rpId));
     if (!bytesEqual(auth.slice(0, 32), rpHash)) return false;
     const flags = auth[32]!;
+    // The signature counter (bytes 33–36) is not checked: platform authenticators often
+    // report 0, and with no server there is no shared counter to guard against clones.
+    // The key never leaves the authenticator, and the lock is a local privacy screen.
     if (!(flags & 0x01) || !(flags & 0x04)) return false;
 
     const signed = new Uint8Array(auth.length + 32);

@@ -1,4 +1,5 @@
 import {
+  appLockKey,
   awayLockDue,
   idleLockDue,
   initialAttempts,
@@ -28,6 +29,7 @@ import {
   verifyPasscode,
   type AppLockRecord,
 } from './store';
+import { setAppLocked } from './lockState';
 import { biometricAvailable, registerBiometric, unlockWithBiometric } from './webauthn';
 
 export type UnlockResult = { ok: true } | { ok: false; message: string };
@@ -114,6 +116,34 @@ export function AppLockProvider({
     [userId],
   );
 
+  // Storage is the source of truth: other tabs share it. Every action re-reads it, so
+  // wrong tries in one tab count in all of them and nothing is overwritten stale.
+  const fresh = useCallback(() => {
+    const r = loadLock(userId);
+    recordRef.current = r;
+    return r;
+  }, [userId]);
+
+  // Keep tabs in sync: turned on, changed or off elsewhere (off elsewhere unlocks here).
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== null && e.key !== appLockKey(userId)) return;
+      const next = loadLock(userId);
+      recordRef.current = next;
+      setRecord(next);
+      if (!next) setLocked(false);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [userId]);
+
+  // Publish the lock for tones and read receipts.
+  const isLocked = locked && !!record;
+  useEffect(() => {
+    setAppLocked(isLocked);
+  }, [isLocked]);
+  useEffect(() => () => setAppLocked(false), []);
+
   // Away time: hidden tab (visibilitychange) or no activity (idle device).
   const lastActive = useRef(now());
   const hiddenAt = useRef<number | null>(null);
@@ -122,7 +152,7 @@ export function AppLockProvider({
       lastActive.current = nowRef.current();
     };
     const onVisibility = () => {
-      const r = recordRef.current;
+      const r = fresh();
       const t = nowRef.current();
       if (document.visibilityState === 'hidden') {
         hiddenAt.current = t;
@@ -136,7 +166,7 @@ export function AppLockProvider({
       if (r && since !== null && awayLockDue(r.away, t - since)) setLocked(true);
     };
     const idle = window.setInterval(() => {
-      const r = recordRef.current;
+      const r = fresh();
       if (r && idleLockDue(r.away, nowRef.current() - lastActive.current)) setLocked(true);
     }, IDLE_CHECK_MS);
     for (const e of ACTIVITY) window.addEventListener(e, touch, { passive: true });
@@ -146,7 +176,7 @@ export function AppLockProvider({
       for (const e of ACTIVITY) window.removeEventListener(e, touch);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, []);
+  }, [fresh]);
 
   useNeutralTitle(locked && !!record);
 
@@ -163,11 +193,11 @@ export function AppLockProvider({
   }, [locked, waitUntil, now]);
 
   const unlocked = useCallback(() => {
-    const r = recordRef.current;
+    const r = fresh();
     if (r && r.attempts.failures) write({ ...r, attempts: initialAttempts() });
     lastActive.current = nowRef.current();
     setLocked(false);
-  }, [write]);
+  }, [write, fresh]);
 
   const value = useMemo<AppLockState>(() => {
     const attempts = record?.attempts ?? initialAttempts();
@@ -182,8 +212,11 @@ export function AppLockProvider({
       offerSignOut: shouldOfferSignOut(attempts),
       waitMs: waitRemainingMs(attempts, t),
       unlock: async (passcode) => {
-        const r = recordRef.current;
-        if (!r) return { ok: true };
+        const r = fresh();
+        if (!r) {
+          setLocked(false);
+          return { ok: true };
+        }
         const at = nowRef.current();
         if (waitRemainingMs(r.attempts, at) > 0)
           return { ok: false, message: wrongPasscodeMessage(r.attempts, at) };
@@ -191,13 +224,15 @@ export function AppLockProvider({
           unlocked();
           return { ok: true };
         }
-        const next = { ...r, attempts: recordFailure(r.attempts, nowRef.current()) };
+        // Re-read after the slow hash: another tab may have counted a try meanwhile.
+        const latest = fresh() ?? r;
+        const next = { ...latest, attempts: recordFailure(latest.attempts, nowRef.current()) };
         write(next);
         setClock(nowRef.current());
         return { ok: false, message: wrongPasscodeMessage(next.attempts, nowRef.current()) };
       },
       unlockBiometric: async () => {
-        const r = recordRef.current;
+        const r = fresh();
         if (!r?.biometric) return { ok: false, message: 'Biometric unlock isn’t set up.' };
         try {
           if (await unlockWithBiometric(r.biometric)) {
@@ -215,7 +250,7 @@ export function AppLockProvider({
         setLocked(false);
       },
       turnOff: async (passcode) => {
-        const r = recordRef.current;
+        const r = fresh();
         if (!r) return true;
         if (!(await verifyPasscode(r, passcode))) return false;
         write(null);
@@ -223,17 +258,17 @@ export function AppLockProvider({
         return true;
       },
       setAway: (away) => {
-        const r = recordRef.current;
+        const r = fresh();
         if (r) write({ ...r, away });
       },
       addBiometric: async () => {
-        const r = recordRef.current;
+        const r = fresh();
         if (!r) return;
         const biometric = await registerBiometric({ id: userId, name: userName });
-        write({ ...(recordRef.current ?? r), biometric });
+        write({ ...(fresh() ?? r), biometric });
       },
       removeBiometric: () => {
-        const r = recordRef.current;
+        const r = fresh();
         if (r) write({ ...r, biometric: null });
       },
       signOutDevice: async () => {
@@ -242,10 +277,22 @@ export function AppLockProvider({
         await signOut();
       },
       lockNow: () => {
-        if (recordRef.current) setLocked(true);
+        if (fresh()) setLocked(true);
       },
     };
-  }, [record, locked, canUseBiometric, clock, now, unlocked, write, signOut, userId, userName]);
+  }, [
+    record,
+    locked,
+    canUseBiometric,
+    clock,
+    now,
+    unlocked,
+    write,
+    fresh,
+    signOut,
+    userId,
+    userName,
+  ]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -366,3 +366,32 @@ describe('settings', () => {
     await waitFor(() => expect(onTurnOn).toHaveBeenCalledWith('123456'));
   });
 });
+
+describe('several tabs', () => {
+  it('counts wrong tries made in another tab', async () => {
+    saveLock(USER, base);
+    mount({ now: () => 1000 });
+    // Another tab used up 4 tries; this tab's state is stale.
+    saveLock(USER, { ...base, attempts: { failures: 4, waitUntil: 0 } });
+    const r = await act(() => api!.unlock('111111'));
+    expect(r).toEqual({ ok: false, message: 'Wrong passcode. Try again in 30 seconds.' });
+    expect(loadLock(USER)!.attempts.failures).toBe(5);
+  }, 20_000);
+
+  it('follows changes from another tab and unlocks when turned off there', () => {
+    saveLock(USER, base);
+    mount();
+    expect(api!.locked).toBe(true);
+    act(() => {
+      saveLock(USER, { ...base, away: '1h' });
+      window.dispatchEvent(new StorageEvent('storage', { key: appLockKey(USER) }));
+    });
+    expect(api!.away).toBe('1h');
+    act(() => {
+      clearLock(USER);
+      window.dispatchEvent(new StorageEvent('storage', { key: appLockKey(USER) }));
+    });
+    expect(api!.enabled).toBe(false);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});

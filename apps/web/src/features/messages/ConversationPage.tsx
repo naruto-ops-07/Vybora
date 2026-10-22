@@ -26,6 +26,7 @@ import { ConfirmDialog } from '@/components/ui/Dialog';
 import { Spinner } from '@/components/ui/Spinner';
 import { ErrorState } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
+import { useAppLocked } from '@/features/applock/lockState';
 import { useMe } from '@/features/auth/AuthProvider';
 import { useSignedUrl } from '@/hooks/useSignedUrl';
 import { cn } from '@/lib/cn';
@@ -86,13 +87,15 @@ export default function ConversationPage() {
   // Newest-first pages → chronological list for display.
   const list = (messages.data?.pages.flat() ?? []).slice().reverse();
 
+  // Nothing is marked read while the app lock is up; unlocking re-runs this once.
+  const locked = useAppLocked();
   const markRead = useCallback(() => {
-    if (document.visibilityState !== 'visible' || !messages.isSuccess) return;
+    if (locked || document.visibilityState !== 'visible' || !messages.isSuccess) return;
     void markConversationRead(supabase, conversationId).then(() => {
       void qc.invalidateQueries({ queryKey: qk.unread });
       void qc.invalidateQueries({ queryKey: qk.conversations });
     });
-  }, [conversationId, messages.isSuccess, qc]);
+  }, [locked, conversationId, messages.isSuccess, qc]);
 
   useEffect(() => {
     markRead();

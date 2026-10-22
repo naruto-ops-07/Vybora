@@ -14,6 +14,7 @@ import {
 import type { LocalMessage } from '@vybora/e2ee';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAppLocked } from '@/features/applock/lockState';
 import { useMe } from '@/features/auth/AuthProvider';
 import { supabase } from '@/lib/supabase';
 import { useConnect } from './ConnectProvider';
@@ -211,14 +212,16 @@ export function useSecureMessages(conversationId: string, limit = MESSAGE_PAGE) 
     () => Math.max(0, ...(messages.data ?? []).map((m) => m.seq ?? 0)),
     [messages.data],
   );
+  // Locked counts as not visible: no read receipts until it's unlocked, then one ack.
+  const locked = useAppLocked();
   useEffect(() => {
-    if (!isVisible || !maxSeq || maxSeq <= lastAck.current) return;
+    if (!isVisible || locked || !maxSeq || maxSeq <= lastAck.current) return;
     lastAck.current = maxSeq;
     void acknowledgeConversation(supabase, conversationId, maxSeq, maxSeq).then(() => {
       void qc.invalidateQueries({ queryKey: qk.connect.inbox });
       void qc.invalidateQueries({ queryKey: qk.unread });
     });
-  }, [isVisible, maxSeq, conversationId, qc]);
+  }, [isVisible, locked, maxSeq, conversationId, qc]);
 
   const hasMore = (messages.data ?? []).filter((m) => m.seq !== null).length >= limit;
   return { messages, sync, syncState, live, userId, hasMore };
