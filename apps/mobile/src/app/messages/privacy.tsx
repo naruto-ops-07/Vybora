@@ -9,7 +9,14 @@ import {
   updateConnectPrivacy,
   type ConnectPrivacy,
 } from '@vybora/api';
-import { friendlyError, formatRelativeTime } from '@vybora/core';
+import {
+  APP_LOCK_AWAY_DEFAULT,
+  APP_LOCK_AWAY_OPTIONS,
+  APP_LOCK_HONESTY,
+  friendlyError,
+  formatRelativeTime,
+  type AppLockAway,
+} from '@vybora/core';
 import { CIPHERSUITE } from '@vybora/e2ee';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, Stack } from 'expo-router';
@@ -23,7 +30,13 @@ import { useConnect } from '@/features/connect/ConnectProvider';
 import { ConnectGate } from '@/features/connect/ConnectGate';
 import { useCc, Pill, Row, SectionCard } from '@/features/connect/ui/primitives';
 import { Segmented } from '@/features/connect/ui/Segmented';
-import { appLockSupport, isAppLockEnabled, setAppLock } from '@/lib/connect/appLock';
+import {
+  appLockSupport,
+  getAppLockAway,
+  isAppLockEnabled,
+  setAppLock,
+  setAppLockAway,
+} from '@/lib/connect/appLock';
 import { supabase } from '@/lib/supabase';
 
 type WhoCanMessage = 'everyone' | 'friends';
@@ -53,7 +66,9 @@ function Privacy() {
   });
   const [phone, setPhone] = useState('');
   const [lock, setLock] = useState(false);
+  const [away, setAway] = useState<AppLockAway>(APP_LOCK_AWAY_DEFAULT);
   useEffect(() => void isAppLockEnabled().then(setLock), []);
+  useEffect(() => void getAppLockAway().then(setAway), []);
   useEffect(() => setPhone(contact.data?.phone_e164 ?? ''), [contact.data?.phone_e164]);
 
   // Applied at once so switches and radios answer immediately; undone on failure.
@@ -260,7 +275,7 @@ function Privacy() {
         )}
       </SectionCard>
 
-      <SectionCard title="App lock">
+      <SectionCard title="App lock" footer={APP_LOCK_HONESTY}>
         <Row
           icon="lock"
           label="Lock Messages"
@@ -280,6 +295,26 @@ function Privacy() {
             />
           }
         />
+        {lock && (
+          <Text style={{ marginHorizontal: 16, marginTop: 8, color: cc.textMuted, fontSize: 13 }}>
+            Lock again after time away
+          </Text>
+        )}
+        {lock && (
+          <Segmented
+            label="Lock again after time away"
+            value={away}
+            options={APP_LOCK_AWAY_OPTIONS}
+            onChange={(v) => {
+              const before = away;
+              setAway(v);
+              setAppLockAway(v).catch(() => {
+                setAway(before);
+                Alert.alert('Couldn’t save', 'Try again.');
+              });
+            }}
+          />
+        )}
       </SectionCard>
 
       <SectionCard

@@ -15,6 +15,7 @@ jest.mock('@/lib/supabase', () => ({
 jest.mock('@/lib/connect/appLock', () => ({
   isUnlocked: () => Promise.resolve(true),
   authenticate: () => Promise.resolve(true),
+  subscribeAppLock: () => () => undefined,
 }));
 jest.mock('@/features/connect/ConnectProvider', () => ({
   useConnect: () => ({

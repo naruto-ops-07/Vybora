@@ -2,7 +2,8 @@ import { Icon } from '@/components/Icon';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, AppState, View } from 'react-native';
 import { Text } from '@/components/Text';
-import { authenticate, isUnlocked } from '@/lib/connect/appLock';
+import { authenticate, isUnlocked, subscribeAppLock } from '@/lib/connect/appLock';
+import { LockScreen } from '@/features/applock/LockScreen';
 import { useConnect } from './ConnectProvider';
 import { useCc, ConnectEmpty, PrimaryButton } from './ui/primitives';
 
@@ -11,32 +12,32 @@ export function ConnectGate({ children }: { children: ReactNode }) {
   const cc = useCc();
   const { status, error, retry } = useConnect();
   const [unlocked, setUnlocked] = useState<boolean | null>(null);
+  const [unlocking, setUnlocking] = useState(false);
 
   useEffect(() => {
     let alive = true;
     const check = () => void isUnlocked().then((u) => alive && setUnlocked(u));
     check();
     const sub = AppState.addEventListener('change', (s) => s === 'active' && check());
+    const unsub = subscribeAppLock(check);
     return () => {
       alive = false;
       sub.remove();
+      unsub();
     };
   }, []);
 
   if (unlocked === false) {
     return (
-      <View style={{ flex: 1, backgroundColor: cc.night, justifyContent: 'center' }}>
-        <ConnectEmpty
-          icon="lock"
-          title="Messages are locked"
-          body="Unlock with Face ID, fingerprint or your device passcode."
-          action={
-            <PrimaryButton
-              title="Unlock"
-              icon="unlock"
-              onPress={() => void authenticate().then(setUnlocked)}
-            />
-          }
+      <View style={{ flex: 1 }}>
+        <LockScreen
+          busy={unlocking}
+          onUnlock={() => {
+            setUnlocking(true);
+            void authenticate()
+              .then(setUnlocked)
+              .finally(() => setUnlocking(false));
+          }}
         />
       </View>
     );

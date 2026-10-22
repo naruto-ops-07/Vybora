@@ -1,5 +1,6 @@
 // Must run before anything touches crypto (Connect E2EE).
 import '@/lib/connect/polyfills';
+import { AppLockCover } from '@/features/applock/AppLockCover';
 import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { isRetryable } from '@vybora/core';
 import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider, useSegments } from 'expo-router';
@@ -152,6 +153,7 @@ export default function RootLayout() {
               ) : (
                 <SetupRequired />
               )}
+              <AppLockCover />
             </SafeAreaProvider>
           </AppearanceGate>
         </AppearanceProvider>

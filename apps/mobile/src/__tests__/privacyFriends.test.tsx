@@ -35,6 +35,9 @@ jest.mock('@/lib/connect/appLock', () => ({
   isAppLockEnabled: () => Promise.resolve(false),
   appLockSupport: () => Promise.resolve({ available: false, reason: '' }),
   setAppLock: () => Promise.resolve(false),
+  getAppLockAway: () => Promise.resolve('1m'),
+  setAppLockAway: () => Promise.resolve(),
+  subscribeAppLock: () => () => undefined,
 }));
 jest.mock('expo-router', () => {
   const Stack = () => null;
