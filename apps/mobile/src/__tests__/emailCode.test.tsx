@@ -281,6 +281,12 @@ describe('code step at sign-up', () => {
 
     expect(resendButton()).toBeDisabled();
     expect(resendButton()).toHaveTextContent('Resend code in 1:00');
+    // The countdown keeps tabular digits in the text face, not mono.
+    const digits = screen.getByTestId('resend-countdown');
+    const style = [digits.props.style].flat(3).reduce((a, s) => ({ ...a, ...s }), {});
+    expect(style.fontVariant).toEqual(['tabular-nums']);
+    expect(style.fontFamily).not.toMatch(/Mono/);
+    expect(style.fontFamily).toMatch(/SemiBold/); // the label's own weight
     await advance(1000);
     expect(resendButton()).toHaveTextContent('Resend code in 0:59');
     expect(resendButton()).toHaveAccessibleName('Resend code in 59 seconds');

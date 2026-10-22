@@ -172,3 +172,30 @@ describe('chat list on first run', () => {
     expect(screen.queryByRole('region', { name: 'Get started' })).toBeNull();
   });
 });
+
+describe('filter chips at a phone width', () => {
+  it('fade at the end edge and keep end room, so the row reads as scrollable', async () => {
+    const { ChatListHeader } = await import('./InboxPane');
+    const { TooltipProvider } = await import('@/components/ui/Tooltip');
+    renderWithProviders(
+      <TooltipProvider>
+        <ChatListHeader
+          term=""
+          onTerm={() => {}}
+          filter="all"
+          onFilter={() => {}}
+          onCompose={() => {}}
+        />
+      </TooltipProvider>,
+    );
+    const row = screen.getByRole('tablist', { name: 'Filter chats' });
+    expect(row.className).toContain('overflow-x-auto');
+    expect(row.className).toMatch(
+      /mask-image:linear-gradient\(to_right,#000_calc\(100%-32px\),transparent\)/,
+    );
+    const end = row.lastElementChild!;
+    expect(end).toHaveAttribute('data-filter-end');
+    expect(end).toHaveAttribute('aria-hidden', 'true');
+    expect(within(row).getAllByRole('tab')).toHaveLength(5);
+  });
+});

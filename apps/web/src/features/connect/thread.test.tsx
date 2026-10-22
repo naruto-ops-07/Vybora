@@ -446,3 +446,40 @@ describe('bubbles and canvas in the new looks', () => {
     expect(['', 'none']).toContain(getComputedStyle(still).animationName);
   });
 });
+
+describe('mono only for data', () => {
+  it('the day chip and the unread divider are in the look’s text face', () => {
+    render(
+      <>
+        <DateChip label="Today" />
+        <UnreadDivider count={3} />
+      </>,
+    );
+    expect(screen.getByRole('heading', { name: 'Today' }).className).not.toContain('font-mono');
+    expect(screen.getByRole('heading', { name: '3 unread messages' }).className).not.toContain(
+      'font-mono',
+    );
+  });
+});
+
+describe('chat header typing', () => {
+  it('says typing in the text face, not mono', async () => {
+    const { ChatHeaderView } = await import('./ChatHeader');
+    const { container } = renderWithProviders(
+      <TooltipProvider>
+        <ChatHeaderView
+          title="Ana"
+          avatar={null}
+          subtitle="typing…"
+          typing
+          online={false}
+          accent="#123456"
+          details={false}
+          onToggleDetails={() => {}}
+        />
+      </TooltipProvider>,
+    );
+    const line = container.querySelector('[data-typing]')!;
+    expect(line.className).not.toContain('font-mono');
+  });
+});

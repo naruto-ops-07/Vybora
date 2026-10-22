@@ -179,6 +179,9 @@ describe('code step at sign-up', () => {
 
     expect(resendButton()).toBeDisabled();
     expect(resendButton()).toHaveTextContent('Resend code in 1:00');
+    // Words in the text face; the digits only tabular, not mono.
+    expect(resendButton().querySelector('.font-mono')).toBeNull();
+    expect(resendButton().querySelector('.tabular-nums')).toHaveTextContent('1:00');
     await act(async () => {
       vi.advanceTimersByTime(1000);
     });

@@ -146,6 +146,25 @@ describe('sealed send', () => {
   });
 });
 
+describe('send button at rest', () => {
+  it('is always the look’s gradient circle, ≥ 44 px; empty only dims it', () => {
+    renderComposer({ onSend: () => true });
+    const b = sendButton();
+    expect(b).toBeDisabled();
+    expect(b).toHaveClass('vy-btn-primary', 'rounded-full', 'h-11', 'w-11', 'disabled:opacity-45');
+    expect(b.className).not.toMatch(/(^|\s)(rounded-md|h-10|w-10|bg-)/);
+    typeAndEnter('h');
+    expect(sendButton()).toHaveClass('vy-btn-primary', 'rounded-full');
+  });
+
+  it('goes flat accent under high contrast (the primary skin’s HC rule)', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/styles/primitives.css'), 'utf8');
+    expect(css).toMatch(
+      /:root\[data-contrast='high'\] \.vy-btn-primary,[^{]*\{[^}]*background-color: var\(--vy-accent\);[^}]*background-image: none;/,
+    );
+  });
+});
+
 describe('seal keyframes', () => {
   const css = readFileSync(resolve(process.cwd(), 'src/styles/index.css'), 'utf8').replace(
     /\r\n/g,

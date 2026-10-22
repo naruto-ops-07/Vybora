@@ -86,8 +86,8 @@ function SealDemo() {
         </p>
       </div>
       <p className="border-t border-line px-5 py-3 text-xs leading-relaxed text-subtle">
-        <span className="font-medium text-muted">End-to-end encrypted with MLS (RFC 9420).</span>{' '}
-        A demonstration with a throwaway key. Real chats use MLS keys that only the members’ devices
+        <span className="font-medium text-muted">End-to-end encrypted with MLS (RFC 9420).</span> A
+        demonstration with a throwaway key. Real chats use MLS keys that only the members’ devices
         hold.
       </p>
     </div>

@@ -52,12 +52,15 @@ export function ChatHeaderView({
       >
         {avatar}
         <span className="min-w-0">
-          <span className="type-wide block truncate text-[17px] leading-6">
-            {title || ' '}
-          </span>
+          <span className="type-wide block truncate text-[17px] leading-6">{title || ' '}</span>
           <span
-            className="flex items-center gap-1.5 font-mono text-[11px] leading-4"
+            className={cn(
+              'flex items-center gap-1.5 leading-4',
+              // Typing is words, in the look's text face; status (last seen) stays data.
+              typing ? 'text-[12px] font-medium' : 'font-mono text-[11px]',
+            )}
             aria-live="polite"
+            data-typing={typing ? '' : undefined}
           >
             {typing ? (
               <TypingDots color={accent} />

@@ -30,6 +30,7 @@ import {
 } from 'react-native';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Icon, type IconName } from '@/components/Icon';
 import { Text, TextInput } from '@/components/Text';
 import { Avatar, IconButton } from '@/components/ui';
@@ -328,47 +329,57 @@ function Inbox() {
                   style={{ flex: 1, height: 44, color: cc.text, fontSize: 16 }}
                 />
               </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={{ marginTop: 10, marginHorizontal: -16 }}
-                contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingBottom: 8 }}
-                accessibilityRole="tablist"
-              >
-                {FILTERS.map((f) => (
-                  <Pressable
-                    key={f}
-                    onPress={() => setFilter(f)}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: filter === f }}
-                    // A 34 px pill inside a 44 px target (web `.vy-chip`).
-                    style={{ minHeight: 44, justifyContent: 'center' }}
-                  >
-                    <View
-                      style={{
-                        minHeight: 34,
-                        justifyContent: 'center',
-                        paddingHorizontal: 14,
-                        borderRadius: 999,
-                        backgroundColor: filter === f ? cc.accent : cc.panel,
-                        borderWidth: StyleSheet.hairlineWidth,
-                        borderColor:
-                          filter === f ? cc.accent : cc.highContrast ? cc.lineStrong : cc.line,
-                      }}
+              <View style={{ marginTop: 10, marginHorizontal: -16 }}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  // Extra end padding so the last chip clears the fade and the row reads as
+                  // one that scrolls.
+                  contentContainerStyle={{
+                    gap: 8,
+                    paddingLeft: 16,
+                    paddingRight: 40,
+                    paddingBottom: 8,
+                  }}
+                  accessibilityRole="tablist"
+                  testID="inbox-filters"
+                >
+                  {FILTERS.map((f) => (
+                    <Pressable
+                      key={f}
+                      onPress={() => setFilter(f)}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected: filter === f }}
+                      // A 34 px pill inside a 44 px target (web `.vy-chip`).
+                      style={{ minHeight: 44, justifyContent: 'center' }}
                     >
-                      <Text
+                      <View
                         style={{
-                          color: filter === f ? cc.onAccent : cc.textMuted,
-                          fontSize: 14,
-                          fontWeight: '500',
+                          minHeight: 34,
+                          justifyContent: 'center',
+                          paddingHorizontal: 14,
+                          borderRadius: 999,
+                          backgroundColor: filter === f ? cc.accent : cc.panel,
+                          borderWidth: StyleSheet.hairlineWidth,
+                          borderColor:
+                            filter === f ? cc.accent : cc.highContrast ? cc.lineStrong : cc.line,
                         }}
                       >
-                        {f[0]!.toUpperCase() + f.slice(1)}
-                      </Text>
-                    </View>
-                  </Pressable>
-                ))}
-              </ScrollView>
+                        <Text
+                          style={{
+                            color: filter === f ? cc.onAccent : cc.textMuted,
+                            fontSize: 14,
+                            fontWeight: '500',
+                          }}
+                        >
+                          {f[0]!.toUpperCase() + f.slice(1)}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+                <EdgeFade color={cc.night} />
+              </View>
             </View>
           </View>
         }
@@ -526,5 +537,28 @@ export default function MessagesScreen() {
     <ConnectGate>
       <Inbox />
     </ConnectGate>
+  );
+}
+
+/** A fade over the end of a horizontal row into `color`: more lies that way. */
+function EdgeFade({ color }: { color: string }) {
+  return (
+    <View
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      testID="inbox-filters-fade"
+      style={{ position: 'absolute', right: 0, top: 0, bottom: 8, width: 32 }}
+    >
+      <Svg width="100%" height="100%">
+        <Defs>
+          <LinearGradient id="vy-filter-fade" x1="0" y1="0" x2="1" y2="0">
+            <Stop offset="0" stopColor={color} stopOpacity={0} />
+            <Stop offset="1" stopColor={color} stopOpacity={1} />
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#vy-filter-fade)" />
+      </Svg>
+    </View>
   );
 }

@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 export function DateChip({ label }: { label: string }) {
   return (
     <div className="pointer-events-none sticky top-2 z-10 my-3 flex justify-center">
-      <h2 className="vy-float rounded-full px-2.5 py-0.5 font-mono text-[11px] leading-4 font-medium">
+      <h2 className="vy-float rounded-full px-2.5 py-0.5 text-[12px] leading-4 font-medium">
         {label}
       </h2>
     </div>
@@ -26,7 +26,7 @@ export function UnreadDivider({ count }: { count: number }) {
   return (
     <div className="my-3 flex items-center gap-3 px-3 md:px-6" data-unread-divider>
       <span className="h-px flex-1 bg-accent/50" aria-hidden="true" />
-      <h2 className="rounded-full bg-accent-soft px-2.5 py-0.5 font-mono text-[11px] leading-4 font-medium text-accent">
+      <h2 className="rounded-full bg-accent-soft px-2.5 py-0.5 text-[12px] leading-4 font-semibold text-accent">
         {count === 1 ? '1 unread message' : `${count} unread messages`}
       </h2>
       <span className="h-px flex-1 bg-accent/50" aria-hidden="true" />

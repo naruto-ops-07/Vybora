@@ -193,8 +193,11 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           data-seal={seal.playing ? 'playing' : 'idle'}
           // While the seal plays the (now empty, disabled) button stays at full
           // strength, then settles back to its dimmed rest state.
+          // Always the look's gradient coin (flat accent under high contrast, via
+          // vy-btn-primary); "can't send yet" is the same circle, dimmed.
+          data-send-button=""
           className={cn(
-            'transition-[color,background-color,opacity] duration-150',
+            'h-11 w-11 rounded-full transition-[color,background-color,opacity] duration-150',
             seal.playing && 'disabled:opacity-100',
           )}
         >

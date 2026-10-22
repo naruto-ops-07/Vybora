@@ -330,7 +330,12 @@ export function EmailCodeStep({ email, purpose, onResend, onChangeEmail }: Email
           {cooling ? (
             <>
               Resend code in{' '}
-              <BaseText style={{ fontFamily: font.monoMedium }}>{countdownClock(wait)}</BaseText>
+              <BaseText
+                style={{ fontFamily: t.fonts.semibold, fontVariant: ['tabular-nums'] }}
+                testID="resend-countdown"
+              >
+                {countdownClock(wait)}
+              </BaseText>
             </>
           ) : (
             'Resend code'

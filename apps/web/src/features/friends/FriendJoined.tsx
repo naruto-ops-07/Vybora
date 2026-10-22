@@ -17,7 +17,12 @@ const OVERLAP = 12;
  */
 const MINE_GLYPH = { x: 0.38, y: 0.5 };
 /** The pair's layout, for the no-clipping test. */
-export const joinedAvatarGeometry = { size: SIZE, overlap: OVERLAP, ring: 2, mineGlyph: MINE_GLYPH };
+export const joinedAvatarGeometry = {
+  size: SIZE,
+  overlap: OVERLAP,
+  ring: 2,
+  mineGlyph: MINE_GLYPH,
+};
 
 /** The sentence the card shows, and the one a screen reader hears when it appears. */
 export const joinedText = (friend: JoinedPerson) => `You and ${nameOf(friend)} are now friends`;

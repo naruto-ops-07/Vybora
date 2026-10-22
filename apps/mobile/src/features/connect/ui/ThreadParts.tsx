@@ -25,9 +25,8 @@ export function DateChip({ label, floating }: { label: string; floating?: boolea
         ]}
       >
         <Text
-          mono
           accessibilityRole="header"
-          style={{ color: cc.textMuted, fontSize: 11, fontWeight: '500' }}
+          style={{ color: cc.textMuted, fontSize: 12, fontWeight: '500' }}
         >
           {label}
         </Text>
@@ -58,9 +57,8 @@ export function UnreadDivider({ count }: { count: number }) {
         }}
       >
         <Text
-          mono
           accessibilityRole="header"
-          style={{ color: cc.accent, fontSize: 11, fontWeight: '600' }}
+          style={{ color: cc.accent, fontSize: 12, fontWeight: '600' }}
         >
           {count === 1 ? '1 unread message' : `${count} unread messages`}
         </Text>

@@ -94,3 +94,14 @@ describe('sealed send (mobile)', () => {
     expect(Haptics.impactAsync).not.toHaveBeenCalled();
   });
 });
+
+describe('send button (mobile)', () => {
+  it('is the look’s 44 px gradient circle at full strength; empty keeps the mic', async () => {
+    await setup(jest.fn());
+    expect(screen.getByRole('button', { name: 'Record a voice message' })).toBeTruthy();
+    await type('hi');
+    const send = screen.getByRole('button', { name: 'Send' });
+    const style = [send.props.style].flat(3).reduce((a, s) => ({ ...a, ...s }), {});
+    expect(style).toMatchObject({ width: 44, height: 44, borderRadius: 22, opacity: 1 });
+  });
+});

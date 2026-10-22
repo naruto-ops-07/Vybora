@@ -160,7 +160,10 @@ export function ChatListHeader({
           </kbd>
         </label>
         <div
-          className="scrollbar-none -mx-3 mt-2.5 flex gap-1.5 overflow-x-auto px-3 pb-2.5"
+          // End padding (a spacer: flex rows drop trailing padding in the scroll box) and a
+          // fade at the end edge, so a cut-off chip reads as "more this way" at 390 px.
+          className="scrollbar-none -mx-3 mt-2.5 flex gap-1.5 overflow-x-auto px-3 pb-2.5 [mask-image:linear-gradient(to_right,#000_calc(100%-32px),transparent)]"
+          data-edge-fade=""
           role="tablist"
           aria-label="Filter chats"
         >
@@ -176,6 +179,7 @@ export function ChatListHeader({
               {f.label}
             </button>
           ))}
+          <span className="w-6 shrink-0" aria-hidden="true" data-filter-end="" />
         </div>
       </div>
     </>

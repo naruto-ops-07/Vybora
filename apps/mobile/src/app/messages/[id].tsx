@@ -606,10 +606,13 @@ function Chat() {
                           />
                         )}
                         <Text
-                          mono
+                          // Typing is words (the text face); status (last seen) stays data.
+                          mono={!typingNames.length}
+                          testID={typingNames.length ? 'header-typing' : undefined}
                           style={{
                             color: typingNames.length ? def.accent : cc.textSubtle,
-                            fontSize: 11,
+                            fontSize: typingNames.length ? 12 : 11,
+                            fontWeight: typingNames.length ? '500' : undefined,
                           }}
                         >
                           {subtitle}

@@ -313,7 +313,7 @@ export function EmailCodeStep({
         >
           {cooling ? (
             <>
-              Resend code in <span className="font-mono tabular-nums">{countdownClock(wait)}</span>
+              Resend code in <span className="tabular-nums">{countdownClock(wait)}</span>
             </>
           ) : (
             'Resend code'

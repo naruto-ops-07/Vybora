@@ -148,6 +148,30 @@ describe('mobile conversation layout', () => {
     expect(screen.getByRole('button', { name: 'Jump to latest message, 2 new' })).toBeTruthy();
   });
 
+  it('sets the day chip and the unread divider in the text face, not mono', async () => {
+    await render(
+      <>
+        <DateChip label="Today" />
+        <UnreadDivider count={2} />
+      </>,
+    );
+    for (const name of ['Today', '2 unread messages']) {
+      const family = [screen.getByRole('header', { name }).props.style]
+        .flat(3)
+        .reduce((a, s) => ({ ...a, ...s }), {}).fontFamily as string | undefined;
+      expect(family ?? '').not.toMatch(/Mono/);
+    }
+  });
+
+  it('inbox filter chips end in padding and an edge fade (source pin)', () => {
+    const src = require('node:fs').readFileSync(
+      require('node:path').resolve('src/app/messages/index.tsx'),
+      'utf8',
+    ) as string;
+    expect(src).toMatch(/paddingRight: 40/);
+    expect(src).toMatch(/<EdgeFade color=\{cc\.night\} \/>/);
+  });
+
   it('exposes retry and message actions to screen readers and dispatches them', async () => {
     const failed: LocalMessage = { ...msg, senderId: 'me', status: 'failed' };
     const onRetry = jest.fn();
