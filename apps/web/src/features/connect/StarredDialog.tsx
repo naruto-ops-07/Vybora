@@ -9,6 +9,8 @@ export interface StarredRowInfo {
   chat: string;
   sender: string;
   nameOf: (userId: string) => string;
+  /** So my own view-once copy reads "View once photo", never "Opened". */
+  myUserId?: string;
 }
 
 /**
@@ -78,7 +80,7 @@ export function StarredDialog({
                     </time>
                   </span>
                   <span className="text-msg-sm line-clamp-2 break-anywhere text-muted">
-                    {messageSummary(m, { nameOf: d.nameOf })}
+                    {messageSummary(m, { nameOf: d.nameOf, myUserId: d.myUserId })}
                   </span>
                 </button>
               </li>

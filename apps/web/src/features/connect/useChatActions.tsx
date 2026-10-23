@@ -1,4 +1,4 @@
-import { qk, sendFriendRequest, type SecureConversation } from '@vybora/api';
+import { qk, respondFriendRequest, sendFriendRequest, type SecureConversation } from '@vybora/api';
 import {
   addFriendErrorNotice,
   addFriendResultNotice,
@@ -10,14 +10,14 @@ import {
 } from '@vybora/core';
 import type { ConnectEngine, LocalMessage } from '@vybora/e2ee';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Avatar, GroupAvatar } from '@/components/ui/Avatar';
 import { ConfirmDialog } from '@/components/ui/Dialog';
 import { useToast } from '@/components/ui/Toast';
 import { supabase } from '@/lib/supabase';
 import { useActionAnnouncer } from './announce';
 import type { EditDraft, ReplyDraft } from './Composer';
-import { controlErrorText, type ControlKind } from './controlErrors';
+import { controlErrorText, MAX_CAPTION, type ControlKind } from './controlErrors';
 import { ForwardDialog } from './ForwardDialog';
 import { conversationTitle, useNicknames, useSecureInbox } from './hooks';
 import type { ContactProfile, MessageKinds } from './kinds/context';
@@ -73,6 +73,20 @@ export function useChatActions({
   const [viewOnce, setViewOnce] = useState<ViewOnceMedia | null>(null);
   const isGroup = conv?.kind === 'group';
 
+  // Everything here belongs to one chat: switching chats closes its dialogs, and a
+  // result that arrives late (a view once opening, a refused edit) is dropped.
+  const liveId = useRef(id);
+  useEffect(() => {
+    liveId.current = id;
+    setEditing(null);
+    setForwarding(null);
+    setInfoFor(null);
+    setReplacePin(null);
+    setStarredOpen(false);
+    setViewOnce(null);
+  }, [id]);
+  const stillHere = (chat: string) => liveId.current === chat;
+
   const pins = useQuery({
     // Under the chat's messages key, so every engine change refreshes it.
     queryKey: [...qk.connect.messages(id), 'pins'],
@@ -96,9 +110,9 @@ export function useChatActions({
     () =>
       (pinned.data ?? []).map((m) => ({
         messageId: m.id,
-        summary: messageSummary(m, { nameOf }),
+        summary: messageSummary(m, { nameOf, myUserId: userId }),
       })),
-    [pinned.data, nameOf],
+    [pinned.data, nameOf, userId],
   );
 
   const starred = useQuery({
@@ -163,21 +177,41 @@ export function useChatActions({
 
   const cancelEdit = useCallback(() => setEditing(null), []);
   const startEdit = (m: LocalMessage) =>
-    setEditing({ id: m.id, text: (m.kind === 'text' ? m.body : m.caption) ?? '' });
+    setEditing({
+      id: m.id,
+      text: (m.kind === 'text' ? m.body : m.caption) ?? '',
+      caption: m.kind !== 'text',
+    });
 
   const saveEdit = useCallback(
     async (text: string) => {
       const target = editing;
+      if (!target) return;
+      if (target.caption && text.length > MAX_CAPTION) {
+        // Kept open with the text: nothing was sent.
+        setEditing({ ...target, text });
+        toast.show('Captions can be up to 2000 characters', 'error');
+        return;
+      }
       setEditing(null);
-      if (!target || text === target.text) return;
+      if (text === target.text) return;
+      const chat = id;
       const members = new Set(conv?.members.map((x) => x.id) ?? []);
       const mentions = mentionIdsIn(text).filter((x) => members.has(x));
-      const ok = await control('edit', target.id, () =>
-        engine!.edit(id, target.id, text, mentions.length ? mentions : undefined),
-      );
+      let refused = false;
+      const ok = await control('edit', target.id, async () => {
+        try {
+          await engine!.edit(chat, target.id, text, mentions.length ? mentions : undefined);
+        } catch (e) {
+          refused = (e as { code?: string }).code === 'forbidden';
+          throw e;
+        }
+      });
       if (ok) announce('Message edited');
+      // Refused (too late, or a mention left): give the words back to fix or cancel.
+      else if (refused && stillHere(chat)) setEditing({ ...target, text });
     },
-    [editing, conv, control, engine, id, announce],
+    [editing, conv, control, engine, id, announce, toast],
   );
 
   const star = useCallback(
@@ -186,7 +220,7 @@ export function useChatActions({
         await engine!.star(id, m.id, on);
         announce(on ? 'Message starred' : 'Star removed');
       } catch (e) {
-        toast.show(controlErrorText('reaction', e), 'error');
+        toast.show(controlErrorText(on ? 'star' : 'unstar', e), 'error');
       }
     },
     [engine, id, announce, toast],
@@ -210,8 +244,15 @@ export function useChatActions({
 
   const addFriend = useMutation({
     mutationKey: ADD_FRIEND_KEY,
-    mutationFn: (p: ContactProfile) => sendFriendRequest(supabase, p.username),
-    onSuccess: (result, p) => {
+    // Their request to me is accepted by id; otherwise a request by the RESOLVED username.
+    mutationFn: async ({ profile: p, accept }: { profile: ContactProfile; accept: boolean }) => {
+      if (accept) {
+        await respondFriendRequest(supabase, p.id, true);
+        return 'accepted' as const;
+      }
+      return sendFriendRequest(supabase, p.username);
+    },
+    onSuccess: (result, { profile: p }) => {
       const n = addFriendResultNotice(result, p.username);
       toast.show(n.text, n.tone);
       void qc.invalidateQueries({ queryKey: qk.connect.friendRequests });
@@ -223,27 +264,34 @@ export function useChatActions({
     },
   });
 
+  const opening = useRef(new Set<string>());
   const kinds = useMemo<MessageKinds>(
     () => ({
       isGroup,
       useContact: useServerContact,
       onMessageContact: (p) => void direct.open(p.id, p.displayName || `@${p.username}`),
-      onAddFriend: (p) => addFriend.mutate(p),
+      onAddFriend: (p, accept) => addFriend.mutate({ profile: p, accept }),
       onVote: async (poll, choices) => {
         const ok = await control('vote', null, () => engine!.vote(id, poll.id, choices));
         if (ok) announce(choices.length ? 'Vote counted' : 'Vote removed');
         return ok;
       },
-      onOpenViewOnce: (m) =>
-        void (async () => {
-          try {
-            const bytes = await engine!.consumeViewOnce(id, m.id);
-            if (!bytes) toast.show('This was already opened.', 'info');
-            else setViewOnce({ kind: m.viewOnce?.kind ?? 'image', bytes });
-          } catch (e) {
-            toast.show(controlErrorText('forward', e), 'error');
-          }
-        })(),
+      onOpenViewOnce: async (m) => {
+        // One open at a time: a second tap while it decrypts does nothing.
+        if (opening.current.has(m.id)) return;
+        opening.current.add(m.id);
+        const chat = id;
+        try {
+          const bytes = await engine!.consumeViewOnce(chat, m.id);
+          if (!stillHere(chat)) return;
+          if (!bytes) toast.show('This was already opened.', 'info');
+          else setViewOnce({ kind: m.viewOnce?.kind ?? 'image', bytes, messageId: m.id });
+        } catch (e) {
+          if (stillHere(chat)) toast.show(controlErrorText('viewOnce', e), 'error');
+        } finally {
+          opening.current.delete(m.id);
+        }
+      },
     }),
     // `addFriend.mutate` and `direct.open` are stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -286,21 +334,57 @@ export function useChatActions({
     [inbox.data, id, userId, nicknames.data],
   );
 
+  /**
+   * Forward to every chat picked, then say once how it went. A chat where the
+   * forward is now a "Not sent" bubble is pointed at (its Retry), not offered again.
+   */
   const forward = async (targets: string[]) => {
     const m = forwarding;
     if (!m) return;
+    const startedAt = new Date(Date.now() - 1000).toISOString();
+    const titleOf = (c: string) => forwardTargets.find((t) => t.id === c)?.title ?? 'a chat';
     let done = 0;
+    const failed: string[] = [];
+    const waiting: string[] = [];
     for (const to of targets) {
       try {
         await engine!.forward(id, m.id, to, { nameOf });
         done++;
       } catch (e) {
-        toast.show(controlErrorText('forward', e), 'error');
-        break;
+        const recent = await engine!.listMessages(to, { limit: 5 }).catch(() => []);
+        const bubble = recent.some(
+          (x) =>
+            x.status === 'failed' &&
+            x.forwarded &&
+            x.senderId === userId &&
+            x.createdAt >= startedAt,
+        );
+        (bubble ? waiting : failed).push(titleOf(to));
+        if (!bubble && targets.length === 1) {
+          toast.show(controlErrorText('forward', e), 'error');
+          setForwarding(null);
+          return;
+        }
       }
     }
     setForwarding(null);
-    if (done) toast.show(done === 1 ? 'Forwarded' : `Forwarded to ${done} chats`, 'success');
+    const n = targets.length;
+    if (!failed.length && !waiting.length) {
+      toast.show(n === 1 ? 'Forwarded' : `Forwarded to ${n} chats`, 'success');
+      return;
+    }
+    const list = (xs: string[]) =>
+      xs.length === 1 ? xs[0]! : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`;
+    toast.show(
+      [
+        n > 1 ? `Forwarded to ${done} of ${n} chats.` : null,
+        failed.length ? `Couldn’t forward to ${list(failed)}.` : null,
+        waiting.length ? `Not sent to ${list(waiting)} yet: use Retry there.` : null,
+      ]
+        .filter(Boolean)
+        .join(' '),
+      'error',
+    );
   };
 
   const dialogs: ReactNode = (
@@ -336,7 +420,7 @@ export function useChatActions({
         scope="chat"
         loading={starred.isPending}
         messages={starred.data ?? []}
-        describe={(m) => ({ chat: '', sender: nameOf(m.senderId), nameOf })}
+        describe={(m) => ({ chat: '', sender: nameOf(m.senderId), nameOf, myUserId: userId })}
         onOpen={(m) => {
           setStarredOpen(false);
           jumpTo(m.id);

@@ -236,14 +236,14 @@ export const Bubble = memo(function Bubble({
         senderLabel,
         m.forwarded && !m.deleted ? 'forwarded' : null,
         time,
-        messageSummary(m, { nameOf }),
+        messageSummary(m, { nameOf, myUserId }),
         m.edited && !m.deleted ? 'edited' : null,
         m.starred ? 'starred' : null,
         receipt ? RECEIPT_LABEL[receipt] : null,
       ]
         .filter(Boolean)
         .join(', '),
-    [senderLabel, time, m, receipt, nameOf],
+    [senderLabel, time, m, receipt, nameOf, myUserId],
   );
   const filled = mine && !m.deleted && m.kind !== 'undecryptable';
   const media =

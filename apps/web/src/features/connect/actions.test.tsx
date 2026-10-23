@@ -332,11 +332,24 @@ describe('action errors', () => {
     );
   });
 
-  it('says a stored control will retry, and a failed delete will not', () => {
-    expect(controlErrorText('reaction', err('network'))).toBe('Couldn’t send yet. It will retry.');
-    expect(controlErrorText('edit', err('unknown'))).toBe('Couldn’t send yet. It will retry.');
+  it('says a control will retry when the network failed', () => {
+    for (const kind of ['reaction', 'edit', 'pin', 'vote'] as const) {
+      expect(controlErrorText(kind, err('network'))).toBe('Couldn’t send yet. It will retry.');
+      expect(controlErrorText(kind, err('unknown'))).toBe('Couldn’t send yet. It will retry.');
+    }
     expect(controlErrorText('delete', err('network'))).toBe(
-      'Couldn’t delete for everyone. Check your connection and try again.',
+      'Couldn’t delete for everyone yet. It will retry when you’re back online.',
+    );
+  });
+
+  it('names mentions that left, stars, and view once on their own', () => {
+    expect(controlErrorText('edit', err('forbidden', 'invalid_mentions'))).toBe(
+      'Some mentions aren’t in this chat any more',
+    );
+    expect(controlErrorText('star', err('unknown'))).toBe('Couldn’t star this message. Try again.');
+    expect(controlErrorText('unstar', err('unknown'))).toBe('Couldn’t remove the star. Try again.');
+    expect(controlErrorText('viewOnce', err('network'))).toBe(
+      'Couldn’t open it. Check your connection and try again. It’s still unopened.',
     );
   });
 });

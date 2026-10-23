@@ -72,7 +72,7 @@ export function ContactCardView({
   state: ContactState;
   filled: boolean;
   onMessage: (p: ContactProfile) => void;
-  onAdd: (p: ContactProfile) => void;
+  onAdd: (p: ContactProfile, accept: boolean) => void;
 }) {
   const divider = filled ? 'border-current/25' : 'border-line';
   let head: ReactNode;
@@ -137,7 +137,7 @@ export function ContactCardView({
               ? `Accept ${name}’s friend request`
               : `Add ${name} as a friend`
           }
-          onClick={() => onAdd(p)}
+          onClick={() => onAdd(p, state.relation === 'incoming')}
           icon={<UserPlusIcon size={16} aria-hidden="true" />}
           busy={state.adding}
           filled={filled}

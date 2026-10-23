@@ -1,10 +1,11 @@
 import { resolveChatTheme } from '@vybora/config';
-import { personTone, UNSUPPORTED_TEXT } from '@vybora/core';
+import { A11Y_STORAGE_KEY, personTone, UNSUPPORTED_TEXT } from '@vybora/core';
 import type { LocalMessage } from '@vybora/e2ee';
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/Tooltip';
+import { A11yProvider } from '@/features/a11y/A11yProvider';
 import { Bubble } from './Bubble';
 import { MessageKindsProvider, type ContactState, type MessageKinds } from './kinds/context';
 import { ViewOnceViewer } from './kinds/ViewOnce';
@@ -136,6 +137,7 @@ describe('contact cards', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Add Rin Okada as a friend' }));
     expect(value.onAddFriend).toHaveBeenCalledWith(
       expect.objectContaining({ id: STRANGER, username: 'rin' }),
+      false,
     );
   });
 
@@ -149,6 +151,15 @@ describe('contact cards', () => {
     renderBubble(card, { value: kinds({ useContact: () => found('outgoing') }) });
     expect(screen.getByText('Request sent')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Add .* as a friend/ })).toBeNull();
+  });
+
+  it('accepts their request when they already asked me', async () => {
+    const value = kinds({ useContact: () => found('incoming') });
+    renderBubble(card, { value });
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Accept Rin Okada’s friend request' }),
+    );
+    expect(value.onAddFriend).toHaveBeenCalledWith(expect.objectContaining({ id: STRANGER }), true);
   });
 
   it('offers nothing to do for my own card', () => {
@@ -259,39 +270,75 @@ describe('view once', () => {
     body: undefined,
     viewOnce: { kind: 'image' as const, consumed: false },
   };
+  const row = () => document.querySelector('[data-view-once]') as HTMLElement;
 
   it('offers one tap to view, nothing else', async () => {
     const value = kinds();
     renderBubble(unopened, { value });
-    expect(screen.getByText('View once photo')).toBeInTheDocument();
+    expect(within(row()).getByText('Photo')).toBeInTheDocument();
+    expect(within(row()).getByText('View once')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Tap to view' }));
     expect(value.onOpenViewOnce).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }));
     expect(screen.queryByRole('link')).toBeNull();
   });
 
-  it('shows "Opened" once it has been viewed', () => {
+  it('shows "Opened" once a received one has been viewed', () => {
     renderBubble({ ...unopened, viewOnce: { kind: 'video', consumed: true } });
-    expect(screen.getByText('Opened')).toBeInTheDocument();
+    expect(within(row()).getByText('Video')).toBeInTheDocument();
+    expect(within(row()).getByText('Opened')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Tap to view' })).toBeNull();
   });
 
-  it('shows my own copy as a view once photo, opened', () => {
+  it('never claims my own copy was opened', () => {
     renderBubble(
       { ...unopened, senderId: ME, status: 'sent', viewOnce: { kind: 'image', consumed: true } },
       { mine: true },
     );
-    expect(screen.getByText('View once photo')).toBeInTheDocument();
-    expect(screen.getByText('Opened')).toBeInTheDocument();
+    expect(within(row()).getByText('View once')).toBeInTheDocument();
+    expect(screen.queryByText(/Opened/)).toBeNull();
+    expect(screen.getByRole('article').getAttribute('aria-label')).not.toMatch(/Opened/);
     expect(screen.queryByRole('button', { name: 'Tap to view' })).toBeNull();
   });
 
-  it('says honestly what it does and revokes the media when closed', async () => {
+  it('shows no caption on view once', () => {
+    renderBubble({ ...unopened, caption: 'do not show' });
+    expect(screen.queryByText('do not show')).toBeNull();
+  });
+
+  it('draws one ring around the icon, dashed once opened', () => {
+    const { unmount } = renderBubble(unopened);
+    expect(row().querySelectorAll('[data-once-ring]')).toHaveLength(1);
+    expect(row().querySelector('[data-once-ring]')!.className).not.toMatch(/dashed/);
+    unmount();
+    renderBubble({ ...unopened, viewOnce: { kind: 'image', consumed: true } });
+    expect(row().querySelector('[data-once-ring]')!.className).toMatch(/border-dashed/);
+  });
+});
+
+describe('view once viewer', () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82]);
+  const MP4 = new Uint8Array([
+    0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 2, 0,
+  ]);
+  let blobs: Blob[] = [];
+  const revoke = vi.fn();
+  beforeEach(() => {
+    blobs = [];
+    revoke.mockReset();
     // jsdom has no object URLs.
-    const revoke = vi.fn();
-    Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:once'), revokeObjectURL: revoke });
+    Object.assign(URL, {
+      createObjectURL: vi.fn((b: Blob) => {
+        blobs.push(b);
+        return 'blob:once';
+      }),
+      revokeObjectURL: revoke,
+    });
+  });
+
+  it('says honestly what it does and revokes the media when closed', async () => {
     const onClose = vi.fn();
     const { rerender } = render(
-      <ViewOnceViewer media={{ kind: 'image', bytes: new Uint8Array([1, 2]) }} onClose={onClose} />,
+      <ViewOnceViewer media={{ kind: 'image', bytes: PNG }} onClose={onClose} />,
     );
     const dialog = screen.getByRole('dialog', { name: 'View once photo' });
     expect(
@@ -303,6 +350,80 @@ describe('view once', () => {
     expect(onClose).toHaveBeenCalled();
     rerender(<ViewOnceViewer media={null} onClose={onClose} />);
     expect(revoke).toHaveBeenCalledWith('blob:once');
+  });
+
+  it('only shows bytes that really are an image or a video, typed as such', () => {
+    const { unmount } = render(
+      <ViewOnceViewer media={{ kind: 'image', bytes: PNG }} onClose={vi.fn()} />,
+    );
+    expect(blobs[0]!.type).toBe('image/png');
+    unmount();
+    blobs = [];
+    const svg = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+    render(<ViewOnceViewer media={{ kind: 'image', bytes: svg }} onClose={vi.fn()} />);
+    expect(blobs).toHaveLength(0);
+    expect(screen.getByText('This photo can’t be shown on this browser.')).toBeInTheDocument();
+    expect(document.body.querySelector('img')).toBeNull();
+  });
+
+  it('keeps focus inside, across the video controls too', async () => {
+    render(<ViewOnceViewer media={{ kind: 'video', bytes: MP4 }} onClose={vi.fn()} />);
+    const close = screen.getByRole('button', { name: 'Close' });
+    const video = document.body.querySelector('video')!;
+    expect(close).toHaveFocus();
+    await userEvent.tab();
+    expect(video).toHaveFocus();
+    await userEvent.tab();
+    expect(close).toHaveFocus();
+    await userEvent.tab({ shift: true });
+    expect(video).toHaveFocus();
+  });
+
+  it('does not autoplay under reduced motion', () => {
+    localStorage.setItem(A11Y_STORAGE_KEY, JSON.stringify({ reduceMotion: 'on' }));
+    render(
+      <A11yProvider>
+        <ViewOnceViewer media={{ kind: 'video', bytes: MP4 }} onClose={vi.fn()} />
+      </A11yProvider>,
+    );
+    expect(document.body.querySelector('video')!.autoplay).toBe(false);
+    localStorage.clear();
+  });
+
+  it('gives focus back to the message when it closes', () => {
+    const msgEl = (
+      <div data-message-id="m9" tabIndex={-1}>
+        message
+      </div>
+    );
+    const { rerender } = render(
+      <>
+        {msgEl}
+        <ViewOnceViewer media={{ kind: 'image', bytes: PNG, messageId: 'm9' }} onClose={vi.fn()} />
+      </>,
+    );
+    rerender(
+      <>
+        {msgEl}
+        <ViewOnceViewer media={null} onClose={vi.fn()} />
+      </>,
+    );
+    expect(screen.getByText('message')).toHaveFocus();
+  });
+
+  it('keeps focus where it is when the parent re-renders with a new onClose', async () => {
+    const media = { kind: 'image', bytes: PNG };
+    const { rerender } = render(<ViewOnceViewer media={media} onClose={() => undefined} />);
+    const close = screen.getByRole('button', { name: 'Close' });
+    await userEvent.tab();
+    // Only one control: Tab keeps it on Close. Now move focus by hand and re-render.
+    const video = document.createElement('button');
+    document.querySelector('[role="dialog"]')!.appendChild(video);
+    video.focus();
+    rerender(<ViewOnceViewer media={media} onClose={() => undefined} />);
+    expect(video).toHaveFocus();
+    expect(close).not.toHaveFocus();
+    video.remove();
   });
 });
 

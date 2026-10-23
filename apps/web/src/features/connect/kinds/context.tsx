@@ -26,10 +26,12 @@ export interface MessageKinds {
   /** A hook: resolve a contact card's person by user id from the server. */
   useContact: (userId: string) => ContactState;
   onMessageContact: (profile: ContactProfile) => void;
-  onAddFriend: (profile: ContactProfile) => void;
+  /** `accept`: they already asked me, so this accepts their request (by id). */
+  onAddFriend: (profile: ContactProfile, accept: boolean) => void;
   /** Resolves once the server has stored the vote (true) or it was refused (false). */
   onVote: (poll: LocalMessage, choices: number[]) => Promise<boolean>;
-  onOpenViewOnce: (message: LocalMessage) => void;
+  /** Resolves once it has opened (or failed); a second tap waits for it. */
+  onOpenViewOnce: (message: LocalMessage) => Promise<void> | void;
 }
 
 const useNoContact = (): ContactState => ({ status: 'missing' });

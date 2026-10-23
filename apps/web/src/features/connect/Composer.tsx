@@ -23,6 +23,8 @@ export interface ReplyDraft {
 export interface EditDraft {
   id: string;
   text: string;
+  /** Editing an attachment's caption (at most 2000 characters). */
+  caption?: boolean;
 }
 
 export interface ComposerHandle {
@@ -232,7 +234,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             ref={area}
             rows={1}
             value={text}
-            maxLength={MAX}
+            maxLength={editing?.caption ? 2000 : MAX}
             onChange={(e) => {
               setText(e.target.value);
               onTyping(e.target.value.length > 0);

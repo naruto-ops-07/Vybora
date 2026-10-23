@@ -4,7 +4,7 @@ import type { SecureConversation } from '@vybora/api';
 import type { ConnectEngine, LocalMessage } from '@vybora/e2ee';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/utils';
 import { MessageKindsProvider, useMessageKinds } from './kinds/context';
@@ -18,6 +18,7 @@ const api = vi.hoisted(() => ({
   fetchFriendRequests: vi.fn(),
   fetchMyProfile: vi.fn(),
   sendFriendRequest: vi.fn(),
+  respondFriendRequest: vi.fn(),
   createSecureConversation: vi.fn(),
 }));
 vi.mock('@vybora/api', async (orig) => ({ ...(await orig<typeof Api>()), ...api }));
@@ -77,12 +78,24 @@ const forbidden = (message: string) => Object.assign(new Error(message), { code:
 
 type Fn = ReturnType<typeof vi.fn>;
 type Fake = ConnectEngine & {
-  [K in 'send' | 'edit' | 'pin' | 'vote' | 'star' | 'forward' | 'consumeViewOnce' | 'listPins']: Fn;
+  [
+    K in
+      | 'send'
+      | 'edit'
+      | 'pin'
+      | 'vote'
+      | 'star'
+      | 'forward'
+      | 'consumeViewOnce'
+      | 'listPins'
+      | 'listMessages'
+  ]: Fn;
 };
 
 function fakeEngine(over: Partial<Record<keyof ConnectEngine, unknown>> = {}) {
   return {
     listPins: vi.fn(async () => []),
+    listMessages: vi.fn(async () => []),
     getMessage: vi.fn(async () => null),
     listStarred: vi.fn(async () => []),
     send: vi.fn(async () => null),
@@ -91,7 +104,9 @@ function fakeEngine(over: Partial<Record<keyof ConnectEngine, unknown>> = {}) {
     vote: vi.fn(async () => null),
     star: vi.fn(async () => undefined),
     forward: vi.fn(async () => null),
-    consumeViewOnce: vi.fn(async () => new Uint8Array([1])),
+    consumeViewOnce: vi.fn(
+      async () => new Uint8Array([0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10, 0, 0, 0, 0]),
+    ),
     ...over,
   } as unknown as Fake;
 }
@@ -208,10 +223,29 @@ describe('contact cards resolve from the server', () => {
     api.sendFriendRequest.mockResolvedValue('sent');
     renderWithProviders(<Harness engine={fakeEngine()} />);
     act(() =>
-      kindsSeen.onAddFriend({ id: 'rin', username: 'rin', displayName: null, avatarPath: null }),
+      kindsSeen.onAddFriend(
+        { id: 'rin', username: 'rin', displayName: null, avatarPath: null },
+        false,
+      ),
     );
     await waitFor(() => expect(api.sendFriendRequest).toHaveBeenCalledWith({}, 'rin'));
     expect(await screen.findByText('Request sent to @rin')).toBeInTheDocument();
+  });
+});
+
+describe('accepting from a contact card', () => {
+  it('accepts their request by id', async () => {
+    api.respondFriendRequest.mockResolvedValue(undefined);
+    renderWithProviders(<Harness engine={fakeEngine()} />);
+    act(() =>
+      kindsSeen.onAddFriend(
+        { id: 'rin', username: 'rin', displayName: null, avatarPath: null },
+        true,
+      ),
+    );
+    await waitFor(() => expect(api.respondFriendRequest).toHaveBeenCalledWith({}, 'rin', true));
+    expect(api.sendFriendRequest).not.toHaveBeenCalled();
+    expect(await screen.findByText('You and @rin are now friends')).toBeInTheDocument();
   });
 });
 
@@ -245,14 +279,14 @@ describe('view once', () => {
       body: undefined,
       viewOnce: { kind: 'image', consumed: false },
     });
-    act(() => kindsSeen.onOpenViewOnce(m));
+    act(() => void kindsSeen.onOpenViewOnce(m));
     expect(await screen.findByRole('dialog', { name: 'View once photo' })).toBeInTheDocument();
     expect(engine.consumeViewOnce).toHaveBeenCalledTimes(1);
     expect(engine.consumeViewOnce).toHaveBeenCalledWith('g1', 'm1');
     await userEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:x');
     engine.consumeViewOnce.mockResolvedValueOnce(null);
-    act(() => kindsSeen.onOpenViewOnce(m));
+    act(() => void kindsSeen.onOpenViewOnce(m));
     expect(await screen.findByText('This was already opened.')).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).toBeNull();
   });
@@ -271,6 +305,19 @@ describe('pins', () => {
     expect(engine.pin).not.toHaveBeenCalled();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Pin' }));
     expect(engine.pin).toHaveBeenCalledWith('g1', 'new', true);
+  });
+
+  it('leaves a deleted pinned message out of the pin bar', async () => {
+    const pins = ['a', 'b'].map((id) => ({ messageId: id, pinnedBy: 'maya', pinnedAt: '' }));
+    const engine = fakeEngine({
+      listPins: vi.fn(async () => pins),
+      getMessage: vi.fn(async (_c: string, id: string) =>
+        msg({ id, body: `pinned ${id}`, deleted: id === 'a' }),
+      ),
+    });
+    renderWithProviders(<Harness engine={engine} />);
+    await waitFor(() => expect(actions.pinItems).toHaveLength(1));
+    expect(actions.pinItems[0]).toEqual({ messageId: 'b', summary: 'pinned b' });
   });
 
   it('pins straight away when there is room, and explains a refusal', async () => {
@@ -299,6 +346,70 @@ describe('forward', () => {
     expect(engine.forward).toHaveBeenCalledWith('g1', 'm1', 'g1', expect.anything());
     expect(await screen.findByText('Forwarded to 2 chats')).toBeInTheDocument();
   });
+
+  it('tries every chat and sums up what failed', async () => {
+    const third = {
+      ...direct,
+      id: 'd2',
+      members: [member('me', 'me'), member('leo', 'Leo')],
+    } as unknown as SecureConversation;
+    api.fetchSecureInbox.mockResolvedValue([group, direct, third]);
+    const failed = msg({
+      id: 'f1',
+      conversationId: 'd1',
+      senderId: 'me',
+      status: 'failed',
+      forwarded: true,
+      createdAt: new Date(Date.now() + 1000).toISOString(),
+    });
+    const engine = fakeEngine({
+      forward: vi.fn(async (_from: string, _id: string, to: string) => {
+        if (to === 'd2') throw Object.assign(new Error('x'), { code: 'forbidden' });
+        if (to === 'd1') throw Object.assign(new Error('x'), { code: 'network' });
+        return null;
+      }),
+      listMessages: vi.fn(async (conv: string) => (conv === 'd1' ? [failed] : [])),
+    });
+    renderWithProviders(<Harness engine={engine} />);
+    act(() => actions.onMenuAction('forward', msg()));
+    const dialog = await screen.findByRole('dialog', { name: 'Forward to' });
+    for (const name of ['Rin', 'Leo', 'Weekend crew'])
+      await userEvent.click(await within(dialog).findByRole('checkbox', { name }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Forward to 3 chats' }));
+    await waitFor(() => expect(engine.forward).toHaveBeenCalledTimes(3));
+    expect(
+      await screen.findByText(
+        'Forwarded to 1 of 3 chats. Couldn’t forward to Leo. Not sent to Rin yet: use Retry there.',
+      ),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('switching chats', () => {
+  it('closes this chat’s dialogs and drops late results when the chat changes', async () => {
+    Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn() });
+    let open!: (b: Uint8Array) => void;
+    const engine = fakeEngine({
+      consumeViewOnce: vi.fn(() => new Promise<Uint8Array>((r) => (open = r))),
+    });
+    let switchTo!: (c: SecureConversation) => void;
+    function Switching() {
+      const [c, setC] = useState<SecureConversation>(group);
+      switchTo = setC;
+      return <Harness engine={engine} conv={c} />;
+    }
+    renderWithProviders(<Switching />);
+    act(() => actions.onMenuAction('forward', msg()));
+    expect(await screen.findByRole('dialog', { name: 'Forward to' })).toBeInTheDocument();
+    const vo = msg({ id: 'v1', kind: 'attachment', viewOnce: { kind: 'image', consumed: false } });
+    act(() => void kindsSeen.onOpenViewOnce(vo));
+    act(() => switchTo(direct));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await act(async () =>
+      open(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10, 0, 0, 0, 0])),
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
 });
 
 describe('edit, star, delete', () => {
@@ -308,11 +419,63 @@ describe('edit, star, delete', () => {
     });
     renderWithProviders(<Harness engine={engine} />);
     act(() => actions.onMenuAction('edit', msg({ senderId: 'me', status: 'sent' })));
-    expect(actions.editing).toEqual({ id: 'm1', text: 'Lunch at noon?' });
+    expect(actions.editing).toEqual({ id: 'm1', text: 'Lunch at noon?', caption: false });
     await act(async () => actions.saveEdit('Lunch at one?'));
     expect(engine.edit).toHaveBeenCalledWith('g1', 'm1', 'Lunch at one?', undefined);
-    expect(actions.editing).toBeNull();
     expect(await screen.findByText('This message can no longer be edited')).toBeInTheDocument();
+    // Refused: the edit stays open with what I typed.
+    expect(actions.editing).toEqual({ id: 'm1', text: 'Lunch at one?', caption: false });
+  });
+
+  it('closes the edit when it will retry', async () => {
+    const engine = fakeEngine({
+      edit: vi.fn(async () => Promise.reject(Object.assign(new Error('n'), { code: 'network' }))),
+    });
+    renderWithProviders(<Harness engine={engine} />);
+    act(() => actions.onMenuAction('edit', msg({ senderId: 'me', status: 'sent' })));
+    await act(async () => actions.saveEdit('Lunch at one?'));
+    expect(await screen.findByText('Couldn’t send yet. It will retry.')).toBeInTheDocument();
+    expect(actions.editing).toBeNull();
+  });
+
+  it('keeps a caption edit open when it is too long', async () => {
+    const engine = fakeEngine();
+    renderWithProviders(<Harness engine={engine} />);
+    act(() =>
+      actions.onMenuAction(
+        'edit',
+        msg({ senderId: 'me', status: 'sent', kind: 'attachment', body: undefined, caption: 'a' }),
+      ),
+    );
+    await act(async () => actions.saveEdit('x'.repeat(2001)));
+    expect(engine.edit).not.toHaveBeenCalled();
+    expect(await screen.findByText('Captions can be up to 2000 characters')).toBeInTheDocument();
+    expect(actions.editing?.text).toHaveLength(2001);
+  });
+
+  it('explains a failed star', async () => {
+    const engine = fakeEngine({ star: vi.fn(async () => Promise.reject(new Error('disk'))) });
+    renderWithProviders(<Harness engine={engine} />);
+    await act(async () => actions.onMenuAction('star', msg()));
+    expect(await screen.findByText('Couldn’t star this message. Try again.')).toBeInTheDocument();
+  });
+
+  it('explains a view once that failed to open, and ignores a second tap meanwhile', async () => {
+    let fail!: (e: unknown) => void;
+    const engine = fakeEngine({
+      consumeViewOnce: vi.fn(() => new Promise((_, reject) => (fail = reject))),
+    });
+    renderWithProviders(<Harness engine={engine} />);
+    const vo = msg({ kind: 'attachment', viewOnce: { kind: 'image', consumed: false } });
+    act(() => void kindsSeen.onOpenViewOnce(vo));
+    act(() => void kindsSeen.onOpenViewOnce(vo));
+    expect(engine.consumeViewOnce).toHaveBeenCalledTimes(1);
+    await act(async () => fail(Object.assign(new Error('n'), { code: 'network' })));
+    expect(
+      await screen.findByText(
+        'Couldn’t open it. Check your connection and try again. It’s still unopened.',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('stars locally', async () => {
@@ -339,7 +502,9 @@ describe('edit, star, delete', () => {
     });
     expect(screen.getByTestId('busy')).toHaveTextContent('');
     expect(
-      await screen.findByText('Couldn’t delete for everyone. Check your connection and try again.'),
+      await screen.findByText(
+        'Couldn’t delete for everyone yet. It will retry when you’re back online.',
+      ),
     ).toBeInTheDocument();
   });
 
