@@ -8,6 +8,7 @@ import { TooltipProvider } from '@/components/ui/Tooltip';
 import { A11yProvider } from '@/features/a11y/A11yProvider';
 import { Bubble } from './Bubble';
 import { MessageKindsProvider, type ContactState, type MessageKinds } from './kinds/context';
+import { streetBlocks } from './kinds/LocationCard';
 import { ViewOnceViewer } from './kinds/ViewOnce';
 
 vi.mock('./ConnectProvider', () => ({ useConnect: () => ({ engine: null }) }));
@@ -188,17 +189,54 @@ describe('location cards', () => {
       location: { lat: 51.5073509, lng: -0.1277583, label: 'Trafalgar Square' },
     });
     expect(screen.getByText('Trafalgar Square')).toBeInTheDocument();
-    const link = screen.getByRole('link', { name: /Open in Maps/ });
+    const link = screen.getByRole('link', { name: 'Open in OpenStreetMap (opens in a new tab)' });
     expect(link).toHaveAttribute(
       'href',
       'https://www.openstreetmap.org/?mlat=51.50735&mlon=-0.12776#map=16/51.50735/-0.12776',
     );
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
-    expect(screen.getByText(/opens openstreetmap\.org/i)).toBeInTheDocument();
+    // The new-tab note is for screen readers; no repeated visible line under every card.
+    expect(screen.queryByText(/Opens openstreetmap\.org/)).toBeNull();
+    expect(screen.getByText('(opens in a new tab)')).toHaveClass('sr-only');
     expect(container.querySelector('img, iframe')).toBeNull();
     expect(container.querySelector('svg[data-location-art]')).not.toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('draws streets with an avenue, a curved street and a park that is not a person colour', () => {
+    const { container } = renderBubble({
+      kind: 'location',
+      body: undefined,
+      location: { lat: 38.71379, lng: -9.13358 },
+    });
+    const art = container.querySelector('svg[data-location-art]')!;
+    expect(art.querySelector('[data-street-curve]')).not.toBeNull();
+    const park = art.querySelector('[data-park]')!;
+    expect(park.getAttribute('fill')).toBe('var(--vy-accent-soft)');
+    expect(art.innerHTML).not.toMatch(/--vy-tone-/);
+  });
+
+  it('leaves one wide avenue each way between the blocks', () => {
+    for (const [lat, lng] of [
+      [51.50735, -0.12776],
+      [38.71379, -9.13358],
+      [-33.86882, 151.20929],
+    ] as const) {
+      const { blocks } = streetBlocks(lat, lng);
+      const xs = [...new Set(blocks.map((b) => b.x))].sort((a, b) => a - b);
+      const ys = [...new Set(blocks.map((b) => b.y))].sort((a, b) => a - b);
+      const colGaps = xs.slice(1).map((x, i) => {
+        const left = blocks.find((b) => b.x === xs[i])!;
+        return x - (left.x + left.w);
+      });
+      const rowGaps = ys.slice(1).map((y, i) => {
+        const above = blocks.find((b) => b.y === ys[i])!;
+        return y - (above.y + above.h);
+      });
+      expect(colGaps.filter((g) => g >= 14)).toHaveLength(1);
+      expect(rowGaps.filter((g) => g >= 14)).toHaveLength(1);
+    }
   });
 
   it('shows coordinates when there is no label', () => {
