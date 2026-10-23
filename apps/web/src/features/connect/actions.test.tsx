@@ -109,20 +109,57 @@ describe('composer edit mode', () => {
   });
 
   it('starts in edit mode under StrictMode (effects run twice)', () => {
+    // StrictMode outermost, as in the app (start.tsx): every effect runs twice on mount.
     render(
       <StrictMode>
-        <Composer
-          {...props}
-          draftKey="e3"
-          onSend={vi.fn()}
-          editing={{ id: 'm1', text: 'Still here' }}
-          onEdit={vi.fn()}
-          onCancelEdit={vi.fn()}
-        />
+        <TooltipProvider>
+          <Composer
+            {...props}
+            draftKey="e3"
+            onSend={vi.fn()}
+            editing={{ id: 'm1', text: 'Still here' }}
+            onEdit={vi.fn()}
+            onCancelEdit={vi.fn()}
+          />
+        </TooltipProvider>
       </StrictMode>,
-      { wrapper: TooltipProvider },
     );
     expect(screen.getByRole('textbox', { name: 'Edit message' })).toHaveValue('Still here');
+  });
+
+  it('keeps Esc to itself in edit mode, and its close buttons are full-size targets', async () => {
+    const outer = vi.fn();
+    window.addEventListener('keydown', outer);
+    const onCancelEdit = vi.fn();
+    render(
+      <Composer
+        {...props}
+        draftKey="e4"
+        onSend={vi.fn()}
+        editing={{ id: 'm1', text: 'x' }}
+        onEdit={vi.fn()}
+        onCancelEdit={onCancelEdit}
+      />,
+      { wrapper: TooltipProvider },
+    );
+    await userEvent.type(screen.getByRole('textbox', { name: 'Edit message' }), '{Escape}');
+    expect(onCancelEdit).toHaveBeenCalled();
+    expect(outer).not.toHaveBeenCalledWith(expect.objectContaining({ key: 'Escape' }));
+    window.removeEventListener('keydown', outer);
+    expect(screen.getByRole('button', { name: 'Cancel edit' })).toHaveClass('touch-target');
+  });
+
+  it('gives the reply banner’s close a full-size target', () => {
+    render(
+      <Composer
+        {...props}
+        draftKey="e5"
+        onSend={vi.fn()}
+        replyTo={{ id: 'm1', senderId: 'maya', preview: 'Hi', name: 'Maya' }}
+      />,
+      { wrapper: TooltipProvider },
+    );
+    expect(screen.getByRole('button', { name: 'Cancel reply' })).toHaveClass('touch-target');
   });
 
   it('cancels with Esc and gives back the draft that was there', async () => {

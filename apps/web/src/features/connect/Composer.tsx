@@ -5,7 +5,15 @@ import {
   PencilSimpleIcon,
   XIcon,
 } from '@phosphor-icons/react';
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { Button } from '@/components/ui/Button';
 import { Tip } from '@/components/ui/Tooltip';
 import { useA11y } from '@/features/a11y/A11yProvider';
@@ -124,12 +132,28 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   useEffect(() => {
     if (!editingNow.current) drafts.set(draftKey, text);
   }, [draftKey, text]);
-  useEffect(() => {
+  // The box grows with its text (up to 180 px): measured before paint whenever the
+  // text or the edit changes, and again whenever its width changes (a narrow phone,
+  // a banner appearing), so a pre-filled edit is never clipped.
+  const fit = useCallback(() => {
     const el = area.current;
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
-  }, [text]);
+  }, []);
+  useLayoutEffect(fit, [text, editId, fit]);
+  useEffect(() => {
+    const el = area.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let width = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth === width) return;
+      width = el.clientWidth;
+      fit();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fit, disabled]);
   useEffect(() => {
     if (replyTo) area.current?.focus();
   }, [replyTo]);
@@ -182,7 +206,13 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             </p>
             <p className="truncate text-sm text-muted">{editing.text}</p>
           </div>
-          <Button variant="ghost" size="icon-sm" onClick={onCancelEdit} aria-label="Cancel edit">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onCancelEdit}
+            aria-label="Cancel edit"
+            className="touch-target"
+          >
             <XIcon size={16} />
           </Button>
         </div>
@@ -198,7 +228,13 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             </p>
             <p className="truncate text-sm text-muted">{replyTo.preview}</p>
           </div>
-          <Button variant="ghost" size="icon-sm" onClick={onCancelReply} aria-label="Cancel reply">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onCancelReply}
+            aria-label="Cancel reply"
+            className="touch-target"
+          >
             <XIcon size={16} />
           </Button>
         </div>
@@ -244,7 +280,9 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
                 e.preventDefault();
                 send();
               } else if (e.key === 'Escape' && editing) {
+                // Only the edit ends: not select mode or the details panel behind it.
                 e.preventDefault();
+                e.stopPropagation();
                 onCancelEdit?.();
               } else if (e.key === 'Escape' && replyTo) onCancelReply();
             }}
