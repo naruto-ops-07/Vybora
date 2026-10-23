@@ -15,6 +15,7 @@ import {
   ShieldCheckIcon,
   SignOutIcon,
   SlidersHorizontalIcon,
+  StarIcon,
   TimerIcon,
   TrashIcon,
   UserMinusIcon,
@@ -202,10 +203,13 @@ export function DetailsPanel({
   conversation: conv,
   onClose,
   onVerify,
+  onOpenStarred,
 }: {
   conversation: SecureConversation;
   onClose: () => void;
   onVerify: (userId: string) => void;
+  /** Starred messages in this chat (on this browser). */
+  onOpenStarred?: () => void;
 }) {
   const { userId } = useMe();
   const { engine } = useConnect();
@@ -652,6 +656,17 @@ export function DetailsPanel({
             </a>
           ))}
         </Section>
+
+        {onOpenStarred && (
+          <Section>
+            <Row
+              icon={<StarIcon size={18} />}
+              label="Starred messages"
+              description="Stars stay on this browser"
+              onClick={onOpenStarred}
+            />
+          </Section>
+        )}
 
         {conv.kind === 'group' && (
           <Section

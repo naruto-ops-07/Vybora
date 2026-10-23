@@ -20,6 +20,7 @@ import {
   layoutThread,
   messageActions,
   receiptOf,
+  renderMentions,
   selectionToText,
 } from '@vybora/core';
 import { MAX_ATTACHMENT_BYTES, type AttachmentRef, type LocalMessage } from '@vybora/e2ee';
@@ -34,6 +35,10 @@ import { useA11y } from '@/features/a11y/A11yProvider';
 import { useMe } from '@/features/auth/AuthProvider';
 import { supabase } from '@/lib/supabase';
 import { useIncomingAnnouncement } from './announce';
+import { MessageKindsProvider } from './kinds/context';
+import { PinBar } from './PinBar';
+import { subscribeThreadIntents, takeThreadIntent } from './threadIntents';
+import { replyDraftOf, useChatActions } from './useChatActions';
 import { Bubble } from './Bubble';
 import { Composer, type ComposerHandle, type ReplyDraft } from './Composer';
 import { useConnect } from './ConnectProvider';
@@ -41,7 +46,6 @@ import { DetailsPanel } from './DetailsPanel';
 import {
   conversationTitle,
   MESSAGE_PAGE,
-  messagePreview,
   useConversation,
   useLastSeen,
   useNicknames,
@@ -123,7 +127,8 @@ export default function ChatPane() {
   const [limit, setLimit] = useState(MESSAGE_PAGE);
   const { messages, syncState, live, hasMore } = useSecureMessages(id, limit);
   const { typingUsers, notifyTyping } = useTyping(id, privacy.data?.typing_indicators ?? true);
-  const [replyTo, setReplyTo] = useState<LocalMessage | null>(null);
+  const [reply, setReply] = useState<ReplyDraft | null>(null);
+  const [pendingJump, setPendingJump] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<LocalMessage | null>(null);
   const [viewer, setViewer] = useState<string | null>(null);
   const [uploads, setUploads] = useState(0);
@@ -155,12 +160,32 @@ export default function ChatPane() {
     [conv, nicknames.data, userId],
   );
 
+  const jumpTo = useCallback(
+    (messageId: string) => {
+      const el = scroller.current?.querySelector<HTMLElement>(
+        `[data-message-id="${CSS.escape(messageId)}"]`,
+      );
+      if (!el) {
+        toast.show('That message is further back. Load earlier messages to see it.', 'info');
+        return;
+      }
+      stick.current = false;
+      el.scrollIntoView({ block: 'center' });
+      el.focus?.();
+    },
+    [toast],
+  );
+  const actions = useChatActions({ engine, conversationId: id, conv, userId, nameOf, jumpTo });
+  const { cancelEdit } = actions;
+
   useEffect(() => {
-    setReplyTo(null);
+    setReply(null);
+    cancelEdit();
+    setPendingJump(null);
     setLimit(MESSAGE_PAGE);
     setDetails((d) => d && window.matchMedia('(min-width: 1280px)').matches);
     stick.current = true;
-  }, [id]);
+  }, [id, cancelEdit]);
 
   const peerId = peer?.id;
   const showOnline = !!privacy.data?.show_online;
@@ -284,13 +309,37 @@ export default function ChatPane() {
     nameOf,
   });
 
+  const startReply = (m: LocalMessage) => {
+    actions.cancelEdit();
+    setReply(replyDraftOf(m, nameOf));
+    composer.current?.focus();
+  };
   const replyById = (mid: string) => {
     const m = ordered.find((x) => x.id === mid);
-    if (m && messageActions(m, m.senderId === userId).includes('reply')) {
-      setReplyTo(m);
-      composer.current?.focus();
-    }
+    if (m && messageActions(m, m.senderId === userId).includes('reply')) startReply(m);
   };
+
+  // A reply quote or a jump handed over from elsewhere (reply privately, starred).
+  useEffect(() => {
+    const take = () => {
+      const intent = takeThreadIntent(id);
+      if (intent?.reply) setReply(intent.reply);
+      if (intent?.jumpTo) setPendingJump(intent.jumpTo);
+    };
+    take();
+    return subscribeThreadIntents(take);
+  }, [id]);
+  const settled = messages.isSuccess && syncState !== 'syncing';
+  useEffect(() => {
+    if (!pendingJump) return;
+    if (ordered.some((m) => m.id === pendingJump)) {
+      setPendingJump(null);
+      jumpTo(pendingJump);
+    } else if (settled) {
+      setPendingJump(null);
+      toast.show('That message is further back. Load earlier messages to see it.', 'info');
+    }
+  }, [pendingJump, ordered, settled, jumpTo, toast]);
 
   // Stay pinned to the newest message unless the reader scrolled up; keep the
   // reading position when older messages are prepended.
@@ -342,20 +391,11 @@ export default function ChatPane() {
     }
   };
 
-  const reply: ReplyDraft | null = replyTo
-    ? {
-        id: replyTo.id,
-        senderId: replyTo.senderId,
-        preview: messagePreview(replyTo).slice(0, 140),
-        name: nameOf(replyTo.senderId),
-      }
-    : null;
-
   const sendText = (body: string) => {
     const r = reply
       ? { id: reply.id, senderId: reply.senderId, preview: reply.preview }
       : undefined;
-    setReplyTo(null);
+    setReply(null);
     stick.current = true;
     const sent = run(() => engine!.send(id, { t: 'text', body, replyTo: r }));
     if (showOnline) void touchActivity(supabase).catch(() => undefined);
@@ -384,18 +424,6 @@ export default function ChatPane() {
         setUploads((n) => n - 1);
       }
     }
-  };
-
-  const jumpTo = (messageId: string) => {
-    const el = scroller.current?.querySelector<HTMLElement>(
-      `[data-message-id="${CSS.escape(messageId)}"]`,
-    );
-    if (!el) {
-      toast.show('That message is further back. Load earlier messages to see it.', 'info');
-      return;
-    }
-    el.scrollIntoView({ block: 'center' });
-    el.focus?.();
   };
 
   useEffect(() => {
@@ -485,6 +513,7 @@ export default function ChatPane() {
             onToggleDetails={() => setDetails((d) => !d)}
           />
         )}
+        {!selection && <PinBar pins={actions.pinItems} onShow={jumpTo} accent={def.accent} />}
 
         {!live && (
           <div
@@ -558,65 +587,62 @@ export default function ChatPane() {
                 No messages yet. Say hello — it’s encrypted.
               </p>
             )}
-            {days.map((day) => (
-              <ThreadDay key={day.key}>
-                {day.items.map((it) => {
-                  if (it.type === 'date') return <DateChip key={it.key} label={it.label} />;
-                  if (it.type === 'unread') return <UnreadDivider key={it.key} count={it.count} />;
-                  const m = it.message;
-                  const group = conv?.kind === 'group';
-                  const sender = conv?.members.find((x) => x.id === m.senderId);
-                  return (
-                    <Bubble
-                      key={it.key}
-                      message={m}
-                      mine={it.mine}
-                      theme={def}
-                      senderName={group ? nameOf(m.senderId) : undefined}
-                      showSender={!!group && it.runStart}
-                      runStart={it.runStart}
-                      runEnd={it.runEnd}
-                      avatar={
-                        group && !it.mine
-                          ? {
-                              path: sender?.avatar_path ?? null,
-                              name: sender?.username ?? '?',
-                              displayName: sender?.display_name,
-                            }
-                          : undefined
-                      }
-                      tabbable={m.id === newestId}
-                      receipt={receiptOf(m, userId, conv?.members ?? [])}
-                      myUserId={userId}
-                      nameOf={nameOf}
-                      onCopy={(msg) => void copyText(msg.body ?? '')}
-                      onReact={(msg, emoji) =>
-                        void run(() =>
-                          engine!.send(id, {
-                            t: 'reaction',
-                            target: msg.id,
-                            emoji,
-                            remove: !!msg.reactions[emoji]?.includes(userId),
-                          }),
-                        )
-                      }
-                      onReply={(msg) => {
-                        setReplyTo(msg);
-                        composer.current?.focus();
-                      }}
-                      onDelete={setDeleting}
-                      onRetry={(msg) => void run(() => engine!.retry(id, msg.id))}
-                      onOpenImage={setViewer}
-                      onJumpTo={jumpTo}
-                      onSelect={(msg) => setSelection(new Set([msg.id]))}
-                      selecting={!!selection}
-                      selected={!!selection?.has(m.id)}
-                      onToggleSelect={(msg) => toggle(msg.id)}
-                    />
-                  );
-                })}
-              </ThreadDay>
-            ))}
+            <MessageKindsProvider value={actions.kinds}>
+              {days.map((day) => (
+                <ThreadDay key={day.key}>
+                  {day.items.map((it) => {
+                    if (it.type === 'date') return <DateChip key={it.key} label={it.label} />;
+                    if (it.type === 'unread')
+                      return <UnreadDivider key={it.key} count={it.count} />;
+                    const m = it.message;
+                    const group = conv?.kind === 'group';
+                    const sender = conv?.members.find((x) => x.id === m.senderId);
+                    return (
+                      <Bubble
+                        key={it.key}
+                        message={m}
+                        mine={it.mine}
+                        theme={def}
+                        senderName={group ? nameOf(m.senderId) : undefined}
+                        showSender={!!group && it.runStart}
+                        runStart={it.runStart}
+                        runEnd={it.runEnd}
+                        avatar={
+                          group && !it.mine
+                            ? {
+                                path: sender?.avatar_path ?? null,
+                                name: sender?.username ?? '?',
+                                displayName: sender?.display_name,
+                              }
+                            : undefined
+                        }
+                        tabbable={m.id === newestId}
+                        receipt={receiptOf(m, userId, conv?.members ?? [])}
+                        myUserId={userId}
+                        nameOf={nameOf}
+                        onCopy={(msg) =>
+                          void copyText(renderMentions(msg.body ?? '', msg.mentions, nameOf))
+                        }
+                        onReact={actions.react}
+                        onReply={startReply}
+                        actionContext={actions.actionContext}
+                        pinned={actions.pinnedIds.has(m.id)}
+                        onMenuAction={actions.onMenuAction}
+                        busy={actions.busy.has(m.id)}
+                        onDelete={setDeleting}
+                        onRetry={(msg) => void run(() => engine!.retry(id, msg.id))}
+                        onOpenImage={setViewer}
+                        onJumpTo={jumpTo}
+                        onSelect={(msg) => setSelection(new Set([msg.id]))}
+                        selecting={!!selection}
+                        selected={!!selection?.has(m.id)}
+                        onToggleSelect={(msg) => toggle(msg.id)}
+                      />
+                    );
+                  })}
+                </ThreadDay>
+              ))}
+            </MessageKindsProvider>
             {uploads > 0 && (
               <div className="flex items-center justify-end gap-2 px-6 py-2 font-mono text-[11px] text-muted">
                 <CircleNotchIcon className="animate-spin" size={13} aria-hidden="true" />
@@ -627,6 +653,9 @@ export default function ChatPane() {
           {away && <JumpToLatest count={newCount} onClick={jumpToLatest} />}
           <p className="sr-only" role="status" aria-live="polite">
             {announcement}
+          </p>
+          <p className="sr-only" role="status" aria-live="polite" data-action-status="">
+            {actions.announcement}
           </p>
         </div>
 
@@ -641,7 +670,10 @@ export default function ChatPane() {
               : 'Setting up encryption for this browser. A member’s device adds it automatically when they’re online.'
           }
           replyTo={reply}
-          onCancelReply={() => setReplyTo(null)}
+          onCancelReply={() => setReply(null)}
+          editing={actions.editing}
+          onEdit={(text) => void actions.saveEdit(text)}
+          onCancelEdit={actions.cancelEdit}
           onSend={sendText}
           onFiles={(f) => void sendFiles(f)}
           onTyping={notifyTyping}
@@ -673,6 +705,7 @@ export default function ChatPane() {
               conversation={conv}
               onClose={() => setDetails(false)}
               onVerify={setVerifying}
+              onOpenStarred={actions.openStarred}
             />
           </aside>
         </>
@@ -684,7 +717,7 @@ export default function ChatPane() {
         onConfirm={() => {
           const m = deleting!;
           setDeleting(null);
-          void run(() => engine!.send(id, { t: 'delete', target: m.id }));
+          void actions.remove([m.id]);
         }}
         title="Delete for everyone?"
         description="This removes the message on every device in this chat."
@@ -700,11 +733,11 @@ export default function ChatPane() {
           const targets = selectedMessages.map((m) => m.id);
           setBulkDeleting(false);
           setSelection(null);
-          void run(async () => {
-            for (const target of targets) await engine!.send(id, { t: 'delete', target });
-          });
+          void actions.remove(targets);
         }}
       />
+
+      {actions.dialogs}
 
       {verifying && conv && (
         <VerifyDialog userId={verifying} conversation={conv} onClose={() => setVerifying(null)} />

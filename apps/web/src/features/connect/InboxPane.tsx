@@ -1,4 +1,4 @@
-import { MagnifyingGlassIcon, NotePencilIcon } from '@phosphor-icons/react';
+import { MagnifyingGlassIcon, NotePencilIcon, StarIcon } from '@phosphor-icons/react';
 import {
   isMuted,
   peerOf,
@@ -13,9 +13,9 @@ import {
   receiptOf,
   usernameFromAddParam,
 } from '@vybora/core';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { Avatar, GroupAvatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Tip } from '@/components/ui/Tooltip';
@@ -43,6 +43,8 @@ import {
   useSecureInbox,
 } from './hooks';
 import { NewChatDialog } from './NewChatDialog';
+import { StarredDialog } from './StarredDialog';
+import { setThreadIntent } from './threadIntents';
 import { PaneHeader } from './ui';
 
 export type Filter = 'all' | 'unread' | 'groups' | 'pinned' | 'archived';
@@ -125,6 +127,7 @@ export function ChatListHeader({
   onFilter,
   searchRef,
   onCompose,
+  onStarred,
 }: {
   term: string;
   onTerm: (term: string) => void;
@@ -132,10 +135,25 @@ export function ChatListHeader({
   onFilter: (filter: Filter) => void;
   searchRef?: React.RefObject<HTMLInputElement | null>;
   onCompose: () => void;
+  /** Starred messages in every chat. */
+  onStarred?: () => void;
 }) {
   return (
     <>
       <PaneHeader title="Chats">
+        {onStarred && (
+          <Tip label="Starred messages">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onStarred}
+              aria-label="Starred messages"
+              className="text-muted"
+            >
+              <StarIcon size={19} />
+            </Button>
+          </Tip>
+        )}
         <Tip label="New message" shortcut="Alt N">
           <Button size="icon" onClick={onCompose} aria-label="New message">
             <NotePencilIcon size={19} weight="bold" />
@@ -218,6 +236,14 @@ export function InboxPane({
   const [filter, setFilter] = useState<Filter>('all');
   const [term, setTerm] = useState('');
   const [composing, setComposing] = useState(false);
+  const [starredOpen, setStarredOpen] = useState(false);
+  const navigate = useNavigate();
+  const starred = useQuery({
+    queryKey: ['connect', 'starred-all'],
+    enabled: !!engine && starredOpen,
+    staleTime: 0,
+    queryFn: () => engine!.listStarred(),
+  });
 
   useEffect(() => {
     if (!composeSignal) return;
@@ -301,6 +327,30 @@ export function InboxPane({
         onFilter={setFilter}
         searchRef={searchRef}
         onCompose={() => setComposing(true)}
+        onStarred={engine ? () => setStarredOpen(true) : undefined}
+      />
+      <StarredDialog
+        open={starredOpen}
+        onClose={() => setStarredOpen(false)}
+        scope="all"
+        loading={starred.isPending}
+        messages={starred.data ?? []}
+        describe={(m) => {
+          const c = convs.find((x) => x.id === m.conversationId);
+          const nameOf = (uid: string) =>
+            uid === userId ? 'You' : c ? memberName(c, uid) : 'Someone';
+          const title = c ? conversationTitle(c, userId, nicknames.data) : '';
+          const sender = nameOf(m.senderId);
+          // A direct chat is named after the person: "Maya", or "You to Maya".
+          if (c?.kind === 'direct')
+            return { chat: '', sender: m.senderId === userId ? `You to ${title}` : sender, nameOf };
+          return { chat: title, sender, nameOf };
+        }}
+        onOpen={(m) => {
+          setStarredOpen(false);
+          setThreadIntent(m.conversationId, { jumpTo: m.id });
+          navigate(`/messages/${m.conversationId}`);
+        }}
       />
 
       <div

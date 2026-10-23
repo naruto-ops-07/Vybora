@@ -1,6 +1,6 @@
 import type * as Api from '@vybora/api';
 import type { Friend, FriendRequest } from '@vybora/api';
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -197,5 +197,27 @@ describe('filter chips at a phone width', () => {
     expect(end).toHaveAttribute('data-filter-end');
     expect(end).toHaveAttribute('aria-hidden', 'true');
     expect(within(row).getAllByRole('tab')).toHaveLength(5);
+  });
+});
+
+describe('starred messages from the chat list', () => {
+  it('opens the all-chats starred view from the header', async () => {
+    const { ChatListHeader } = await import('./InboxPane');
+    const { TooltipProvider } = await import('@/components/ui/Tooltip');
+    const onStarred = vi.fn();
+    renderWithProviders(
+      <TooltipProvider>
+        <ChatListHeader
+          term=""
+          onTerm={() => {}}
+          filter="all"
+          onFilter={() => {}}
+          onCompose={() => {}}
+          onStarred={onStarred}
+        />
+      </TooltipProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Starred messages' }));
+    expect(onStarred).toHaveBeenCalled();
   });
 });
