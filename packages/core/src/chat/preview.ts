@@ -220,11 +220,7 @@ export function messageActions(
     mine &&
     m.senderId !== undefined &&
     m.createdAt !== undefined &&
-    canEditMessage(
-      { ...m, senderId: m.senderId, createdAt: m.createdAt },
-      ctx.myUserId,
-      ctx.now,
-    )
+    canEditMessage({ ...m, senderId: m.senderId, createdAt: m.createdAt }, ctx.myUserId, ctx.now)
   )
     out.push('edit');
   if (canForward(m)) out.push('forward');
