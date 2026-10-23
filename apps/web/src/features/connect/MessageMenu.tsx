@@ -1,22 +1,58 @@
-import { ArrowBendUpLeftIcon, CheckSquareIcon, CopyIcon, TrashIcon } from '@phosphor-icons/react';
+import {
+  ArrowBendUpLeftIcon,
+  ChatCircleDotsIcon,
+  CheckSquareIcon,
+  CopyIcon,
+  InfoIcon,
+  PencilSimpleIcon,
+  PushPinIcon,
+  PushPinSlashIcon,
+  ShareFatIcon,
+  StarIcon,
+  TrashIcon,
+} from '@phosphor-icons/react';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import type { MessageAction } from '@vybora/core';
 import type { ReactElement, ReactNode } from 'react';
-import { menuContentClass, menuDangerItemClass, menuItemClass } from '@/components/ui/Menu';
+import {
+  menuContentClass,
+  menuDangerItemClass,
+  menuItemClass,
+  menuSeparatorClass,
+} from '@/components/ui/Menu';
 import { cn } from '@/lib/cn';
 import { QUICK_REACTIONS } from './reactions';
 
 const LABEL: Record<MessageAction, string> = {
   reply: 'Reply',
+  replyPrivately: 'Reply privately',
   copy: 'Copy text',
+  edit: 'Edit',
+  forward: 'Forward',
+  star: 'Star',
+  unstar: 'Unstar',
+  pin: 'Pin',
+  unpin: 'Unpin',
+  info: 'Message info',
   select: 'Select',
   delete: 'Delete for everyone',
 };
+const icon = (I: typeof CopyIcon, weight?: 'fill') => (
+  <I size={16} weight={weight} aria-hidden="true" />
+);
 const ICON: Record<MessageAction, ReactNode> = {
-  reply: <ArrowBendUpLeftIcon size={16} aria-hidden="true" />,
-  copy: <CopyIcon size={16} aria-hidden="true" />,
-  select: <CheckSquareIcon size={16} aria-hidden="true" />,
-  delete: <TrashIcon size={16} aria-hidden="true" />,
+  reply: icon(ArrowBendUpLeftIcon),
+  replyPrivately: icon(ChatCircleDotsIcon),
+  copy: icon(CopyIcon),
+  edit: icon(PencilSimpleIcon),
+  forward: icon(ShareFatIcon),
+  star: icon(StarIcon),
+  unstar: icon(StarIcon, 'fill'),
+  pin: icon(PushPinIcon),
+  unpin: icon(PushPinSlashIcon),
+  info: icon(InfoIcon),
+  select: icon(CheckSquareIcon),
+  delete: icon(TrashIcon),
 };
 
 /** Right-click, long-press (touch), Shift+F10 or Enter: reactions on top, then actions. */
@@ -67,18 +103,35 @@ export function MessageMenu({
               })}
             </ContextMenu.Group>
             {actions.map((a) => (
-              <ContextMenu.Item
-                key={a}
-                onSelect={() => onAction(a)}
-                className={cn(menuItemClass, a === 'delete' && menuDangerItemClass)}
-              >
-                {ICON[a]}
-                {LABEL[a]}
-              </ContextMenu.Item>
+              <ActionItem key={a} action={a} onAction={onAction} />
             ))}
           </ContextMenu.Content>
         </ContextMenu.Portal>
       )}
     </ContextMenu.Root>
+  );
+}
+
+function ActionItem({
+  action: a,
+  onAction,
+}: {
+  action: MessageAction;
+  onAction: (a: MessageAction) => void;
+}) {
+  return (
+    <>
+      {/* "Delete for everyone" stands apart from the everyday actions. */}
+      {a === 'delete' && (
+        <ContextMenu.Separator className={menuSeparatorClass} aria-hidden="true" />
+      )}
+      <ContextMenu.Item
+        onSelect={() => onAction(a)}
+        className={cn(menuItemClass, a === 'delete' && menuDangerItemClass)}
+      >
+        {ICON[a]}
+        {LABEL[a]}
+      </ContextMenu.Item>
+    </>
   );
 }

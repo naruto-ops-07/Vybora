@@ -5,7 +5,10 @@ import {
   ClockIcon,
   CopyIcon,
   DotsThreeIcon,
+  InfoIcon,
+  ShareFatIcon,
   ShieldSlashIcon,
+  StarIcon,
   SmileyIcon,
   TimerIcon,
   TrashIcon,
@@ -16,8 +19,9 @@ import {
   messageActions,
   messageSummary,
   SWIPE_REPLY_THRESHOLD,
-  tokenizeText,
+  UNSUPPORTED_TEXT,
   type MessageAction,
+  type MessageActionContext,
   type Receipt,
 } from '@vybora/core';
 import type { LocalMessage } from '@vybora/e2ee';
@@ -27,6 +31,11 @@ import { useA11y } from '@/features/a11y/A11yProvider';
 import { cn } from '@/lib/cn';
 import { toneVars } from '@/lib/tones';
 import { FileAttachment, ImageAttachment, VideoAttachment, VoiceAttachment } from './Attachment';
+import { ContactCardContent } from './kinds/ContactCard';
+import { LocationCard } from './kinds/LocationCard';
+import { MentionText } from './kinds/MentionText';
+import { PollCard } from './kinds/PollCard';
+import { ViewOnceContent } from './kinds/ViewOnce';
 import { MessageMenu } from './MessageMenu';
 import { QUICK_REACTIONS } from './reactions';
 import { bubbleFillStyle, type ResolvedChatTheme } from './ui';
@@ -46,29 +55,6 @@ export function Ticks({ receipt }: { receipt: Receipt }) {
       weight={receipt === 'read' ? 'bold' : 'regular'}
       aria-label={receipt === 'read' ? 'Read' : 'Delivered'}
     />
-  );
-}
-
-/** Text with safe, clickable links (never rendered as HTML). */
-function Linkified({ text }: { text: string }) {
-  return (
-    <>
-      {tokenizeText(text).map((t, i) =>
-        t.type === 'url' ? (
-          <a
-            key={i}
-            href={t.href}
-            target="_blank"
-            rel="noopener noreferrer nofollow"
-            className="underline underline-offset-2"
-          >
-            {t.value}
-          </a>
-        ) : (
-          <span key={i}>{t.value}</span>
-        ),
-      )}
-    </>
   );
 }
 
@@ -158,6 +144,17 @@ export interface BubbleProps {
   /** The newest message is the thread's single Tab stop. */
   tabbable?: boolean;
   onSelect: (m: LocalMessage) => void;
+  /**
+   * With it, the menu offers the full set (edit, forward, star, pin, info, reply
+   * privately); without it only reply, copy, select and delete.
+   */
+  actionContext?: Omit<MessageActionContext, 'now' | 'pinned'>;
+  /** One of the chat's current pins. */
+  pinned?: boolean;
+  /** The actions beyond reply, copy, select and delete. */
+  onMenuAction?: (a: MessageAction, m: LocalMessage) => void;
+  /** A reaction or delete for this message is on its way to the server. */
+  busy?: boolean;
   selecting?: boolean;
   selected?: boolean;
   onToggleSelect?: (m: LocalMessage) => void;
@@ -184,6 +181,10 @@ export const Bubble = memo(function Bubble({
   avatar,
   tabbable,
   onSelect,
+  actionContext,
+  pinned = false,
+  onMenuAction,
+  busy,
   selecting,
   selected,
   onToggleSelect,
@@ -191,7 +192,10 @@ export const Bubble = memo(function Bubble({
   const [picker, setPicker] = useState(false);
   const { prefs, reduceMotion } = useA11y();
   const root = useRef<HTMLDivElement>(null);
-  const actions = messageActions(m, mine);
+  // The edit window is judged now, at render (the engine re-checks against server time).
+  const actions: MessageAction[] = actionContext
+    ? messageActions(m, mine, { ...actionContext, now: new Date(), pinned })
+    : messageActions(m, mine);
   const swipe = useSwipeReply(
     () => onReply(m),
     !selecting && prefs.swipeToReply && actions.includes('reply'),
@@ -221,16 +225,25 @@ export const Bubble = memo(function Bubble({
     else if (a === 'copy') copy();
     else if (a === 'select') onSelect(m);
     else if (a === 'delete') onDelete(m);
+    else onMenuAction?.(a, m);
   };
   const senderLabel = mine ? 'You' : nameOf(m.senderId);
   const senderTone = toneVars(m.senderId);
   const time = useMemo(() => formatClock(m.createdAt), [m.createdAt]);
   const label = useMemo(
     () =>
-      [senderLabel, time, messageSummary(m), receipt ? RECEIPT_LABEL[receipt] : null]
+      [
+        senderLabel,
+        m.forwarded && !m.deleted ? 'forwarded' : null,
+        time,
+        messageSummary(m, { nameOf }),
+        m.edited && !m.deleted ? 'edited' : null,
+        m.starred ? 'starred' : null,
+        receipt ? RECEIPT_LABEL[receipt] : null,
+      ]
         .filter(Boolean)
         .join(', '),
-    [senderLabel, time, m, receipt],
+    [senderLabel, time, m, receipt, nameOf],
   );
   const filled = mine && !m.deleted && m.kind !== 'undecryptable';
   const media =
@@ -251,6 +264,21 @@ export const Bubble = memo(function Bubble({
     );
   } else if (m.deleted) {
     content = <span className="text-sm italic opacity-75">This message was deleted</span>;
+  } else if (m.kind === 'unsupported') {
+    content = (
+      <span className={cn('flex items-center gap-2 text-sm italic', !filled && 'text-muted')}>
+        <InfoIcon size={15} className="shrink-0" aria-hidden="true" />
+        {UNSUPPORTED_TEXT}
+      </span>
+    );
+  } else if (m.viewOnce) {
+    content = <ViewOnceContent message={m} mine={mine} filled={filled} selecting={selecting} />;
+  } else if (m.kind === 'contact' && m.contact) {
+    content = <ContactCardContent contact={m.contact} filled={filled} />;
+  } else if (m.kind === 'location' && m.location) {
+    content = <LocationCard location={m.location} filled={filled} />;
+  } else if (m.kind === 'poll' && m.poll) {
+    content = <PollCard message={m} myUserId={myUserId} filled={filled} nameOf={nameOf} />;
   } else if (m.kind === 'attachment' && m.attachment) {
     const a = m.attachment;
     content = (
@@ -263,7 +291,12 @@ export const Bubble = memo(function Bubble({
         {a.kind === 'file' && <FileAttachment attachment={a} />}
         {m.caption && (
           <p className={cn('break-anywhere whitespace-pre-wrap text-msg', media && 'px-2 pb-0.5')}>
-            <Linkified text={m.caption} />
+            <MentionText
+              body={m.caption}
+              nameOf={nameOf}
+              onFill={filled}
+              highContrast={theme.highContrast}
+            />
           </p>
         )}
       </div>
@@ -271,7 +304,13 @@ export const Bubble = memo(function Bubble({
   } else {
     content = (
       <p className="break-anywhere whitespace-pre-wrap text-msg">
-        <Linkified text={m.body ?? ''} />
+        <MentionText
+          body={m.body ?? ''}
+          mentions={m.mentions}
+          nameOf={nameOf}
+          onFill={filled}
+          highContrast={theme.highContrast}
+        />
       </p>
     );
   }
@@ -384,8 +423,11 @@ export const Bubble = memo(function Bubble({
                 runEnd && (mine ? 'rounded-br-sm' : 'rounded-bl-sm'),
                 filled ? 'vy-bubble-out shadow-1' : 'vy-bubble-in',
                 selecting && 'pointer-events-none',
+                busy && 'opacity-60 transition-opacity duration-150',
               )}
               data-bubble={filled ? 'out' : 'in'}
+              data-busy={busy ? '' : undefined}
+              aria-busy={busy || undefined}
               style={
                 filled
                   ? theme.fill
@@ -414,6 +456,19 @@ export const Bubble = memo(function Bubble({
                   <span className="line-clamp-2 text-[13px] opacity-80">{m.replyTo.preview}</span>
                 </button>
               )}
+              {m.forwarded && !m.deleted && (
+                <span
+                  className={cn(
+                    'mb-0.5 flex items-center gap-1 text-xs italic',
+                    metaColor,
+                    media && 'px-2 pt-1',
+                  )}
+                  data-forwarded=""
+                >
+                  <ShareFatIcon size={12} aria-hidden="true" />
+                  Forwarded
+                </span>
+              )}
               {content}
               <span
                 className={cn(
@@ -421,8 +476,11 @@ export const Bubble = memo(function Bubble({
                   metaColor,
                   media && 'px-2 pb-1',
                 )}
+                data-meta=""
               >
+                {m.starred && <StarIcon size={11} weight="fill" aria-label="Starred" role="img" />}
                 {m.expiresAt && <TimerIcon size={11} aria-label="Disappearing message" />}
+                {m.edited && !m.deleted && <span className="font-sans">Edited</span>}
                 <time dateTime={m.createdAt}>{time}</time>
                 {mine && receipt && <Ticks receipt={receipt} />}
               </span>
