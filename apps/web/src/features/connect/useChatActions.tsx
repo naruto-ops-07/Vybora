@@ -87,7 +87,7 @@ export function useChatActions({
     setInfoFor(null);
     setReplacePin(null);
     setStarredOpen(false);
-    setViewOnce(null);
+    // Not the view-once viewer: it shows over any chat, and closing it would lose the view.
   }, [id]);
   const stillHere = (chat: string) => liveId.current === chat;
 
@@ -160,15 +160,47 @@ export function useChatActions({
     [control, engine, id, userId],
   );
 
+  /**
+   * Delete for everyone, one control per message. Offline (network/unknown) each one
+   * is queued by the engine and goes out on the next sync, so a bulk delete keeps
+   * going; only a refusal stops it. One message at the end, never one per bubble.
+   */
   const remove = useCallback(
     async (targets: readonly string[]) => {
+      let deleted = 0;
+      let queued = 0;
+      let failure: unknown = null;
       for (const target of targets) {
-        const ok = await control('delete', target, () => engine!.send(id, { t: 'delete', target }));
-        if (!ok) return;
+        setBusy((b) => new Set(b).add(target));
+        try {
+          await engine!.send(id, { t: 'delete', target });
+          deleted++;
+        } catch (e) {
+          const code = (e as { code?: string }).code;
+          if (code === 'network' || code === 'unknown') queued++;
+          else {
+            failure = e;
+            if (code === 'forbidden') break;
+          }
+        } finally {
+          setBusy((b) => {
+            const next = new Set(b);
+            next.delete(target);
+            return next;
+          });
+        }
       }
-      announce(targets.length === 1 ? 'Message deleted' : `${targets.length} messages deleted`);
+      if (failure) toast.show(controlErrorText('delete', failure), 'error');
+      else if (queued === 1 && targets.length === 1)
+        toast.show(controlErrorText('delete', { code: 'network' }), 'error');
+      else if (queued)
+        toast.show(
+          `Couldn’t delete ${queued} ${queued === 1 ? 'message' : 'messages'} for everyone yet. They’ll retry when you’re back online.`,
+          'error',
+        );
+      if (deleted) announce(deleted === 1 ? 'Message deleted' : `${deleted} messages deleted`);
     },
-    [control, engine, id, announce],
+    [engine, id, announce, toast],
   );
 
   const pin = useCallback(
@@ -245,7 +277,7 @@ export function useChatActions({
           reply: replyDraftOf(m, nameOf, userId),
         });
     },
-    [star, pin, pins.data, direct, nameOf],
+    [star, pin, pins.data, direct, nameOf, userId],
   );
 
   const addFriend = useMutation({
@@ -289,9 +321,10 @@ export function useChatActions({
         const chat = id;
         try {
           const bytes = await engine!.consumeViewOnce(chat, m.id);
-          if (!stillHere(chat)) return;
-          if (!bytes) toast.show('This was already opened.', 'info');
-          else setViewOnce({ kind: m.viewOnce?.kind ?? 'image', bytes, messageId: m.id });
+          // Consumed now, so it is shown even if the chat changed meanwhile.
+          if (!bytes) {
+            if (stillHere(chat)) toast.show('This was already opened.', 'info');
+          } else setViewOnce({ kind: m.viewOnce?.kind ?? 'image', bytes, messageId: m.id });
         } catch (e) {
           if (stillHere(chat)) toast.show(controlErrorText('viewOnce', e), 'error');
         } finally {

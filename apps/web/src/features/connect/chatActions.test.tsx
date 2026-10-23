@@ -430,7 +430,7 @@ describe('forward', () => {
 });
 
 describe('switching chats', () => {
-  it('closes this chat’s dialogs and drops late results when the chat changes', async () => {
+  it('closes this chat’s dialogs on a switch, but a view once already opening still shows', async () => {
     Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn() });
     let open!: (b: Uint8Array) => void;
     const engine = fakeEngine({
@@ -452,7 +452,9 @@ describe('switching chats', () => {
     await act(async () =>
       open(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10, 0, 0, 0, 0])),
     );
-    expect(screen.queryByRole('dialog')).toBeNull();
+    // It was consumed: dropping it would lose the only view. It opens over the new chat.
+    expect(await screen.findByRole('dialog', { name: 'View once photo' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Forward to' })).toBeNull();
   });
 });
 
@@ -527,6 +529,35 @@ describe('edit, star, delete', () => {
     renderWithProviders(<Harness engine={engine} />);
     await act(async () => actions.onMenuAction('star', msg()));
     expect(engine.star).toHaveBeenCalledWith('g1', 'm1', true);
+  });
+
+  it('queues every message of a bulk delete when offline, with one message at the end', async () => {
+    const engine = fakeEngine({
+      send: vi.fn(async () => Promise.reject(Object.assign(new Error('n'), { code: 'network' }))),
+    });
+    renderWithProviders(<Harness engine={engine} />);
+    await act(async () => actions.remove(['a', 'b', 'c']));
+    expect(engine.send).toHaveBeenCalledTimes(3);
+    expect(engine.send).toHaveBeenCalledWith('g1', { t: 'delete', target: 'c' });
+    expect(
+      await screen.findAllByText(
+        'Couldn’t delete 3 messages for everyone yet. They’ll retry when you’re back online.',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('stops a bulk delete at a refusal', async () => {
+    const engine = fakeEngine({
+      send: vi.fn(async () =>
+        Promise.reject(Object.assign(new Error('delete_not_allowed'), { code: 'forbidden' })),
+      ),
+    });
+    renderWithProviders(<Harness engine={engine} />);
+    await act(async () => actions.remove(['a', 'b']));
+    expect(engine.send).toHaveBeenCalledTimes(1);
+    expect(
+      await screen.findByText('This message can’t be deleted for everyone'),
+    ).toBeInTheDocument();
   });
 
   it('shows a delete as pending, and keeps the message when it fails', async () => {
