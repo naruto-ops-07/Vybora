@@ -1,4 +1,10 @@
-import { LockSimpleIcon, PaperclipIcon, XIcon } from '@phosphor-icons/react';
+import {
+  CheckIcon,
+  LockSimpleIcon,
+  PaperclipIcon,
+  PencilSimpleIcon,
+  XIcon,
+} from '@phosphor-icons/react';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Tip } from '@/components/ui/Tooltip';
@@ -11,6 +17,12 @@ export interface ReplyDraft {
   senderId: string;
   preview: string;
   name: string;
+}
+
+/** The message being edited: its id and current text (body or caption). */
+export interface EditDraft {
+  id: string;
+  text: string;
 }
 
 export interface ComposerHandle {
@@ -32,6 +44,13 @@ interface Props {
   onFiles: (files: File[]) => void;
   onTyping: (typing: boolean) => void;
   draftKey: string;
+  /**
+   * Edit mode: the box holds this message's text, Enter saves it through
+   * `onEdit` and Esc cancels. Whatever was being typed comes back afterwards.
+   */
+  editing?: EditDraft | null;
+  onEdit?: (text: string) => void;
+  onCancelEdit?: () => void;
   /** Gallery only: bump to play the seal without sending anything. */
   sealDemoRun?: number;
 }
@@ -50,11 +69,14 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     onFiles,
     onTyping,
     draftKey,
+    editing,
+    onEdit,
+    onCancelEdit,
     sealDemoRun,
   },
   ref,
 ) {
-  const [text, setText] = useState(() => drafts.get(draftKey) ?? '');
+  const [text, setText] = useState(() => editing?.text ?? drafts.get(draftKey) ?? '');
   const area = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   useImperativeHandle(ref, () => ({ focus: () => area.current?.focus() }), []);
@@ -77,8 +99,27 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   useEffect(() => {
     setText(drafts.get(draftKey) ?? '');
   }, [draftKey]);
+  // Edit mode borrows the box: the draft is kept aside (never overwritten) and restored.
+  const editId = editing?.id ?? null;
+  const editText = editing?.text ?? '';
+  const editingNow = useRef<string | null>(null);
   useEffect(() => {
-    drafts.set(draftKey, text);
+    if (editId === editingNow.current) return;
+    editingNow.current = editId;
+    if (editId) {
+      setText(editText);
+      requestAnimationFrame(() => {
+        const el = area.current;
+        if (!el) return;
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+      });
+    } else setText(drafts.get(draftKey) ?? '');
+    // Only a change of the message being edited resets the box.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
+  useEffect(() => {
+    if (!editingNow.current) drafts.set(draftKey, text);
   }, [draftKey, text]);
   useEffect(() => {
     const el = area.current;
@@ -93,6 +134,10 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const send = () => {
     const body = text.trim();
     if (!body || disabled) return;
+    if (editing) {
+      onEdit?.(body.slice(0, MAX));
+      return;
+    }
     const result = onSend(body.slice(0, MAX));
     setText('');
     onTyping(false);
@@ -117,7 +162,29 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
 
   return (
     <div className="vy-panel vy-canvas-layer pb-safe shrink-0 border-t px-3 py-3 md:px-5">
-      {replyTo && (
+      {editing && (
+        <div
+          className="mb-2 flex items-center gap-3 rounded-sm border-l-[3px] bg-surface-muted py-1.5 pr-1 pl-3"
+          style={{ borderColor: accent }}
+        >
+          <PencilSimpleIcon
+            size={16}
+            className="shrink-0"
+            style={{ color: accent }}
+            aria-hidden="true"
+          />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold" style={{ color: accent }}>
+              Editing message
+            </p>
+            <p className="truncate text-sm text-muted">{editing.text}</p>
+          </div>
+          <Button variant="ghost" size="icon-sm" onClick={onCancelEdit} aria-label="Cancel edit">
+            <XIcon size={16} />
+          </Button>
+        </div>
+      )}
+      {replyTo && !editing && (
         <div
           className="mb-2 flex items-center gap-3 rounded-sm border-l-[3px] bg-surface-muted py-1.5 pr-1 pl-3"
           style={{ borderColor: accent }}
@@ -134,17 +201,19 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         </div>
       )}
       <div className="flex items-end gap-2">
-        <Tip label="Attach, encrypted, up to 25 MB" side="top">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => fileInput.current?.click()}
-            aria-label="Attach photo, video or file"
-            className="text-muted"
-          >
-            <PaperclipIcon size={20} />
-          </Button>
-        </Tip>
+        {!editing && (
+          <Tip label="Attach, encrypted, up to 25 MB" side="top">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => fileInput.current?.click()}
+              aria-label="Attach photo, video or file"
+              className="text-muted"
+            >
+              <PaperclipIcon size={20} />
+            </Button>
+          </Tip>
+        )}
         <input
           ref={fileInput}
           type="file"
@@ -171,6 +240,9 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
               if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 send();
+              } else if (e.key === 'Escape' && editing) {
+                e.preventDefault();
+                onCancelEdit?.();
               } else if (e.key === 'Escape' && replyTo) onCancelReply();
             }}
             onPaste={(e) => {
@@ -180,8 +252,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
                 onFiles(files);
               }
             }}
-            placeholder="Message"
-            aria-label="Message"
+            placeholder={editing ? 'Edit message' : 'Message'}
+            aria-label={editing ? 'Edit message' : 'Message'}
             className="max-h-[180px] w-full resize-none bg-transparent py-2 text-msg outline-none placeholder:text-subtle"
           />
         </div>
@@ -189,7 +261,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           size="icon"
           onClick={send}
           disabled={!text.trim()}
-          aria-label="Send"
+          aria-label={editing ? 'Save edit' : 'Send'}
           data-seal={seal.playing ? 'playing' : 'idle'}
           // While the seal plays the (now empty, disabled) button stays at full
           // strength, then settles back to its dimmed rest state.
@@ -201,7 +273,11 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             seal.playing && 'disabled:opacity-100',
           )}
         >
-          <SendGlyph run={seal.run} playing={seal.playing} />
+          {editing ? (
+            <CheckIcon size={20} weight="bold" aria-hidden="true" />
+          ) : (
+            <SendGlyph run={seal.run} playing={seal.playing} />
+          )}
         </Button>
       </div>
       {text.length > MAX - 200 && (

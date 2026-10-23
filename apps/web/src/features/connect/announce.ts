@@ -1,6 +1,22 @@
 import { messageSummary, nextAnnouncement, type AnnounceMark } from '@vybora/core';
 import type { LocalMessage } from '@vybora/e2ee';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+/**
+ * Text for a polite live region confirming what I just did ("Message starred",
+ * "Vote counted"). The same words twice in a row are still announced.
+ */
+export function useActionAnnouncer(): { text: string; announce: (text: string) => void } {
+  const [text, setText] = useState('');
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
+  const announce = useCallback((next: string) => {
+    setText('');
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setText(next), 50);
+  }, []);
+  return { text, announce };
+}
 
 /**
  * Text for a polite live region: the newest incoming message that arrived
