@@ -259,22 +259,33 @@ export interface SearchableLike {
   mentions?: readonly string[];
   caption?: string;
   attachment?: { name?: string };
-  contact?: { displayName: string; username: string };
+  contact?: { userId: string };
   location?: { label?: string };
   poll?: { question: string; options: readonly string[] };
+}
+
+export interface SearchNames {
+  /** Validated mention ids → name. */
+  nameOf?: (userId: string) => string;
+  /**
+   * A contact card's person as the SERVER knows them, when already known (cached).
+   * The card's own name and username are the sender's words and are never searched.
+   */
+  contactName?: (userId: string) => string | undefined;
 }
 
 /** Case- and accent-insensitive comparison form (one char in → one char out where possible). */
 export const foldText = (s: string) => s.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
 
 /** The text a message can be found by. */
-export function searchableTextOf(m: SearchableLike, nameOf?: (userId: string) => string): string {
+export function searchableTextOf(m: SearchableLike, names: SearchNames = {}): string {
   if (m.deleted) return '';
+  const resolved = m.contact && names.contactName?.(m.contact.userId);
   return [
-    m.body && renderMentions(m.body, m.mentions, nameOf),
+    m.body && renderMentions(m.body, m.mentions, names.nameOf),
     m.caption,
     m.attachment?.name,
-    m.contact && `${m.contact.displayName} @${m.contact.username}`,
+    m.contact && (resolved ? `Contact card · ${resolved}` : 'Contact card'),
     m.location?.label,
     m.poll && [m.poll.question, ...m.poll.options].join(' · '),
   ]
@@ -296,13 +307,13 @@ export interface SearchHit<M> {
 export function searchMessages<M extends SearchableLike>(
   messages: readonly M[],
   query: string,
-  opts: { nameOf?: (userId: string) => string; limit?: number } = {},
+  opts: SearchNames & { limit?: number } = {},
 ): SearchHit<M>[] {
   const words = foldText(query).split(/\s+/).filter(Boolean);
   if (!words.length) return [];
   const hits: SearchHit<M>[] = [];
   for (const message of messages) {
-    const text = searchableTextOf(message, opts.nameOf);
+    const text = searchableTextOf(message, opts);
     if (!text) continue;
     const folded = foldText(text);
     // Folding may change length (rare ligatures); ranges are exact only when it doesn't.

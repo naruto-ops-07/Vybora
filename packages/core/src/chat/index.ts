@@ -5,3 +5,4 @@ export * from './swipe';
 export * from './a11y';
 export * from './announce';
 export * from './features';
+export * from './compose';
