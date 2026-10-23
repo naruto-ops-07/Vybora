@@ -3,6 +3,7 @@ import {
   EDIT_WINDOW_MS,
   canEditMessage,
   canPin,
+  canCaption,
   editWindowRemainingMs,
   formatCoordinates,
   mapLinkFor,
@@ -39,6 +40,9 @@ describe('edit window', () => {
     expect(canEditMessage({ ...mine, status: 'sending' }, A, at(1000))).toBe(false);
     expect(canEditMessage({ ...mine, deleted: true }, A, at(1000))).toBe(false);
     expect(canEditMessage({ ...mine, kind: 'attachment', viewOnce: {} }, A, at(1))).toBe(false);
+    // My own message synced from my other device arrives as 'received'.
+    expect(canEditMessage({ ...mine, status: 'received' }, A, at(1000))).toBe(true);
+    expect(canEditMessage({ ...mine, status: 'failed' }, A, at(1000))).toBe(false);
     expect(editWindowRemainingMs(t0, at(60_000))).toBe(EDIT_WINDOW_MS - 60_000);
   });
 });
@@ -130,6 +134,22 @@ describe('messageSummary for new kinds (local previews)', () => {
       'View once photo',
     );
     expect(s({ kind: 'attachment', viewOnce: { kind: 'image', consumed: true } })).toBe('Opened');
+    // The sender's own copy never claims it was opened (the sender can't know).
+    const mineVo = { senderId: A, kind: 'attachment', viewOnce: { kind: 'video', consumed: true } };
+    expect(messageSummary(mineVo as never, { myUserId: A })).toBe('View once video');
+    expect(messageSummary(mineVo as never, { myUserId: B })).toBe('Opened');
+    // Captions never ride on view once.
+    expect(
+      s({ kind: 'attachment', caption: 'secret', viewOnce: { kind: 'image', consumed: false } }),
+    ).toBe('View once photo');
+    expect(
+      chatRowPreview(mineVo as never, {
+        myUserId: A,
+        isGroup: false,
+        typingUserIds: [],
+        nameOf: () => 'x',
+      }).text,
+    ).toBe('View once video');
     expect(s({ body: `hi @[${A}]`, mentions: [A] })).toBe('hi @someone');
     expect(s({ body: `hi @[${A}]` })).toBe(`hi @[${A}]`);
     const row = chatRowPreview(
@@ -208,5 +228,12 @@ describe('pollVotesLabel', () => {
     expect(pollVotesLabel(0)).toBe('No votes yet');
     expect(pollVotesLabel(1)).toBe('1 vote');
     expect(pollVotesLabel(7)).toBe('7 votes');
+  });
+});
+
+describe('canCaption', () => {
+  it('allows a caption on a normal attachment, never on view once', () => {
+    expect(canCaption({})).toBe(true);
+    expect(canCaption({ viewOnce: true })).toBe(false);
   });
 });

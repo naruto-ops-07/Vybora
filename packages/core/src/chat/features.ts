@@ -26,13 +26,20 @@ export function editWindowRemainingMs(createdAt: string, now: Date): number {
   return Math.max(0, start + EDIT_WINDOW_MS - now.getTime());
 }
 
-/** Whether "Edit" is offered: my own sent text/attachment, not view-once, inside the window. */
+/**
+ * Whether "Edit" is offered: my own settled text/attachment (sent from this device, or
+ * 'received' from my other device), not view-once, inside the window. The engine allows
+ * the same.
+ */
 export function canEditMessage(m: EditableLike, myUserId: string, now: Date): boolean {
   if (m.senderId !== myUserId || m.deleted || m.viewOnce) return false;
   if (m.kind !== 'text' && m.kind !== 'attachment') return false;
-  if (m.status !== 'sent') return false;
+  if (m.status !== 'sent' && m.status !== 'received') return false;
   return editWindowRemainingMs(m.createdAt, now) > 0;
 }
+
+/** View once carries no caption (it would outlive the media): composers must not offer one. */
+export const canCaption = (attachment: { viewOnce?: unknown }) => !attachment.viewOnce;
 
 // ---------------------------------------------------------------- pins
 

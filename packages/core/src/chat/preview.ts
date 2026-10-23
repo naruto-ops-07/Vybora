@@ -46,18 +46,20 @@ export const UNSUPPORTED_TEXT = 'Update VYBORA to see this message';
 /**
  * One-line description of a decrypted message (never more than the device
  * already shows). Local only: never put this in a push or a log.
- * `nameOf` turns `@[userId]` mention tokens into `@Name`.
+ * `nameOf` turns `@[userId]` mention tokens into `@Name`. With `myUserId`, my own
+ * view-once copy reads "View once photo" (never "Opened": the sender can't know).
  */
 export function messageSummary(
   m: PreviewMessageLike,
-  opts: { nameOf?: (userId: string) => string } = {},
+  opts: { nameOf?: (userId: string) => string; myUserId?: string } = {},
 ): string {
   if (m.deleted) return 'This message was deleted';
   if (m.kind === 'undecryptable') return 'Message couldn’t be decrypted';
   if (m.kind === 'unsupported') return UNSUPPORTED_TEXT;
   if (m.viewOnce) {
     const what = m.viewOnce.kind === 'video' ? 'video' : 'photo';
-    return m.viewOnce.consumed ? 'Opened' : `View once ${what}`;
+    const mine = !!opts.myUserId && m.senderId === opts.myUserId;
+    return m.viewOnce.consumed && !mine ? 'Opened' : `View once ${what}`;
   }
   // The card's name and username come from the sender and could be anything (a
   // spoof): only the card itself shows the person, from the server's profile.
@@ -104,7 +106,7 @@ export function chatRowPreview(
   const mine = last.senderId === opts.myUserId;
   return {
     prefix: mine ? 'You' : opts.isGroup ? opts.nameOf(last.senderId) : null,
-    text: messageSummary(last, { nameOf: opts.nameOf }),
+    text: messageSummary(last, { nameOf: opts.nameOf, myUserId: opts.myUserId }),
     receipt: mine && !last.deleted ? (opts.receipt ?? null) : null,
     typing: false,
   };
@@ -113,7 +115,7 @@ export function chatRowPreview(
 /** Plain-text copy of selected messages: "[18:01] Maya: Dinner?" per line. */
 export function selectionToText(
   messages: readonly (PreviewMessageLike & { createdAt: string })[],
-  opts: TimeOpts & { nameOf: (userId: string) => string },
+  opts: TimeOpts & { nameOf: (userId: string) => string; myUserId?: string },
 ): string {
   return messages
     .map(
@@ -225,8 +227,7 @@ export function messageActions(
     out.push('edit');
   if (canForward(m)) out.push('forward');
   out.push(m.starred ? 'unstar' : 'star');
-  if (ctx.pinned) out.push('unpin');
-  else if (ctx.canPin) out.push('pin');
+  if (ctx.canPin) out.push(ctx.pinned ? 'unpin' : 'pin');
   if (mine) out.push('info');
   out.push('select');
   if (mine) out.push('delete');

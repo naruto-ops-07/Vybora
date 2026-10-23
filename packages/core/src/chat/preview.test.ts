@@ -218,6 +218,13 @@ describe('messageActions with context (wave A)', () => {
     expect(messageActions(theirs, false, ctx)).not.toContain('edit');
   });
 
+  it('hides unpin from people who may not pin', () => {
+    const a = messageActions(theirs, false, { ...ctx, canPin: false, pinned: true });
+    expect(a).not.toContain('unpin');
+    expect(a).not.toContain('pin');
+    expect(messageActions(theirs, false, { ...ctx, pinned: true })).toContain('unpin');
+  });
+
   it('hides pin without permission and info for messages from others', () => {
     expect(messageActions(theirs, false, { ...ctx, canPin: false })).not.toContain('pin');
     expect(messageActions(theirs, false, ctx)).not.toContain('info');
