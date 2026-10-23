@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 
 /**
  * Keyboard model for the message list (focus lives on [data-message-id]
@@ -6,7 +6,7 @@ import type { KeyboardEvent } from 'react';
  * selection in select mode. Shift+F10 / the Menu key fire `contextmenu` natively.
  */
 export function threadKeyDown(
-  e: KeyboardEvent<HTMLElement>,
+  e: ReactKeyboardEvent<HTMLElement>,
   handlers: { onReply: (id: string) => void; onToggle?: (id: string) => void },
 ) {
   const target = e.target as HTMLElement;
@@ -38,4 +38,20 @@ export function threadKeyDown(
     e.preventDefault();
     handlers.onToggle(id);
   }
+}
+
+/**
+ * Alt+↑/↓ in the workspace: the previous or next chat in the list. Never while a
+ * modal (a dialog, the view-once viewer) is open: that would swap the chat under it.
+ * Returns whether it switched.
+ */
+export function switchChatByKey(e: KeyboardEvent): boolean {
+  if (!e.altKey || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return false;
+  if (document.querySelector('[aria-modal="true"]')) return false;
+  const links = [...document.querySelectorAll<HTMLAnchorElement>('a[data-chat-link]')];
+  if (!links.length) return false;
+  e.preventDefault();
+  const i = links.findIndex((a) => a.getAttribute('aria-current') === 'page');
+  links[(i + (e.key === 'ArrowDown' ? 1 : -1) + links.length) % links.length]?.click();
+  return true;
 }

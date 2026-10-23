@@ -31,6 +31,7 @@ import { cn } from '@/lib/cn';
 import { ConnectProvider, useConnect } from './ConnectProvider';
 import { CommandPalette } from './CommandPalette';
 import { InboxPane } from './InboxPane';
+import { switchChatByKey } from './threadKeys';
 
 /** Waits for this browser's encryption engine; explains every non-ready state. */
 function Gate({ children, quietOnDesktop }: { children: ReactNode; quietOnDesktop?: boolean }) {
@@ -324,13 +325,7 @@ export default function Workspace() {
         if (!searchRef.current) return;
         e.preventDefault();
         searchRef.current.focus();
-      } else if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
-        const links = [...document.querySelectorAll<HTMLAnchorElement>('a[data-chat-link]')];
-        if (!links.length) return;
-        e.preventDefault();
-        const i = links.findIndex((a) => a.getAttribute('aria-current') === 'page');
-        links[(i + (e.key === 'ArrowDown' ? 1 : -1) + links.length) % links.length]?.click();
-      }
+      } else switchChatByKey(e);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

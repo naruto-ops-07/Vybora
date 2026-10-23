@@ -9,7 +9,7 @@ import { TooltipProvider } from '@/components/ui/Tooltip';
 import { Bubble } from './Bubble';
 import { MessageMenu } from './MessageMenu';
 import { BulkDeleteDialog, SelectBar } from './SelectBar';
-import { threadKeyDown } from './threadKeys';
+import { switchChatByKey, threadKeyDown } from './threadKeys';
 import { useSwipeReply } from './useSwipeReply';
 
 vi.mock('./ConnectProvider', () => ({ useConnect: () => ({ engine: null }) }));
@@ -302,5 +302,36 @@ describe('select bar', () => {
     expect(
       screen.getByRole('dialog', { name: 'Delete 3 messages for everyone?' }),
     ).toBeInTheDocument();
+  });
+});
+
+describe('Alt+↑/↓ between chats', () => {
+  function links() {
+    document.body.innerHTML = `
+      <a href="#a" data-chat-link aria-current="page">A</a>
+      <a href="#b" data-chat-link>B</a>`;
+    const [a, b] = [...document.querySelectorAll('a')];
+    const clicked: string[] = [];
+    a!.addEventListener('click', (e) => (e.preventDefault(), clicked.push('a')));
+    b!.addEventListener('click', (e) => (e.preventDefault(), clicked.push('b')));
+    return clicked;
+  }
+  const key = (k: string) =>
+    new KeyboardEvent('keydown', { key: k, altKey: true, cancelable: true });
+
+  it('moves to the next chat', () => {
+    const clicked = links();
+    expect(switchChatByKey(key('ArrowDown'))).toBe(true);
+    expect(clicked).toEqual(['b']);
+  });
+
+  it('does nothing while a dialog is open', () => {
+    const clicked = links();
+    const modal = document.createElement('div');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    document.body.appendChild(modal);
+    expect(switchChatByKey(key('ArrowDown'))).toBe(false);
+    expect(clicked).toEqual([]);
   });
 });
