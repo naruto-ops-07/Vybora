@@ -150,12 +150,16 @@ const isContent = (p: Payload): p is ContentPayload => CONTENT_KINDS.has(p.t);
 /** Controls the sender's device refuses up front (and reports if server time refuses them). */
 const CHECKED = new Set(['edit', 'pin', 'vote']);
 /**
- * Delivery failures that mean the server did NOT store the envelope, so a
- * control's pending records can be dropped. Anything else ('network',
- * 'unknown': e.g. a 502 after the insert committed) may have been stored;
- * those records stay so retry() or the next sync resolves them.
+ * Delivery failures after which a control may still have been stored (e.g. a
+ * 502 after the insert committed). Its records are kept and the control is
+ * QUEUED: every later sync of the chat re-delivers it (or recognises the
+ * stored copy). Contract for callers: a control (edit/pin/vote/reaction/
+ * delete) rejecting with code 'network' or 'unknown' means "queued, will
+ * retry". Any other code means it was not stored and has been dropped.
  */
-const NOT_STORED = new Set(['forbidden', 'device_revoked', 'not_ready']);
+const QUEUED_CODES = new Set(['network', 'unknown']);
+/** Queued controls older than this are dropped unsent (no plaintext lingers). */
+const QUEUE_TTL_MS = 24 * 60 * 60 * 1000;
 
 export type SyncStatus = 'ready' | 'waiting_for_access' | 'broken';
 
@@ -213,6 +217,7 @@ export class ConnectEngine {
    * instead of relying on the error type alone.
    */
   private transientLookups = 0;
+  private lastQueuedMs = 0;
 
   constructor(
     private readonly transport: ConnectTransport,
@@ -311,7 +316,50 @@ export class ConnectEngine {
 
   /** Pull and process everything new for a conversation; keep membership in sync. */
   sync(conversationId: string): Promise<{ status: SyncStatus; epoch: number | null }> {
-    return this.locked(conversationId, () => this.syncLocked(conversationId));
+    return this.locked(conversationId, async () => {
+      const result = await this.syncLocked(conversationId);
+      // Server envelopes are processed first, so any stored copy of a queued
+      // control has already been recognised (and its records removed).
+      if (result.status === 'ready') await this.redeliverQueued(conversationId);
+      return result;
+    });
+  }
+
+  /**
+   * Re-deliver this chat's queued controls (see QUEUED_CODES). Content
+   * messages are not auto-resent: they keep the explicit Retry flow.
+   * Refused re-deliveries are dropped quietly; transient ones stay queued;
+   * records older than 24 h (or without a queue time) are dropped unsent.
+   */
+  private async redeliverQueued(conversationId: string): Promise<void> {
+    let changed = false;
+    const queue: { id: string; age: number; at: string }[] = [];
+    for (const key of await this.store.list(`pp/${conversationId}/`)) {
+      const id = key.slice(key.lastIndexOf('/') + 1);
+      const payload = await getJson<Payload>(this.store, key);
+      if (!payload || isContent(payload)) continue;
+      const at = (await getJson<string>(this.store, `pq/${conversationId}/${id}`)) ?? '';
+      queue.push({ id, at, age: at ? Date.now() - Date.parse(at) : Infinity });
+    }
+    queue.sort((a, b) => a.at.localeCompare(b.at)); // keep send order (pin, then unpin)
+    for (const { id, age } of queue) {
+      if (!(age <= QUEUE_TTL_MS)) {
+        await this.dropPending(conversationId, id);
+        changed = true;
+        continue;
+      }
+      try {
+        await this.deliverLocked(conversationId, id, undefined);
+        changed = true;
+      } catch (error) {
+        const code = toConnectError(error).code;
+        if (code === 'network') break; // still offline: the rest waits for the next sync
+        if (code === 'unknown') continue; // maybe stored: stays queued
+        await this.dropPending(conversationId, id); // refused (e.g. too late to edit)
+        changed = true;
+      }
+    }
+    if (changed) this.emit(conversationId);
   }
 
   /** Send content. Resolves once the server has durably stored the ciphertext. */
@@ -358,6 +406,15 @@ export class ConnectEngine {
       // createdAt, exactly as every receiver will. So a control is never shown
       // as done while it was never sent.
       await setJson(this.store, `pp/${conversationId}/${id}`, payload);
+      if (!isContent(payload)) {
+        // Strictly increasing, so re-delivery keeps send order even within a millisecond.
+        this.lastQueuedMs = Math.max(Date.now(), this.lastQueuedMs + 1);
+        await setJson(
+          this.store,
+          `pq/${conversationId}/${id}`,
+          new Date(this.lastQueuedMs).toISOString(),
+        );
+      }
       return this.deliverLocked(conversationId, id, attachmentPaths);
     });
   }
@@ -564,6 +621,7 @@ export class ConnectEngine {
       `ord/${conversationId}/`,
       `out/${conversationId}/`,
       `pp/${conversationId}/`,
+      `pq/${conversationId}/`,
       `star/${conversationId}/`,
       `vo/${conversationId}/`,
     ]) {
@@ -974,8 +1032,7 @@ export class ConnectEngine {
       const pending = await getJson<Payload>(this.store, `pp/${conversationId}/${env.clientId}`);
       if (pending && !isContent(pending)) {
         await this.applyControl(conversationId, pending, this.userId, env.createdAt, info);
-        await this.store.delete(`ob/${conversationId}/${env.clientId}`);
-        await this.store.delete(`pp/${conversationId}/${env.clientId}`);
+        await this.dropPending(conversationId, env.clientId);
         return state;
       }
       const local = await getJson<LocalMessage>(
@@ -1302,8 +1359,7 @@ export class ConnectEngine {
           posted = await this.transport.findOwnEnvelope(identity.deviceId, id);
           if (!posted) throw e;
         }
-        await this.store.delete(`ob/${conversationId}/${id}`);
-        await this.store.delete(`pp/${conversationId}/${id}`);
+        await this.dropPending(conversationId, id);
         if (!isContent(payload)) {
           const applied = await this.applyControl(
             conversationId,
@@ -1341,7 +1397,8 @@ export class ConnectEngine {
           await this.store.delete(`ob/${conversationId}/${id}`);
           continue;
         }
-        if (!isContent(payload) && NOT_STORED.has(e.code))
+        // Not stored for sure → drop; maybe stored ('network'/'unknown') → stays queued.
+        if (!isContent(payload) && !QUEUED_CODES.has(e.code))
           await this.dropPending(conversationId, id);
         const local = await this.getMessage(conversationId, id);
         if (local) {
@@ -1359,5 +1416,6 @@ export class ConnectEngine {
   private async dropPending(conversationId: string, id: string) {
     await this.store.delete(`ob/${conversationId}/${id}`);
     await this.store.delete(`pp/${conversationId}/${id}`);
+    await this.store.delete(`pq/${conversationId}/${id}`);
   }
 }
