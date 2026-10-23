@@ -251,6 +251,7 @@ export class ConnectEngine {
       const server = await this.transport.getDevice(stored.deviceId);
       if (server && !server.revoked && server.identityKey === stored.publicKey) {
         this.identity = deserializeIdentity(stored);
+        await this.pruneQueued(); // no control plaintext outlives 24 h, synced or not
         await this.transport.touchDevice(stored.deviceId).catch(() => undefined);
         await this.topUpKeyPackages();
         return { deviceId: stored.deviceId, created: false };
@@ -331,35 +332,69 @@ export class ConnectEngine {
    * Refused re-deliveries are dropped quietly; transient ones stay queued;
    * records older than 24 h (or without a queue time) are dropped unsent.
    */
-  private async redeliverQueued(conversationId: string): Promise<void> {
+  private async redeliverQueued(conversationId: string): Promise<number> {
     let changed = false;
-    const queue: { id: string; age: number; at: string }[] = [];
+    const queue: { id: string; age: number; at: string; payload: Payload }[] = [];
     for (const key of await this.store.list(`pp/${conversationId}/`)) {
       const id = key.slice(key.lastIndexOf('/') + 1);
       const payload = await getJson<Payload>(this.store, key);
       if (!payload || isContent(payload)) continue;
       const at = (await getJson<string>(this.store, `pq/${conversationId}/${id}`)) ?? '';
-      queue.push({ id, at, age: at ? Date.now() - Date.parse(at) : Infinity });
+      queue.push({ id, at, payload, age: at ? Date.now() - Date.parse(at) : Infinity });
     }
     queue.sort((a, b) => a.at.localeCompare(b.at)); // keep send order (pin, then unpin)
-    for (const { id, age } of queue) {
+    let remaining = queue.length;
+    for (const { id, age, payload } of queue) {
       if (!(age <= QUEUE_TTL_MS)) {
         await this.dropPending(conversationId, id);
+        remaining--;
+        changed = true;
+        continue;
+      }
+      // Already invalid by this device's clock (e.g. edit window passed): don't post.
+      if (
+        CHECKED.has(payload.t) &&
+        !(await this.applyControl(
+          conversationId,
+          payload,
+          this.userId,
+          new Date().toISOString(),
+          await this.cachedInfo(conversationId),
+          true,
+        ))
+      ) {
+        await this.dropPending(conversationId, id);
+        remaining--;
         changed = true;
         continue;
       }
       try {
         await this.deliverLocked(conversationId, id, undefined);
+        remaining--;
         changed = true;
       } catch (error) {
-        const code = toConnectError(error).code;
-        if (code === 'network') break; // still offline: the rest waits for the next sync
-        if (code === 'unknown') continue; // maybe stored: stays queued
+        // Still offline, or maybe stored ('unknown'): stop here so nothing
+        // later (e.g. an unpin) is posted before this one (the pin).
+        if (QUEUED_CODES.has(toConnectError(error).code)) break;
         await this.dropPending(conversationId, id); // refused (e.g. too late to edit)
+        remaining--;
         changed = true;
       }
     }
     if (changed) this.emit(conversationId);
+    return remaining;
+  }
+
+  /** Drop queued controls older than 24 h (or without a queue time) in every chat. */
+  private async pruneQueued(): Promise<void> {
+    for (const key of await this.store.list('pp/')) {
+      const [, conv, id] = key.split('/');
+      if (!conv || !id) continue;
+      const payload = await getJson<Payload>(this.store, key);
+      if (!payload || isContent(payload)) continue;
+      const at = await getJson<string>(this.store, `pq/${conv}/${id}`);
+      if (!(at && Date.now() - Date.parse(at) <= QUEUE_TTL_MS)) await this.dropPending(conv, id);
+    }
   }
 
   /** Send content. Resolves once the server has durably stored the ciphertext. */
@@ -371,6 +406,8 @@ export class ConnectEngine {
     return this.locked(conversationId, async () => {
       const id = randomId();
       let payload = { v: 1, id, ...content } as Payload;
+      // Controls go out in order: flush this chat's queued ones first.
+      const behind = isContent(payload) ? 0 : await this.redeliverQueued(conversationId);
       const now = new Date().toISOString();
       const needsInfo =
         CHECKED.has(payload.t) ||
@@ -414,6 +451,9 @@ export class ConnectEngine {
           `pq/${conversationId}/${id}`,
           new Date(this.lastQueuedMs).toISOString(),
         );
+        // Older controls are still queued: wait behind them (contract: 'network' = queued).
+        if (behind > 0)
+          throw new ConnectError('network', 'queued behind earlier controls; will retry');
       }
       return this.deliverLocked(conversationId, id, attachmentPaths);
     });

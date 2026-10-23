@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ConnectEngine } from '../engine';
 import { setJson } from '../store';
 import { chat, device, read } from './flow';
 import { MemoryServer } from './memoryServer';
@@ -126,5 +127,103 @@ describe('queued controls are re-delivered on sync', () => {
     const failed = (await alice.engine.listMessages(conv)).find((x) => x.body === 'unsent')!;
     expect(failed.status).toBe('failed');
     expect(server.envelopes.some((e) => e.clientId === failed.id)).toBe(false);
+  });
+});
+
+describe('fix round 5: order and pruning', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("pin X fails 'unknown', then unpin X: X ends up unpinned (nothing overtakes)", async () => {
+    const { server, alice, bob, conv } = await pair();
+    const m = (await alice.engine.send(conv, { t: 'text', body: 'x' }))!;
+    server.postFailures.push({ code: 'unknown' });
+    await expect(alice.engine.pin(conv, m.id, true)).rejects.toMatchObject({ code: 'unknown' });
+    // The unpin first flushes the queued pin, which fails 'unknown' again,
+    // so the unpin waits behind it instead of overtaking.
+    server.postFailures.push({ code: 'unknown' });
+    await expect(alice.engine.pin(conv, m.id, false)).rejects.toMatchObject({ code: 'network' });
+    const [pinId, unpinId] = await (async () => {
+      const ids = await pendingIds(alice, conv);
+      const at = async (id: string) =>
+        (await alice.store.get(`pq/${conv}/${id}`))
+          ? new TextDecoder().decode((await alice.store.get(`pq/${conv}/${id}`))!)
+          : '';
+      const withAt = await Promise.all(ids.map(async (id) => ({ id, at: await at(id) })));
+      return withAt.sort((a, b) => a.at.localeCompare(b.at)).map((x) => x.id);
+    })();
+    // A sync where the pin fails 'unknown' once more must not post the unpin.
+    server.postFailures.push({ code: 'unknown' });
+    await alice.engine.sync(conv);
+    expect(server.envelopes.some((e) => e.clientId === unpinId)).toBe(false);
+    await alice.engine.sync(conv);
+    const order = server.envelopes.map((e) => e.clientId);
+    expect(order.indexOf(pinId!)).toBeLessThan(order.indexOf(unpinId!));
+    expect(await alice.engine.listPins(conv)).toEqual([]);
+    await read(bob, conv);
+    expect(await bob.engine.listPins(conv)).toEqual([]);
+  });
+
+  it('a queued pin plus a direct unpin keeps X unpinned', async () => {
+    const { server, alice, bob, conv } = await pair();
+    const m = (await alice.engine.send(conv, { t: 'text', body: 'x' }))!;
+    server.failNext.add('postApplication');
+    await expect(alice.engine.pin(conv, m.id, true)).rejects.toMatchObject({ code: 'network' });
+    await alice.engine.pin(conv, m.id, false); // online again: flushes the pin, then unpins
+    expect(await pendingIds(alice, conv)).toEqual([]);
+    expect(await alice.engine.listPins(conv)).toEqual([]);
+    await read(bob, conv);
+    expect(await bob.engine.listPins(conv)).toEqual([]);
+  });
+
+  it('init prunes stale records in every chat, even one that never syncs again', async () => {
+    const server = new MemoryServer();
+    const alice = await device(server);
+    const bob = await device(server);
+    const quiet = await chat(server, 'direct', alice, [bob]);
+    const m = (await alice.engine.send(quiet, { t: 'text', body: 'x' }))!;
+    server.failNext.add('postApplication');
+    await expect(alice.engine.edit(quiet, m.id, 'secret edit')).rejects.toThrow();
+    const [id] = await pendingIds(alice, quiet);
+    await setJson(
+      alice.store,
+      `pq/${quiet}/${id}`,
+      new Date(Date.now() - 25 * 3600_000).toISOString(),
+    );
+
+    // App restart: a new engine on the same store; the quiet chat is never synced.
+    const restarted = new ConnectEngine(server.transport(alice.userId), alice.store, {
+      userId: alice.userId,
+      platform: 'web',
+      label: 'test',
+    });
+    await restarted.init();
+    expect(await alice.store.list(`pp/${quiet}/`)).toEqual([]);
+    expect(await alice.store.list(`pq/${quiet}/`)).toEqual([]);
+    expect(await alice.store.list(`ob/${quiet}/`)).toEqual([]);
+    // Fresh records survive a restart.
+    server.failNext.add('postApplication');
+    await expect(restarted.edit(quiet, m.id, 'fresh')).rejects.toThrow();
+    const again = new ConnectEngine(server.transport(alice.userId), alice.store, {
+      userId: alice.userId,
+      platform: 'web',
+      label: 'test',
+    });
+    await again.init();
+    expect((await alice.store.list(`pp/${quiet}/`)).length).toBe(1);
+  });
+
+  it("doesn't re-post an edit that this device's clock already says is too late", async () => {
+    const { server, alice, conv } = await pair();
+    const m = (await alice.engine.send(conv, { t: 'text', body: 'v1' }))!;
+    server.failNext.add('postApplication');
+    await expect(alice.engine.edit(conv, m.id, 'v2')).rejects.toThrow();
+    const before = server.envelopes.length;
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.now() + 16 * 60_000);
+    await alice.engine.sync(conv);
+    vi.useRealTimers();
+    expect(server.envelopes.length).toBe(before); // no wasted post
+    expect(await pendingIds(alice, conv)).toEqual([]);
+    expect((await alice.engine.getMessage(conv, m.id))!.body).toBe('v1');
   });
 });
