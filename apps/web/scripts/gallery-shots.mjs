@@ -27,6 +27,10 @@
  *                      contrast fails if the canvas glow, a gradient bubble or a blur remains.
  *   empty-{look}-{mode}.png, friends-{look}-{mode}.png  the chat-list empty states and the
  *                      Friends section (Received / Sent tabs) per look × mode, 1440 wide.
+ *   kinds-{look}-{mode}-{1440,390}.png, kinds-{look}-hc-{mode}-1440.png  the Message kinds
+ *                      section (wave A bubbles, pin bar, edit mode); high contrast fails if a
+ *                      gradient, shadow or blur remains on a bubble or panel.
+ *   kinds-dialog-{forward,info,starred,votes,once}-{look}-{dark,light,hc}.png  its dialogs.
  *   ambient.txt-style log lines: the canvas glow's animation per look with motion allowed.
  *   {look}-{dark,light,dark-hc}-{1440,390}.png  the whole gallery in every look × mode
  *                      (and dark + high contrast) at both widths.
@@ -180,6 +184,45 @@ const SHOTS = [
     section: 'workspace',
     hc: true,
   })),
+  // Wave A message kinds: every look × mode at both widths, plus high contrast.
+  ...['velvet', 'aurora', 'bloom'].flatMap((look) =>
+    ['dark', 'light'].flatMap((theme) =>
+      [1440, 390].map((width) => ({
+        file: `kinds-${look}-${theme}-${width}.png`,
+        viewport: { width, height: width === 390 ? 844 : 900 },
+        mobile: width === 390,
+        query: `look=${look}&theme=${theme}`,
+        section: 'message-kinds',
+      })),
+    ),
+  ),
+  ...['velvet', 'aurora', 'bloom'].flatMap((look) =>
+    ['dark', 'light'].map((theme) => ({
+      file: `kinds-${look}-hc-${theme}-1440.png`,
+      viewport: { width: 1440, height: 900 },
+      query: `look=${look}&theme=${theme}&contrast=high`,
+      section: 'message-kinds',
+      hc: true,
+    })),
+  ),
+  // The kinds' dialogs, opened from the section's buttons (viewport shots).
+  ...['velvet', 'aurora', 'bloom'].flatMap((look) =>
+    ['dark', 'light', 'hc'].flatMap((mode) =>
+      [
+        ['forward', 'Forward dialog'],
+        ['info', 'Message info'],
+        ['starred', 'Starred messages'],
+        ['votes', 'View votes'],
+        ['once', 'Tap to view'],
+      ].map(([name, click]) => ({
+        file: `kinds-dialog-${name}-${look}-${mode}.png`,
+        viewport: { width: 1440, height: 900 },
+        query: `look=${look}&theme=${mode === 'light' ? 'light' : 'dark'}${mode === 'hc' ? '&contrast=high' : ''}`,
+        click,
+        hc: mode === 'hc',
+      })),
+    ),
+  ),
   // Motion allowed: the canvas glow's ambient animation per look (logged, no image).
   ...['velvet', 'aurora', 'bloom'].map((look) => ({
     file: `ambient-${look}`,
@@ -190,10 +233,10 @@ const SHOTS = [
   })),
 ].filter((shot) => !only || shot.file.startsWith(only));
 
-/** The Workspace section under high contrast: anything still lit, graded or frosted. */
-async function workspaceLeftovers(page) {
-  return page.evaluate(() => {
-    const root = document.getElementById('workspace');
+/** A section under high contrast: anything still lit, graded or frosted. */
+async function workspaceLeftovers(page, id = 'workspace') {
+  return page.evaluate((id) => {
+    const root = document.getElementById(id);
     const out = [];
     if (root.querySelector('[data-chat-glow]')) out.push('canvas glow is rendered');
     for (const el of root.querySelectorAll(
@@ -207,7 +250,7 @@ async function workspaceLeftovers(page) {
         out.push(`shadow on ${el.className.slice(0, 40)}: ${s.boxShadow}`);
     }
     return out;
-  });
+  }, id);
 }
 
 /** Computed depth of the Primitives section: what each look actually draws. */
@@ -334,15 +377,23 @@ try {
       await context.close();
       continue;
     }
-    if (shot.section === 'workspace') {
+    if (shot.click) {
+      await page
+        .locator('#message-kinds')
+        .getByRole('button', { name: shot.click })
+        .first()
+        .click();
+      await page.waitForTimeout(600);
+      await page.screenshot({ path });
+    } else if (shot.section === 'workspace' || shot.section === 'message-kinds') {
       if (shot.hc) {
-        const left = await workspaceLeftovers(page);
+        const left = await workspaceLeftovers(page, shot.section);
         if (left.length) {
-          console.error('workspace not flat under high contrast:', JSON.stringify(left));
+          console.error(`${shot.section} not flat under high contrast:`, JSON.stringify(left));
           process.exitCode = 1;
         }
       }
-      await page.locator('#workspace').screenshot({ path });
+      await page.locator(`#${shot.section}`).screenshot({ path });
     } else if (shot.section && shot.section !== 'primitives') {
       await page.locator(`#${shot.section}`).screenshot({ path });
     } else if (shot.section) {

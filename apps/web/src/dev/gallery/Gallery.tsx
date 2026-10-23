@@ -20,6 +20,7 @@ import { FriendsSection, SealedSendSection } from './sections/Delight';
 import { EmptyStatesSection, GetStartedSection, HandleCardSection } from './sections/FirstRun';
 import { GroupAvatarsSection } from './sections/GroupAvatars';
 import { IllustrationsSection } from './sections/Illustrations';
+import { MessageKindsSection } from './sections/MessageKinds';
 import { PrimitivesSection } from './sections/Primitives';
 import { ThreadSection } from './sections/Thread';
 import { TonesSection } from './sections/Tones';
@@ -135,6 +136,13 @@ const SECTIONS: GallerySection[] = [
     description:
       'A group chat: runs and tails, sender names in tones, a reply, reactions, receipts, an unread divider.',
     Component: ThreadSection,
+  },
+  {
+    id: 'message-kinds',
+    title: 'Message kinds',
+    description:
+      'Contact cards named only from the server profile, drawn locations with no map tiles, polls, view once, an unsupported message, mentions in tones, edited, forwarded and starred, the pin bar and edit mode. The buttons open forward, message info and starred.',
+    Component: MessageKindsSection,
   },
   {
     id: 'sealed-send',
