@@ -420,7 +420,18 @@ export function useChatActions({
         scope="chat"
         loading={starred.isPending}
         messages={starred.data ?? []}
-        describe={(m) => ({ chat: '', sender: nameOf(m.senderId), nameOf, myUserId: userId })}
+        describe={(m) => {
+          const who = conv?.members.find((x) => x.id === m.senderId);
+          return {
+            chat: '',
+            sender: nameOf(m.senderId),
+            nameOf,
+            myUserId: userId,
+            avatar: who
+              ? { path: who.avatar_path, username: who.username, displayName: who.display_name }
+              : undefined,
+          };
+        }}
         onOpen={(m) => {
           setStarredOpen(false);
           jumpTo(m.id);

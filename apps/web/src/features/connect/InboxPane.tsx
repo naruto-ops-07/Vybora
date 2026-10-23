@@ -341,10 +341,22 @@ export function InboxPane({
             uid === userId ? 'You' : c ? memberName(c, uid) : 'Someone';
           const title = c ? conversationTitle(c, userId, nicknames.data) : '';
           const sender = nameOf(m.senderId);
+          const who = c?.members.find((x) => x.id === m.senderId);
+          const extra = {
+            nameOf,
+            myUserId: userId,
+            avatar: who
+              ? { path: who.avatar_path, username: who.username, displayName: who.display_name }
+              : undefined,
+          };
           // A direct chat is named after the person: "Maya", or "You to Maya".
           if (c?.kind === 'direct')
-            return { chat: '', sender: m.senderId === userId ? `You to ${title}` : sender, nameOf };
-          return { chat: title, sender, nameOf };
+            return {
+              chat: '',
+              sender: m.senderId === userId ? `You to ${title}` : sender,
+              ...extra,
+            };
+          return { chat: title, sender, ...extra };
         }}
         onOpen={(m) => {
           setStarredOpen(false);

@@ -324,7 +324,11 @@ describe('starred messages', () => {
     );
     const dialog = screen.getByRole('dialog', { name: 'Starred messages' });
     expect(within(dialog).getByText('Train at 9:40')).toBeInTheDocument();
-    expect(within(dialog).getByText('Poll: Dinner?')).toBeInTheDocument();
+    // Kinds are an icon, not a "Poll:" prefix; every row leads with the sender's avatar.
+    const poll = within(dialog).getByText('Dinner?');
+    expect(poll.closest('button')!.querySelector('[data-kind-icon="poll"]')).not.toBeNull();
+    expect(within(dialog).queryByText(/^Poll:/)).toBeNull();
+    expect(dialog.querySelectorAll('[data-starred-avatar]')).toHaveLength(2);
     await userEvent.click(within(dialog).getByRole('button', { name: /Train at 9:40/ }));
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 's1' }));
   });
