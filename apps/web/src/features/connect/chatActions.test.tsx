@@ -217,6 +217,50 @@ describe('contact cards resolve from the server', () => {
     }
     renderWithProviders(<One />);
     await waitFor(() => expect(states.at(-1)).toEqual({ status: 'missing' }));
+    // No row at all (PostgREST's "no rows" for .single()) is no one too.
+    api.fetchMyProfile.mockRejectedValue({ code: 'PGRST116', message: 'no rows' });
+    states.length = 0;
+    function Two() {
+      const a = useChatActions({
+        engine,
+        conversationId: 'g1',
+        conv: group,
+        userId: 'me',
+        nameOf: () => 'x',
+        jumpTo: vi.fn(),
+      });
+      return (
+        <MessageKindsProvider value={a.kinds}>
+          <ContactProbe userId="y" onState={(s) => states.push(s)} />
+        </MessageKindsProvider>
+      );
+    }
+    renderWithProviders(<Two />);
+    await waitFor(() => expect(states.at(-1)).toEqual({ status: 'missing' }));
+  });
+
+  it('never turns a failed lookup into "VYBORA user"', async () => {
+    api.fetchMyProfile.mockRejectedValue(new TypeError('Failed to fetch'));
+    const states: unknown[] = [];
+    const engine = fakeEngine();
+    function Failing() {
+      const a = useChatActions({
+        engine,
+        conversationId: 'g1',
+        conv: group,
+        userId: 'me',
+        nameOf: () => 'x',
+        jumpTo: vi.fn(),
+      });
+      return (
+        <MessageKindsProvider value={a.kinds}>
+          <ContactProbe userId="z" onState={(s) => states.push(s)} />
+        </MessageKindsProvider>
+      );
+    }
+    renderWithProviders(<Failing />);
+    await waitFor(() => expect(states.at(-1)).toEqual({ status: 'error' }));
+    expect(states).not.toContainEqual({ status: 'missing' });
   });
 
   it('adds a friend by the resolved username, never the card’s', async () => {

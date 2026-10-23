@@ -35,6 +35,9 @@ export function PollCard({
   const [votes, setVotes] = useState(false);
   const questionId = useId();
   const list = useRef<HTMLDivElement>(null);
+  // A radio group is one tab stop (roving tabindex): my choice, else the first option.
+  const [roved, setRoved] = useState<number | null>(null);
+  const stop = roved ?? tally.myChoices[0] ?? 0;
 
   const choose = async (option: number) => {
     if (pending !== null) return;
@@ -54,7 +57,9 @@ export function PollCard({
     e.preventDefault();
     e.stopPropagation();
     const step = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : -1;
-    items[(i + step + items.length) % items.length]?.focus();
+    const next = (i + step + items.length) % items.length;
+    setRoved(next);
+    items[next]?.focus();
   };
 
   return (
@@ -85,6 +90,8 @@ export function PollCard({
               aria-disabled={pending !== null}
               aria-label={`${o.label}, ${countLabel(o.count)}`}
               data-poll-option=""
+              tabIndex={poll.multi ? undefined : o.index === stop ? 0 : -1}
+              onFocus={() => !poll.multi && setRoved(o.index)}
               onClick={() => void choose(o.index)}
               className={cn(
                 'group/opt -mx-1.5 flex min-h-11 w-[calc(100%+12px)] items-start gap-2.5 rounded-sm px-1.5 py-1.5 text-left transition-colors duration-150',

@@ -114,10 +114,21 @@ describe('contact cards', () => {
     expect(screen.getByRole('article').getAttribute('aria-label')).not.toContain('Your Bank');
   });
 
-  it('shows a skeleton while the profile loads', () => {
+  it('shows a skeleton while the profile loads, visible on the bubble', () => {
     renderBubble(card, { value: kinds({ useContact: () => ({ status: 'loading' }) }) });
-    expect(screen.getByLabelText('Loading contact')).toBeInTheDocument();
+    const loading = screen.getByLabelText('Loading contact');
     expect(screen.queryByText(/Your Bank/)).toBeNull();
+    const bars = loading.querySelectorAll('[data-skeleton]');
+    expect(bars.length).toBeGreaterThan(0);
+    // Drawn from the bubble's own text colour, so it shows on any bubble fill.
+    for (const bar of bars) expect(bar.className).toContain('currentColor_12%');
+  });
+
+  it('says it couldn’t load rather than guessing who it is', () => {
+    renderBubble(card, { value: kinds({ useContact: () => ({ status: 'error' }) }) });
+    expect(screen.getByText('Couldn’t load this contact')).toBeInTheDocument();
+    expect(screen.queryByText('VYBORA user')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Message|Add/ })).toBeNull();
   });
 
   it('says "VYBORA user" with no name or buttons when no profile is found', () => {
@@ -211,6 +222,21 @@ describe('polls', () => {
     expect(radios[1]).toHaveAttribute('aria-checked', 'true');
     expect(radios[0]).toHaveAccessibleName(/Beach, 2 votes/);
     expect(screen.getByText('3 votes')).toBeInTheDocument();
+  });
+
+  it('is one tab stop as a radio group, moving with the arrow keys', async () => {
+    renderBubble(poll(false, { [ME]: [1] }));
+    const radios = screen.getAllByRole('radio');
+    expect(radios.map((r) => r.tabIndex)).toEqual([-1, 0, -1]);
+    radios[1]!.focus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(radios[2]).toHaveFocus();
+    expect(radios.map((r) => r.tabIndex)).toEqual([-1, -1, 0]);
+  });
+
+  it('starts the tab stop on the first option when nothing is chosen', () => {
+    renderBubble(poll(false));
+    expect(screen.getAllByRole('radio').map((r) => r.tabIndex)).toEqual([0, -1, -1]);
   });
 
   it('uses checkboxes for multiple choice', () => {

@@ -16,7 +16,15 @@ export function contactProfileQuery(userId: string) {
     queryFn: async (): Promise<ContactProfile | null> => {
       // A by-id read of `profiles`, under its RLS: suspended accounts and people
       // who blocked me come back as no row, exactly like an unknown id.
-      const r = await fetchMyProfile(supabase, userId).catch(() => null);
+      let r: Awaited<ReturnType<typeof fetchMyProfile>> | null;
+      try {
+        r = await fetchMyProfile(supabase, userId);
+      } catch (e) {
+        // PostgREST's "no rows" for .single(): there is no one we may see. Anything
+        // else (offline, a server error) is a failure: the query errors and retries.
+        if ((e as { code?: string } | null)?.code === 'PGRST116') return null;
+        throw e;
+      }
       if (!r || r.status !== 'active') return null;
       return {
         id: r.id,
@@ -43,6 +51,7 @@ export function useServerContact(userId: string): ContactState {
   }).includes(userId);
 
   if (profile.isPending) return { status: 'loading' };
+  if (profile.isError) return { status: 'error' };
   if (!profile.data) return { status: 'missing' };
   const p = profile.data;
   if (p.id === me) return { status: 'found', profile: p, relation: 'self' };

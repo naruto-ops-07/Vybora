@@ -14,6 +14,8 @@ export type ContactRelation = 'self' | 'friends' | 'outgoing' | 'incoming' | 'no
 export type ContactState =
   | { status: 'loading' }
   | { status: 'missing' }
+  /** The lookup failed (offline, server error): never shown as "VYBORA user". */
+  | { status: 'error' }
   | { status: 'found'; profile: ContactProfile; relation: ContactRelation; adding?: boolean };
 
 /**

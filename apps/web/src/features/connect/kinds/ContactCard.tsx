@@ -8,12 +8,25 @@ import {
 import type { ContactCard as ContactPayload } from '@vybora/e2ee';
 import type { ReactNode } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
-import { Skeleton } from '@/components/ui/States';
 import { Spinner } from '@/components/ui/Spinner';
 import { cn } from '@/lib/cn';
 import { useMessageKinds, type ContactProfile, type ContactState } from './context';
 
 const personName = (p: ContactProfile) => p.displayName || `@${p.username}`;
+
+/** A loading bar drawn from the bubble's own text colour, so it shows on any fill. */
+function Bar({ className }: { className: string }) {
+  return (
+    <span
+      className={cn(
+        'block bg-[color-mix(in_srgb,currentColor_12%,transparent)] motion-safe:animate-pulse',
+        className,
+      )}
+      aria-hidden="true"
+      data-skeleton=""
+    />
+  );
+}
 
 function CardButton({
   label,
@@ -79,10 +92,30 @@ export function ContactCardView({
   if (state.status === 'loading') {
     head = (
       <div className="flex items-center gap-3" role="status" aria-label="Loading contact">
-        <Skeleton className="h-11 w-11 shrink-0 rounded-full" />
+        <Bar className="h-11 w-11 shrink-0 rounded-full" />
         <div className="flex-1 space-y-2">
-          <Skeleton className="h-3.5 w-28" />
-          <Skeleton className="h-3 w-16" />
+          <Bar className="h-3.5 w-28 rounded-sm" />
+          <Bar className="h-3 w-16 rounded-sm" />
+        </div>
+      </div>
+    );
+  } else if (state.status === 'error') {
+    head = (
+      <div className="flex items-center gap-3">
+        <span
+          className={cn(
+            'flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-dashed',
+            divider,
+          )}
+          aria-hidden="true"
+        >
+          <UserIcon size={20} />
+        </span>
+        <div className="min-w-0">
+          <p className="text-msg font-semibold">Couldn’t load this contact</p>
+          <p className={cn('text-[13px]', !filled && 'text-muted')}>
+            Check your connection.
+          </p>
         </div>
       </div>
     );
