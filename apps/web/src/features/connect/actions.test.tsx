@@ -293,6 +293,27 @@ describe('message info', () => {
   });
 });
 
+describe('message info for my view once', () => {
+  it('describes it without claiming it was opened', () => {
+    render(
+      <MessageInfoDialog
+        open
+        onClose={vi.fn()}
+        message={msg({
+          kind: 'attachment',
+          body: undefined,
+          viewOnce: { kind: 'video', consumed: true },
+        })}
+        members={[]}
+        nameOf={() => 'You'}
+        myUserId="me"
+      />,
+    );
+    expect(screen.getByText('View once video')).toBeInTheDocument();
+    expect(screen.queryByText('Opened')).toBeNull();
+  });
+});
+
 describe('starred messages', () => {
   it('lists starred messages and opens the one picked', async () => {
     const onOpen = vi.fn();

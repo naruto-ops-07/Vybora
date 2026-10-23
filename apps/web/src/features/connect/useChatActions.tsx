@@ -29,10 +29,14 @@ import { StarredDialog } from './StarredDialog';
 import { useOpenDirect } from './useOpenDirect';
 
 /** A reply quote for a message: who wrote it and one line of what it says. */
-export const replyDraftOf = (m: LocalMessage, nameOf: (id: string) => string): ReplyDraft => ({
+export const replyDraftOf = (
+  m: LocalMessage,
+  nameOf: (id: string) => string,
+  myUserId?: string,
+): ReplyDraft => ({
   id: m.id,
   senderId: m.senderId,
-  preview: messageSummary(m, { nameOf }).slice(0, 140),
+  preview: messageSummary(m, { nameOf, myUserId }).slice(0, 140),
   name: nameOf(m.senderId),
 });
 
@@ -237,7 +241,9 @@ export function useChatActions({
         else void pin(m, true);
       } else if (a === 'info') setInfoFor(m);
       else if (a === 'replyPrivately')
-        void direct.open(m.senderId, nameOf(m.senderId), { reply: replyDraftOf(m, nameOf) });
+        void direct.open(m.senderId, nameOf(m.senderId), {
+          reply: replyDraftOf(m, nameOf, userId),
+        });
     },
     [star, pin, pins.data, direct, nameOf],
   );
@@ -401,6 +407,7 @@ export function useChatActions({
         message={infoFor}
         members={conv?.members ?? []}
         nameOf={nameOf}
+        myUserId={userId}
       />
       <ConfirmDialog
         open={!!replacePin}

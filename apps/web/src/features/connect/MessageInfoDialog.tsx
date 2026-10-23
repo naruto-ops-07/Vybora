@@ -60,12 +60,14 @@ export function MessageInfoDialog({
   message,
   members,
   nameOf,
+  myUserId,
 }: {
   open: boolean;
   onClose: () => void;
   message: LocalMessage | null;
   members: readonly ConnectMember[];
   nameOf: (userId: string) => string;
+  myUserId?: string;
 }) {
   if (!message) return null;
   const info = messageInfo(message, members);
@@ -74,7 +76,7 @@ export function MessageInfoDialog({
     <Dialog open={open} onClose={onClose} title="Message info">
       <figure className="border-l-[3px] border-accent py-0.5 pl-3">
         <blockquote className="text-msg-sm line-clamp-3 break-anywhere">
-          {messageSummary(message, { nameOf })}
+          {messageSummary(message, { nameOf, myUserId })}
         </blockquote>
         <figcaption className="mt-1 text-xs text-muted">
           Sent{' '}

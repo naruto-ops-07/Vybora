@@ -113,9 +113,7 @@ export function ContactCardView({
         </span>
         <div className="min-w-0">
           <p className="text-msg font-semibold">Couldn’t load this contact</p>
-          <p className={cn('text-[13px]', !filled && 'text-muted')}>
-            Check your connection.
-          </p>
+          <p className={cn('text-[13px]', !filled && 'text-muted')}>Check your connection.</p>
         </div>
       </div>
     );

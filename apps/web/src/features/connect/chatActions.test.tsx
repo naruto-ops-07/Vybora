@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/utils';
 import { MessageKindsProvider, useMessageKinds } from './kinds/context';
 import { takeThreadIntent } from './threadIntents';
-import { useChatActions } from './useChatActions';
+import { replyDraftOf, useChatActions } from './useChatActions';
 
 const api = vi.hoisted(() => ({
   fetchSecureInbox: vi.fn(),
@@ -594,5 +594,17 @@ describe('reply privately', () => {
     expect(navigate).toHaveBeenCalledWith('/messages/d-old');
     expect(api.createSecureConversation).not.toHaveBeenCalled();
     takeThreadIntent('d-old');
+  });
+});
+
+describe('my view-once copy in quotes and info', () => {
+  it('quotes it as a view once photo, never "Opened"', () => {
+    const mine = msg({
+      senderId: 'me',
+      kind: 'attachment',
+      body: undefined,
+      viewOnce: { kind: 'image', consumed: true },
+    });
+    expect(replyDraftOf(mine, () => 'You', 'me').preview).toBe('View once photo');
   });
 });

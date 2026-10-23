@@ -261,7 +261,7 @@ export default function ChatPane() {
   const copySelection = async () => {
     if (!selectedMessages.length) return;
     const copied = await copyText(
-      selectionToText(selectedMessages, { nameOf }),
+      selectionToText(selectedMessages, { nameOf, myUserId: userId }),
       selectedMessages.length === 1
         ? 'Message copied'
         : `${selectedMessages.length} messages copied`,
@@ -311,7 +311,7 @@ export default function ChatPane() {
 
   const startReply = (m: LocalMessage) => {
     actions.cancelEdit();
-    setReply(replyDraftOf(m, nameOf));
+    setReply(replyDraftOf(m, nameOf, userId));
     composer.current?.focus();
   };
   const replyById = (mid: string) => {
