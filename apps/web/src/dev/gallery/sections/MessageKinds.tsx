@@ -39,10 +39,12 @@ const AIKO = PEOPLE.ocean;
 const SANA = PEOPLE.sky;
 const UNKNOWN = '5a3d1e00-0000-4000-8000-ffffffffffff';
 const LOADING = '5a3d1e00-0000-4000-8000-eeeeeeeeeeee';
+const FAILED = '5a3d1e00-0000-4000-8000-dddddddddddd';
 
 /** The fake "server profile" lookup: what the real one returns, by user id only. */
 function useSampleContact(userId: string): ContactState {
   if (userId === LOADING) return { status: 'loading' };
+  if (userId === FAILED) return { status: 'error' };
   const p = [AIKO, SANA].find((x) => x.id === userId);
   if (!p) return { status: 'missing' };
   return {
@@ -122,6 +124,11 @@ function messages(now: Date): LocalMessage[] {
       ...base('k9', INES.id, 19),
       kind: 'contact',
       contact: { userId: UNKNOWN, username: 'x', displayName: 'x' },
+    },
+    {
+      ...base('k9b', KOFI.id, 18),
+      kind: 'contact',
+      contact: { userId: FAILED, username: 'x', displayName: 'x' },
     },
     {
       ...base('k10', KOFI.id, 15),
@@ -322,7 +329,7 @@ export function MessageKindsSection() {
         onClose={() => setDialog(null)}
         scope="all"
         loading={false}
-        messages={[list[13]!, list[1]!, list[3]!]}
+        messages={['k14', 'k2', 'k4'].map((id) => list.find((m) => m.id === id)!)}
         describe={(m) => ({ chat: 'Weekend crew', sender: nameFor(m.senderId), nameOf: nameFor })}
         onOpen={() => setDialog(null)}
       />

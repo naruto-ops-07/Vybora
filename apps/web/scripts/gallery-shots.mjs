@@ -27,10 +27,11 @@
  *                      contrast fails if the canvas glow, a gradient bubble or a blur remains.
  *   empty-{look}-{mode}.png, friends-{look}-{mode}.png  the chat-list empty states and the
  *                      Friends section (Received / Sent tabs) per look × mode, 1440 wide.
- *   kinds-{look}-{mode}-{1440,390}.png, kinds-{look}-hc-{mode}-1440.png  the Message kinds
+ *   kinds-{look}-{mode}-{1440,390}.png, kinds-{look}-hc-{mode}-{1440,390}.png  the Message kinds
  *                      section (wave A bubbles, pin bar, edit mode); high contrast fails if a
  *                      gradient, shadow or blur remains on a bubble or panel.
- *   kinds-dialog-{forward,info,starred,votes,once}-{look}-{dark,light,hc}.png  its dialogs.
+ *   kinds-dialog-{forward,info,starred,votes,once}-{look}-{dark,light,hc}[-390].png  its dialogs
+ *                      (390 wide under high contrast).
  *   ambient.txt-style log lines: the canvas glow's animation per look with motion allowed.
  *   {look}-{dark,light,dark-hc}-{1440,390}.png  the whole gallery in every look × mode
  *                      (and dark + high contrast) at both widths.
@@ -197,13 +198,16 @@ const SHOTS = [
     ),
   ),
   ...['velvet', 'aurora', 'bloom'].flatMap((look) =>
-    ['dark', 'light'].map((theme) => ({
-      file: `kinds-${look}-hc-${theme}-1440.png`,
-      viewport: { width: 1440, height: 900 },
-      query: `look=${look}&theme=${theme}&contrast=high`,
-      section: 'message-kinds',
-      hc: true,
-    })),
+    ['dark', 'light'].flatMap((theme) =>
+      [1440, 390].map((width) => ({
+        file: `kinds-${look}-hc-${theme}-${width}.png`,
+        viewport: { width, height: width === 390 ? 844 : 900 },
+        mobile: width === 390,
+        query: `look=${look}&theme=${theme}&contrast=high`,
+        section: 'message-kinds',
+        hc: true,
+      })),
+    ),
   ),
   // The kinds' dialogs, opened from the section's buttons (viewport shots).
   ...['velvet', 'aurora', 'bloom'].flatMap((look) =>
@@ -214,13 +218,17 @@ const SHOTS = [
         ['starred', 'Starred messages'],
         ['votes', 'View votes'],
         ['once', 'Tap to view'],
-      ].map(([name, click]) => ({
-        file: `kinds-dialog-${name}-${look}-${mode}.png`,
-        viewport: { width: 1440, height: 900 },
-        query: `look=${look}&theme=${mode === 'light' ? 'light' : 'dark'}${mode === 'hc' ? '&contrast=high' : ''}`,
-        click,
-        hc: mode === 'hc',
-      })),
+      ].flatMap(([name, click]) =>
+        // Phones too under high contrast (and the composer's edit mode lives in the section).
+        (mode === 'hc' ? [1440, 390] : [1440]).map((width) => ({
+          file: `kinds-dialog-${name}-${look}-${mode}${width === 390 ? '-390' : ''}.png`,
+          viewport: { width, height: width === 390 ? 844 : 900 },
+          mobile: width === 390,
+          query: `look=${look}&theme=${mode === 'light' ? 'light' : 'dark'}${mode === 'hc' ? '&contrast=high' : ''}`,
+          click,
+          hc: mode === 'hc',
+        })),
+      ),
     ),
   ),
   // Motion allowed: the canvas glow's ambient animation per look (logged, no image).
