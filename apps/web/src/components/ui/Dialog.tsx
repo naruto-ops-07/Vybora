@@ -32,6 +32,10 @@ export function Dialog({
   const titleId = useId();
   const descId = useId();
   const panel = useRef<HTMLDivElement>(null);
+  // The latest onClose, read at the moment of closing: a parent re-render (a new
+  // arrow function) must not re-run the open effect and pull focus back to the start.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
@@ -47,7 +51,7 @@ export function Dialog({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
       } else if (e.key === 'Tab' && panel.current) {
         const items = [...panel.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
           (el) => el.offsetParent !== null,
@@ -71,7 +75,7 @@ export function Dialog({
       document.body.style.overflow = overflow;
       previouslyFocused?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   return createPortal(

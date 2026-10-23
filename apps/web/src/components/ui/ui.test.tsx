@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { screen } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
+import { useState } from 'react';
 import userEvent from '@testing-library/user-event';
 import { highContrastThemes, LOOKS, looks } from '@vybora/config';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -121,6 +122,46 @@ describe('ConfirmDialog', () => {
     expect(onConfirm).toHaveBeenCalled();
     await userEvent.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+describe('Dialog focus', () => {
+  it('leaves focus alone when the parent re-renders with a new onClose', async () => {
+    let bump!: () => void;
+    function Typing() {
+      const [n, setN] = useState(0);
+      bump = () => setN((x) => x + 1);
+      return (
+        <Dialog open onClose={() => void n} title="Forward to">
+          <input aria-label="First" data-autofocus />
+          <input aria-label="Second" />
+        </Dialog>
+      );
+    }
+    renderWithProviders(<Typing />);
+    await screen.findByRole('dialog', { name: 'Forward to' });
+    await userEvent.click(screen.getByRole('textbox', { name: 'Second' }));
+    await userEvent.keyboard('ab');
+    act(() => bump());
+    await new Promise((r) => setTimeout(r, 10));
+    expect(screen.getByRole('textbox', { name: 'Second' })).toHaveFocus();
+  });
+
+  it('still closes with the newest onClose', async () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    let swap!: () => void;
+    function Swapping() {
+      const [fn, setFn] = useState<() => void>(() => first);
+      swap = () => setFn(() => second);
+      return <Dialog open onClose={fn} title="T" />;
+    }
+    renderWithProviders(<Swapping />);
+    await screen.findByRole('dialog', { name: 'T' });
+    act(() => swap());
+    await userEvent.keyboard('{Escape}');
+    expect(second).toHaveBeenCalled();
+    expect(first).not.toHaveBeenCalled();
   });
 });
 
