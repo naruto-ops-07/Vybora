@@ -27,7 +27,7 @@ export function ViewOnceContent({
   const label = `View once ${what(vo.kind)}`;
   const open = !mine && !vo.consumed;
   return (
-    <div className="flex min-w-[13rem] items-center gap-3 py-0.5" data-view-once="">
+    <div className="flex w-[16.5rem] max-w-full items-center gap-3 py-0.5" data-view-once="">
       <span
         className={cn(
           'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-[1.5px]',
@@ -39,7 +39,9 @@ export function ViewOnceContent({
         <NumberCircleOneIcon size={22} weight={open ? 'fill' : 'regular'} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold">{mine || open ? label : 'Opened'}</span>
+        <span className="block text-sm font-semibold text-balance">
+          {mine || open ? label : 'Opened'}
+        </span>
         {mine ? (
           <span className={cn('block text-xs', !filled && 'text-muted')}>Opened</span>
         ) : open ? null : (

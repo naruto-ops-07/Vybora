@@ -2,6 +2,7 @@ import type { ConnectMember } from '@vybora/api';
 import type { LocalMessage } from '@vybora/e2ee';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { StrictMode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/Tooltip';
 import { Composer } from './Composer';
@@ -105,6 +106,23 @@ describe('composer edit mode', () => {
     expect(onEdit).toHaveBeenCalledWith('See you at 8');
     expect(onSend).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Save edit' })).toBeInTheDocument();
+  });
+
+  it('starts in edit mode under StrictMode (effects run twice)', () => {
+    render(
+      <StrictMode>
+        <Composer
+          {...props}
+          draftKey="e3"
+          onSend={vi.fn()}
+          editing={{ id: 'm1', text: 'Still here' }}
+          onEdit={vi.fn()}
+          onCancelEdit={vi.fn()}
+        />
+      </StrictMode>,
+      { wrapper: TooltipProvider },
+    );
+    expect(screen.getByRole('textbox', { name: 'Edit message' })).toHaveValue('Still here');
   });
 
   it('cancels with Esc and gives back the draft that was there', async () => {

@@ -423,7 +423,6 @@ export const Bubble = memo(function Bubble({
                 runEnd && (mine ? 'rounded-br-sm' : 'rounded-bl-sm'),
                 filled ? 'vy-bubble-out shadow-1' : 'vy-bubble-in',
                 selecting && 'pointer-events-none',
-                busy && 'opacity-60 transition-opacity duration-150',
               )}
               data-bubble={filled ? 'out' : 'in'}
               data-busy={busy ? '' : undefined}
@@ -478,6 +477,8 @@ export const Bubble = memo(function Bubble({
                 )}
                 data-meta=""
               >
+                {/* A reaction, delete or edit on its way: same contrast, a clock as for sending. */}
+                {busy && <ClockIcon size={11} aria-label="Updating" role="img" data-busy-mark="" />}
                 {m.starred && <StarIcon size={11} weight="fill" aria-label="Starred" role="img" />}
                 {m.expiresAt && <TimerIcon size={11} aria-label="Disappearing message" />}
                 {m.edited && !m.deleted && <span className="font-sans">Edited</span>}

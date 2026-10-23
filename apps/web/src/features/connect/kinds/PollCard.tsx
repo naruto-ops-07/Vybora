@@ -58,7 +58,7 @@ export function PollCard({
   };
 
   return (
-    <div className="w-[min(18rem,66vw)] pt-0.5" data-poll="">
+    <div className="w-[18rem] max-w-full pt-0.5" data-poll="">
       <p id={questionId} className="break-anywhere text-msg font-semibold leading-snug">
         {poll.question}
       </p>

@@ -162,7 +162,7 @@ export function ContactCardView({
   }
 
   return (
-    <div className="w-[min(16rem,62vw)] pt-0.5" data-contact-card="">
+    <div className="w-64 max-w-full pt-0.5" data-contact-card="">
       {head}
       {actions}
     </div>

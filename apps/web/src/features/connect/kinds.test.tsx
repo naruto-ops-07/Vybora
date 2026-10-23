@@ -50,7 +50,8 @@ function renderBubble(
     mine = false,
     value = kinds(),
     highContrast = false,
-  }: { mine?: boolean; value?: MessageKinds; highContrast?: boolean } = {},
+    busy = false,
+  }: { mine?: boolean; value?: MessageKinds; highContrast?: boolean; busy?: boolean } = {},
 ) {
   const theme = { ...resolveChatTheme(null), accent: '#0F766E', highContrast };
   return render(
@@ -71,6 +72,7 @@ function renderBubble(
           onRetry={vi.fn()}
           onOpenImage={vi.fn()}
           onSelect={vi.fn()}
+          busy={busy}
         />
       </MessageKindsProvider>
     </TooltipProvider>,
@@ -327,5 +329,15 @@ describe('mentions, edited and forwarded', () => {
     expect(fwd.compareDocumentPosition(screen.getByText('Hello'))).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
+  });
+});
+
+describe('pending changes', () => {
+  it('marks a bubble with a change on its way without dimming it', () => {
+    renderBubble({}, { busy: true });
+    expect(screen.getByRole('img', { name: 'Updating' })).toBeInTheDocument();
+    const bubble = screen.getByText('Hello').closest('[data-bubble]')!;
+    expect(bubble).toHaveAttribute('aria-busy', 'true');
+    expect(bubble.className).not.toMatch(/opacity/);
   });
 });

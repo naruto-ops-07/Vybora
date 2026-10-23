@@ -96,13 +96,14 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     if (sealDemoRun) play();
   }, [sealDemoRun, play]);
 
-  useEffect(() => {
-    setText(drafts.get(draftKey) ?? '');
-  }, [draftKey]);
   // Edit mode borrows the box: the draft is kept aside (never overwritten) and restored.
   const editId = editing?.id ?? null;
   const editText = editing?.text ?? '';
   const editingNow = useRef<string | null>(null);
+  useEffect(() => {
+    // In edit mode the box belongs to the edit; the draft comes back when it ends.
+    if (!editingNow.current) setText(drafts.get(draftKey) ?? '');
+  }, [draftKey]);
   useEffect(() => {
     if (editId === editingNow.current) return;
     editingNow.current = editId;

@@ -43,7 +43,12 @@ export function streetBlocks(lat: number, lng: number) {
   // One green: a park somewhere away from the pin (which sits in the middle).
   const away = blocks
     .map((b, i) => ({ i, d: Math.hypot(b.x + b.w / 2 - W / 2, b.y + b.h / 2 - H / 2) }))
-    .filter((b) => b.d > 46);
+    .filter((b) => b.d > 46)
+    // Wholly in view, so the green is always seen.
+    .filter(({ i }) => {
+      const b = blocks[i]!;
+      return b.x >= 4 && b.y >= 4 && b.x + b.w <= W - 4 && b.y + b.h <= H - 4;
+    });
   const park = away.length ? away[Math.floor(rand() * away.length)]!.i : -1;
   const tone = PERSON_TONES[Math.floor(rand() * PERSON_TONES.length)]!;
   return { blocks, park, tone };
@@ -107,7 +112,7 @@ export function LocationCard({ location, filled }: { location: LocationPin; fill
   const { lat, lng, label } = location;
   const coords = formatCoordinates(lat, lng);
   return (
-    <div className="-mx-2 -mt-0.5 w-[min(17rem,64vw)]" data-location-card="">
+    <div className="-mx-2 -mt-0.5 w-[17rem] max-w-[calc(100%+1rem)]" data-location-card="">
       <div
         className={cn(
           'overflow-hidden rounded-md border',
