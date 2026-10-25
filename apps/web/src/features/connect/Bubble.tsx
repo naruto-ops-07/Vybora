@@ -155,6 +155,10 @@ export interface BubbleProps {
   onMenuAction?: (a: MessageAction, m: LocalMessage) => void;
   /** A reaction or delete for this message is on its way to the server. */
   busy?: boolean;
+  /** The search query: its matches are marked in this bubble. */
+  match?: string;
+  /** This bubble is the result being shown right now. */
+  currentMatch?: boolean;
   selecting?: boolean;
   selected?: boolean;
   onToggleSelect?: (m: LocalMessage) => void;
@@ -185,6 +189,8 @@ export const Bubble = memo(function Bubble({
   pinned = false,
   onMenuAction,
   busy,
+  match,
+  currentMatch,
   selecting,
   selected,
   onToggleSelect,
@@ -240,10 +246,11 @@ export const Bubble = memo(function Bubble({
         m.edited && !m.deleted ? 'edited' : null,
         m.starred ? 'starred' : null,
         receipt ? RECEIPT_LABEL[receipt] : null,
+        currentMatch ? 'current result' : null,
       ]
         .filter(Boolean)
         .join(', '),
-    [senderLabel, time, m, receipt, nameOf, myUserId],
+    [senderLabel, time, m, receipt, nameOf, myUserId, currentMatch],
   );
   const filled = mine && !m.deleted && m.kind !== 'undecryptable';
   const media =
@@ -296,6 +303,8 @@ export const Bubble = memo(function Bubble({
               nameOf={nameOf}
               onFill={filled}
               highContrast={theme.highContrast}
+              match={match}
+              current={currentMatch}
             />
           </p>
         )}
@@ -310,6 +319,8 @@ export const Bubble = memo(function Bubble({
           nameOf={nameOf}
           onFill={filled}
           highContrast={theme.highContrast}
+          match={match}
+          current={currentMatch}
         />
       </p>
     );
@@ -426,6 +437,7 @@ export const Bubble = memo(function Bubble({
               )}
               data-bubble={filled ? 'out' : 'in'}
               data-busy={busy ? '' : undefined}
+              data-current-match={currentMatch || undefined}
               aria-busy={busy || undefined}
               style={
                 filled

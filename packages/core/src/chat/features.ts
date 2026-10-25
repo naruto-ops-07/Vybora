@@ -293,6 +293,23 @@ export function searchableTextOf(m: SearchableLike, names: SearchNames = {}): st
     .join(' · ');
 }
 
+/**
+ * Where each word of `query` appears in `text` (accent- and case-insensitive),
+ * in order: what a result highlights. Empty when the folding changes the length
+ * (rare ligatures), because then the positions wouldn't line up.
+ */
+export function matchRanges(text: string, query: string): [number, number][] {
+  const words = foldText(query).split(/\s+/).filter(Boolean);
+  const folded = foldText(text);
+  if (!words.length || !text || folded.length !== text.length) return [];
+  const out: [number, number][] = [];
+  for (const w of words) {
+    for (let i = folded.indexOf(w); i >= 0; i = folded.indexOf(w, i + w.length))
+      if (!out.some(([a, b]) => i < b && a < i + w.length)) out.push([i, i + w.length]);
+  }
+  return out.sort((a, b) => a[0] - b[0]);
+}
+
 export interface SearchHit<M> {
   message: M;
   /** Display text (mentions rendered) and the matched ranges in it. */

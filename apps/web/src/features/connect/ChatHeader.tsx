@@ -1,4 +1,10 @@
-import { ArrowLeftIcon, InfoIcon, LockSimpleIcon, TimerIcon } from '@phosphor-icons/react';
+import {
+  ArrowLeftIcon,
+  InfoIcon,
+  LockSimpleIcon,
+  MagnifyingGlassIcon,
+  TimerIcon,
+} from '@phosphor-icons/react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Button } from '@/components/ui/Button';
@@ -21,6 +27,7 @@ export function ChatHeaderView({
   disappearing,
   details,
   onToggleDetails,
+  onSearch,
 }: {
   title: string;
   /** 40 px Avatar or GroupAvatar. */
@@ -34,6 +41,8 @@ export function ChatHeaderView({
   disappearing?: string | null;
   details: boolean;
   onToggleDetails: () => void;
+  /** Find a message in this chat (also Ctrl/Cmd F). */
+  onSearch?: () => void;
 }) {
   return (
     <header className="vy-panel vy-canvas-layer flex h-16 shrink-0 items-center gap-2 border-b px-2 md:px-4">
@@ -87,6 +96,19 @@ export function ChatHeaderView({
           <span className="sr-only">disappearing messages</span>
         </span>
       ) : null}
+      {onSearch && (
+        <Tip label="Search this chat" shortcut="Ctrl F">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onSearch}
+            aria-label="Search this chat"
+            className="text-muted"
+          >
+            <MagnifyingGlassIcon size={19} />
+          </Button>
+        </Tip>
+      )}
       <Tip label="Details" shortcut="Alt I">
         <Button
           variant="ghost"

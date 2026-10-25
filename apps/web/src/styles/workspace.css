@@ -257,6 +257,30 @@
   box-shadow: var(--vy-shadow-1);
 }
 
+/* ── Search marks ──────────────────────────────────────────────────────── */
+
+/*
+ * A found word, inside a bubble or a result row: the accent wash under the text
+ * it already had, so it reads the same on every bubble fill. The current result
+ * is the accent itself.
+ */
+.vy-mark {
+  color: inherit;
+  background-color: color-mix(in srgb, var(--vy-accent) 30%, transparent);
+  padding-inline: 1px;
+}
+[data-bubble='out'] .vy-mark {
+  background-color: color-mix(in srgb, currentColor 26%, transparent);
+}
+.vy-mark[data-current='true'] {
+  color: var(--vy-on-accent);
+  background-color: var(--vy-accent);
+}
+[data-bubble='out'] .vy-mark[data-current='true'] {
+  color: var(--vy-bubble-out-to);
+  background-color: currentColor;
+}
+
 /* ── High contrast: flat. Kept last, after every rule it overrides. ──── */
 
 :root[data-contrast='high'] .vy-glow {
@@ -280,6 +304,21 @@
 :root[data-contrast='high'] .vy-card,
 :root[data-contrast='high'] .vy-count {
   box-shadow: none;
+}
+:root[data-contrast='high'] .vy-mark {
+  color: var(--vy-text);
+  background-color: transparent;
+  outline: 2px solid var(--vy-accent);
+  outline-offset: -1px;
+}
+:root[data-contrast='high'] .vy-mark[data-current='true'] {
+  color: var(--vy-on-accent);
+  background-color: var(--vy-accent);
+}
+:root[data-contrast='high'] [data-bubble='out'] .vy-mark {
+  color: var(--vy-bubble-out-text);
+  background-color: transparent;
+  outline-color: currentColor;
 }
 :root[data-contrast='high'] .vy-chip {
   border-color: var(--vy-border-strong);

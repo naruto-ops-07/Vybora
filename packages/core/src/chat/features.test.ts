@@ -7,6 +7,7 @@ import {
   editWindowRemainingMs,
   formatCoordinates,
   mapLinkFor,
+  matchRanges,
   pollVotesLabel,
   insertMention,
   mentionIdsIn,
@@ -184,6 +185,20 @@ describe('local search', () => {
     // An unvalidated token isn't searchable by the name it claims.
     expect(searchMessages(msgs, 'forged sam', { nameOf: () => 'Sam' })).toEqual([]);
   });
+  it('marks every match of the query in a piece of text', () => {
+    expect(matchRanges('Café at the cafe', 'cafe')).toEqual([
+      [0, 4],
+      [12, 16],
+    ]);
+    expect(matchRanges('Dinner at eight', 'at eight')).toEqual([
+      [7, 9],
+      [10, 15],
+    ]);
+    expect(matchRanges('nothing here', 'cafe')).toEqual([]);
+    expect(matchRanges('', 'a')).toEqual([]);
+    expect(matchRanges('anything', '  ')).toEqual([]);
+  });
+
   it('builds a snippet around the first match', () => {
     const text = `${'x'.repeat(100)} needle ${'y'.repeat(100)}`;
     const snip = searchSnippet({ text, ranges: [[101, 107]] }, 10);

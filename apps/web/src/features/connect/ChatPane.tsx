@@ -61,6 +61,9 @@ import {
   ThreadDay,
   UnreadDivider,
 } from './ThreadParts';
+import { SearchBar } from './search/SearchBar';
+import { useChatSearch } from './search/useChatSearch';
+
 import { useCopyText } from './copy';
 import { useToday } from './useToday';
 import { BulkDeleteDialog, SelectBar } from './SelectBar';
@@ -183,6 +186,16 @@ export default function ChatPane() {
     },
     [toast],
   );
+  const search = useChatSearch({
+    load: useCallback(
+      () => engine?.queryMessages({ conversationId: id }) ?? Promise.resolve([]),
+      [engine, id],
+    ),
+    nameOf,
+    onJump: jumpTo,
+  });
+  const { open: openSearch, isOpen: searchOpen, bar: searchBar } = search;
+
   const actions = useChatActions({
     engine,
     conversationId: id,
@@ -396,8 +409,9 @@ export default function ChatPane() {
       if (messages.isFetching) return;
       el.scrollTop = el.scrollHeight - restoreFrom.current;
       restoreFrom.current = null;
-    } else if (stick.current) el.scrollTop = el.scrollHeight;
-  }, [ordered.length, typingUsers.length, id, messages.isFetching]);
+      // While searching, a new message must not yank the reader off the result.
+    } else if (stick.current && !searchOpen) el.scrollTop = el.scrollHeight;
+  }, [ordered.length, typingUsers.length, id, messages.isFetching, searchOpen]);
 
   const positioned = useRef<string | null>(null);
   useLayoutEffect(() => {
@@ -475,7 +489,10 @@ export default function ChatPane() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.altKey && (e.key === 'i' || e.key === 'I')) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        openSearch();
+      } else if (e.altKey && (e.key === 'i' || e.key === 'I')) {
         e.preventDefault();
         setDetails((d) => !d);
       } else if (
@@ -489,7 +506,7 @@ export default function ChatPane() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [details, selection]);
+  }, [details, selection, openSearch]);
 
   // Only once the inbox is settled: a just-created chat may not be in the cached list yet.
   if (conversation.isSuccess && !conversation.isFetching && !conv)
@@ -558,8 +575,10 @@ export default function ChatPane() {
             disappearing={conv?.disappearingSeconds ? ttlLabel(conv.disappearingSeconds) : null}
             details={details}
             onToggleDetails={() => setDetails((d) => !d)}
+            onSearch={openSearch}
           />
         )}
+        <SearchBar {...searchBar} />
         {!selection && <PinBar pins={actions.pinItems} onShow={jumpTo} accent={def.accent} />}
 
         {!live && (
@@ -676,6 +695,8 @@ export default function ChatPane() {
                         pinned={actions.pinnedIds.has(m.id)}
                         onMenuAction={actions.onMenuAction}
                         busy={actions.busy.has(m.id)}
+                        match={search.term || undefined}
+                        currentMatch={search.current === m.id}
                         onDelete={setDeleting}
                         onRetry={(msg) => void run(() => engine!.retry(id, msg.id))}
                         onOpenImage={setViewer}
