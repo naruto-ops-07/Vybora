@@ -4,11 +4,12 @@ import {
   addFriendResultNotice,
   canPin as mayPin,
   mentionIdsIn,
+  mentionsToDisplay,
   messageSummary,
   pinWouldReplace,
   type MessageAction,
 } from '@vybora/core';
-import type { ConnectEngine, LocalMessage } from '@vybora/e2ee';
+import type { ConnectEngine, LocalMessage, OutgoingContent } from '@vybora/e2ee';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Avatar, GroupAvatar } from '@/components/ui/Avatar';
@@ -22,10 +23,15 @@ import { ForwardDialog } from './ForwardDialog';
 import { conversationTitle, useNicknames, useSecureInbox } from './hooks';
 import type { ContactProfile, MessageKinds } from './kinds/context';
 import { ADD_FRIEND_KEY, useServerContact } from './kinds/useServerContact';
+import { AttachmentPreview } from './compose/AttachmentPreview';
+import { ContactPicker } from './compose/ContactPicker';
+import { LocationShare } from './compose/LocationShare';
+import { PollDialog } from './compose/PollDialog';
 import { ViewOnceViewer, type ViewOnceMedia } from './kinds/ViewOnce';
 import { MessageInfoDialog } from './MessageInfoDialog';
 import type { PinnedItem } from './PinBar';
 import { StarredDialog } from './StarredDialog';
+import { useFriends } from '@/features/friends/hooks';
 import { useOpenDirect } from './useOpenDirect';
 
 /** A reply quote for a message: who wrote it and one line of what it says. */
@@ -54,6 +60,8 @@ export function useChatActions({
   userId,
   nameOf,
   jumpTo,
+  send,
+  sendFiles,
 }: {
   engine: ConnectEngine | null;
   conversationId: string;
@@ -61,6 +69,9 @@ export function useChatActions({
   userId: string;
   nameOf: (userId: string) => string;
   jumpTo: (messageId: string) => void;
+  /** The chat's own send (it explains failures and plays the seal). */
+  send?: (content: OutgoingContent) => Promise<boolean>;
+  sendFiles?: (files: File[], viewOnce: boolean) => Promise<void>;
 }) {
   const qc = useQueryClient();
   const toast = useToast();
@@ -75,6 +86,8 @@ export function useChatActions({
   const [replacePin, setReplacePin] = useState<LocalMessage | null>(null);
   const [starredOpen, setStarredOpen] = useState(false);
   const [viewOnce, setViewOnce] = useState<ViewOnceMedia | null>(null);
+  const [composing, setComposing] = useState<'poll' | 'contact' | 'location' | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const isGroup = conv?.kind === 'group';
 
   // Everything here belongs to one chat: switching chats closes its dialogs, and a
@@ -87,6 +100,8 @@ export function useChatActions({
     setInfoFor(null);
     setReplacePin(null);
     setStarredOpen(false);
+    setComposing(null);
+    setFiles([]);
     // Not the view-once viewer: it shows over any chat, and closing it would lose the view.
   }, [id]);
   const stillHere = (chat: string) => liveId.current === chat;
@@ -119,6 +134,7 @@ export function useChatActions({
     [pinned.data, nameOf, userId],
   );
 
+  const friends = useFriends();
   const starred = useQuery({
     queryKey: [...qk.connect.messages(id), 'starred'],
     enabled: !!engine && starredOpen,
@@ -212,28 +228,38 @@ export function useChatActions({
   );
 
   const cancelEdit = useCallback(() => setEditing(null), []);
-  const startEdit = (m: LocalMessage) =>
-    setEditing({
-      id: m.id,
-      text: (m.kind === 'text' ? m.body : m.caption) ?? '',
-      caption: m.kind !== 'text',
-    });
+  // Mentions show as @Name in the box (the composer turns them back into tokens).
+  const startEdit = useCallback(
+    (m: LocalMessage) => {
+      if (m.kind === 'text') {
+        const d = mentionsToDisplay(m.body ?? '', m.mentions, nameOf);
+        setEditing({ id: m.id, text: d.text, entries: d.entries, source: m.body ?? '' });
+      } else
+        setEditing({ id: m.id, text: m.caption ?? '', caption: true, source: m.caption ?? '' });
+    },
+    [nameOf],
+  );
 
   const saveEdit = useCallback(
-    async (text: string) => {
+    async (text: string, picked?: string[]) => {
       const target = editing;
       if (!target) return;
+      // Back to what the box showed (names, not tokens), for a refused or too-long edit.
+      const reopen = () => {
+        const d = mentionsToDisplay(text, picked, nameOf);
+        setEditing({ ...target, text: d.text, entries: d.entries });
+      };
       if (target.caption && text.length > MAX_CAPTION) {
         // Kept open with the text: nothing was sent.
-        setEditing({ ...target, text });
+        reopen();
         toast.show('Captions can be up to 2000 characters', 'error');
         return;
       }
       setEditing(null);
-      if (text === target.text) return;
+      if (text === (target.source ?? target.text)) return;
       const chat = id;
       const members = new Set(conv?.members.map((x) => x.id) ?? []);
-      const mentions = mentionIdsIn(text).filter((x) => members.has(x));
+      const mentions = (picked ?? mentionIdsIn(text)).filter((x) => members.has(x));
       let refused = false;
       const ok = await control('edit', target.id, async () => {
         try {
@@ -245,9 +271,9 @@ export function useChatActions({
       });
       if (ok) announce('Message edited');
       // Refused (too late, or a mention left): give the words back to fix or cancel.
-      else if (refused && stillHere(chat)) setEditing({ ...target, text });
+      else if (refused && stillHere(chat)) reopen();
     },
-    [editing, conv, control, engine, id, announce, toast],
+    [editing, conv, control, engine, id, announce, toast, nameOf],
   );
 
   const star = useCallback(
@@ -277,7 +303,7 @@ export function useChatActions({
           reply: replyDraftOf(m, nameOf, userId),
         });
     },
-    [star, pin, pins.data, direct, nameOf, userId],
+    [star, pin, pins.data, direct, nameOf, userId, startEdit],
   );
 
   const addFriend = useMutation({
@@ -478,6 +504,40 @@ export function useChatActions({
         }}
       />
       <ViewOnceViewer media={viewOnce} onClose={() => setViewOnce(null)} />
+      <PollDialog
+        open={composing === 'poll'}
+        onClose={() => setComposing(null)}
+        onSend={(poll) => {
+          setComposing(null);
+          void send?.({ t: 'poll', ...poll });
+        }}
+      />
+      <ContactPicker
+        open={composing === 'contact'}
+        onClose={() => setComposing(null)}
+        friends={friends.data ?? []}
+        loading={friends.isPending}
+        onSend={(contact) => {
+          setComposing(null);
+          void send?.({ t: 'contact', ...contact });
+        }}
+      />
+      <LocationShare
+        open={composing === 'location'}
+        onClose={() => setComposing(null)}
+        onSend={(location) => {
+          setComposing(null);
+          void send?.({ t: 'location', ...location });
+        }}
+      />
+      <AttachmentPreview
+        files={files}
+        onClose={() => setFiles([])}
+        onSend={(picked, once) => {
+          setFiles([]);
+          void sendFiles?.(picked, once);
+        }}
+      />
     </>
   );
 
@@ -495,6 +555,13 @@ export function useChatActions({
     saveEdit,
     cancelEdit,
     openStarred: () => setStarredOpen(true),
+    compose: {
+      poll: () => setComposing('poll'),
+      // Sharing a contact is only offered once the friends list is there to pick from.
+      contact: () => setComposing('contact'),
+      location: () => setComposing('location'),
+      files: (picked: File[]) => setFiles(picked),
+    },
     announcement,
     dialogs,
   };

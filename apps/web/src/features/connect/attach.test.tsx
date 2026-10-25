@@ -141,7 +141,7 @@ describe('attachment preview', () => {
       />,
     );
     const toggle = await screen.findByRole('switch', { name: 'View once' });
-    expect(toggle).toBeEnabled();
+    await waitFor(() => expect(toggle).toBeEnabled());
     await userEvent.click(toggle);
     expect(
       screen.getByText('Opens once on their device. Screenshots can’t be blocked.'),
@@ -158,9 +158,10 @@ describe('attachment preview', () => {
         onSend={vi.fn()}
       />,
     );
-    const toggle = await screen.findByRole('switch', { name: 'View once' });
-    await waitFor(() => expect(toggle).toBeDisabled());
-    expect(screen.getByText('View once needs a JPEG, PNG, GIF, WebP, MP4 or WebM.')).toBeVisible();
+    expect(
+      await screen.findByText('View once needs a JPEG, PNG, GIF, WebP, MP4 or WebM.'),
+    ).toBeVisible();
+    expect(screen.getByRole('switch', { name: 'View once' })).toBeDisabled();
   });
 
   it('has no view-once toggle for documents', async () => {

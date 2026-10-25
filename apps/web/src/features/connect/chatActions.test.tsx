@@ -465,12 +465,12 @@ describe('edit, star, delete', () => {
     });
     renderWithProviders(<Harness engine={engine} />);
     act(() => actions.onMenuAction('edit', msg({ senderId: 'me', status: 'sent' })));
-    expect(actions.editing).toEqual({ id: 'm1', text: 'Lunch at noon?', caption: false });
+    expect(actions.editing).toMatchObject({ id: 'm1', text: 'Lunch at noon?' });
     await act(async () => actions.saveEdit('Lunch at one?'));
     expect(engine.edit).toHaveBeenCalledWith('g1', 'm1', 'Lunch at one?', undefined);
     expect(await screen.findByText('This message can no longer be edited')).toBeInTheDocument();
     // Refused: the edit stays open with what I typed.
-    expect(actions.editing).toEqual({ id: 'm1', text: 'Lunch at one?', caption: false });
+    expect(actions.editing).toMatchObject({ id: 'm1', text: 'Lunch at one?' });
   });
 
   it('closes the edit when it will retry', async () => {

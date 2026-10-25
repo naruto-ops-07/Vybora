@@ -1,4 +1,4 @@
-import { ArrowDownIcon } from '@phosphor-icons/react';
+import { ArrowDownIcon, AtIcon } from '@phosphor-icons/react';
 import { formatUnread, type ThreadItem, type ThreadMessageLike } from '@vybora/core';
 import type { ReactNode } from 'react';
 
@@ -52,6 +52,26 @@ export function JumpToLatest({ count, onClick }: { count: number; onClick: () =>
         </span>
       )}
     </button>
+  );
+}
+
+/**
+ * "You were mentioned": above the composer while unread messages name me.
+ * Each press shows the oldest one still unseen, so a stack is worked through.
+ */
+export function MentionJump({ count, onClick }: { count: number; onClick: () => void }) {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4">
+      <button
+        type="button"
+        onClick={onClick}
+        className="vy-float pointer-events-auto touch-target flex min-h-11 items-center gap-2 rounded-full px-4 text-[13px] font-semibold text-ink transition-colors duration-150 hover:text-accent"
+        data-mention-jump=""
+      >
+        <AtIcon size={16} className="text-accent" aria-hidden="true" />
+        {count === 1 ? 'You were mentioned' : `You were mentioned ${count} times`}
+      </button>
+    </div>
   );
 }
 

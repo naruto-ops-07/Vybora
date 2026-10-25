@@ -21,6 +21,7 @@ import {
   messageActions,
   receiptOf,
   renderMentions,
+  unreadMentions,
   selectionToText,
 } from '@vybora/core';
 import { MAX_ATTACHMENT_BYTES, type AttachmentRef, type LocalMessage } from '@vybora/e2ee';
@@ -52,7 +53,14 @@ import {
   useSecureMessages,
   useTyping,
 } from './hooks';
-import { DateChip, groupByDay, JumpToLatest, ThreadDay, UnreadDivider } from './ThreadParts';
+import {
+  DateChip,
+  groupByDay,
+  JumpToLatest,
+  MentionJump,
+  ThreadDay,
+  UnreadDivider,
+} from './ThreadParts';
 import { useCopyText } from './copy';
 import { useToday } from './useToday';
 import { BulkDeleteDialog, SelectBar } from './SelectBar';
@@ -175,7 +183,19 @@ export default function ChatPane() {
     },
     [toast],
   );
-  const actions = useChatActions({ engine, conversationId: id, conv, userId, nameOf, jumpTo });
+  const actions = useChatActions({
+    engine,
+    conversationId: id,
+    conv,
+    userId,
+    nameOf,
+    jumpTo,
+    send: (content) => {
+      stick.current = true;
+      return run(() => engine!.send(id, content));
+    },
+    sendFiles: (picked, viewOnce) => sendFiles(picked, viewOnce),
+  });
   const { cancelEdit } = actions;
 
   useEffect(() => {
@@ -223,6 +243,22 @@ export default function ChatPane() {
     if (conv && readMark?.id !== id)
       setReadMark({ id, seq: conv.lastReadSeq, until: conv.lastSeq });
   }, [conv, id, readMark?.id]);
+
+  // The @mention picker: the other members of a group (direct chats have none).
+  const mentionCandidates = useMemo(
+    () =>
+      conv?.kind === 'group'
+        ? conv.members
+            .filter((m) => m.id !== userId)
+            .map((m) => ({
+              id: m.id,
+              name: nameOf(m.id),
+              username: m.username,
+              avatarPath: m.avatar_path,
+            }))
+        : undefined,
+    [conv, userId, nameOf],
+  );
 
   const today = useToday();
   const items = useMemo(
@@ -300,6 +336,15 @@ export default function ChatPane() {
     setNewCount(0);
     el.scrollTo({ top: el.scrollHeight, behavior: reduceMotion ? 'auto' : 'smooth' });
   };
+
+  // "You were mentioned": unread messages naming me, oldest first.
+  const mentions = useMemo(
+    () => unreadMentions(ordered, userId, conv?.lastReadSeq ?? Number.MAX_SAFE_INTEGER),
+    [ordered, userId, conv?.lastReadSeq],
+  );
+  const [jumpedMentions, setJumpedMentions] = useState<string[]>([]);
+  useEffect(() => setJumpedMentions([]), [id]);
+  const nextMention = mentions.find((m) => !jumpedMentions.includes(m));
 
   const announcement = useIncomingAnnouncement(ordered, {
     ready: messages.isSuccess,
@@ -391,19 +436,19 @@ export default function ChatPane() {
     }
   };
 
-  const sendText = (body: string) => {
+  const sendText = (body: string, mentions?: string[]) => {
     const r = reply
       ? { id: reply.id, senderId: reply.senderId, preview: reply.preview }
       : undefined;
     setReply(null);
     stick.current = true;
-    const sent = run(() => engine!.send(id, { t: 'text', body, replyTo: r }));
+    const sent = run(() => engine!.send(id, { t: 'text', body, replyTo: r, mentions }));
     if (showOnline) void touchActivity(supabase).catch(() => undefined);
     // Composer seals the send glyph once the server has stored the ciphertext.
     return sent;
   };
 
-  const sendFiles = async (files: File[]) => {
+  const sendFiles = async (files: File[], viewOnce = false) => {
     if (files.length > 10) toast.show('Up to 10 files at a time; sending the first 10.', 'info');
     for (const file of files.slice(0, 10)) {
       if (file.size > MAX_ATTACHMENT_BYTES) {
@@ -419,7 +464,9 @@ export default function ChatPane() {
       try {
         const meta = await describeFile(file);
         const bytes = new Uint8Array(await file.arrayBuffer());
-        await run(() => engine!.sendAttachment(id, bytes, meta));
+        await run(() =>
+          engine!.sendAttachment(id, bytes, viewOnce ? { ...meta, viewOnce: true } : meta),
+        );
       } finally {
         setUploads((n) => n - 1);
       }
@@ -650,6 +697,15 @@ export default function ChatPane() {
               </div>
             )}
           </div>
+          {nextMention && !selection && (
+            <MentionJump
+              count={mentions.length - jumpedMentions.length}
+              onClick={() => {
+                setJumpedMentions((j) => [...j, nextMention]);
+                jumpTo(nextMention);
+              }}
+            />
+          )}
           {away && <JumpToLatest count={newCount} onClick={jumpToLatest} />}
           <p className="sr-only" role="status" aria-live="polite">
             {announcement}
@@ -672,11 +728,15 @@ export default function ChatPane() {
           replyTo={reply}
           onCancelReply={() => setReply(null)}
           editing={actions.editing}
-          onEdit={(text) => void actions.saveEdit(text)}
+          onEdit={(text, mentions) => void actions.saveEdit(text, mentions)}
           onCancelEdit={actions.cancelEdit}
           onSend={sendText}
-          onFiles={(f) => void sendFiles(f)}
+          onFiles={actions.compose.files}
           onTyping={notifyTyping}
+          members={mentionCandidates}
+          onPoll={actions.compose.poll}
+          onContact={actions.compose.contact}
+          onLocation={actions.compose.location}
         />
 
         {dragging && (
