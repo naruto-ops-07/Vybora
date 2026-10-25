@@ -365,7 +365,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
                   decorative
                 />
                 <span className="min-w-0 flex-1 truncate font-medium">{m.name}</span>
-                <span className="shrink-0 text-xs text-muted">@{m.username}</span>
+                {/* Inherits the row's colour: the highlighted row is solid accent in high contrast. */}
+                <span className="shrink-0 text-xs opacity-70">@{m.username}</span>
               </li>
             ))}
           </ul>
