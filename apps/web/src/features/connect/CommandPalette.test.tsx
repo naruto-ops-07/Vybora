@@ -4,8 +4,11 @@ import { Route, Routes, useLocation } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/utils';
 import { CommandPalette } from './CommandPalette';
+import { takeThreadIntent } from './threadIntents';
 
 vi.mock('@/features/auth/AuthProvider', () => ({ useMe: () => ({ userId: 'me' }) }));
+const connect = vi.hoisted(() => ({ engine: null as unknown }));
+vi.mock('./ConnectProvider', () => ({ useConnect: () => ({ engine: connect.engine }) }));
 vi.mock('./hooks', () => ({
   conversationTitle: () => 'Chat',
   useNicknames: () => ({ data: {} }),
@@ -71,5 +74,35 @@ describe('command palette: appearance', () => {
     expect(screen.queryByRole('option', { name: /theme/i })).toBeNull();
     await userEvent.click(screen.getByRole('option', { name: 'Appearance…' }));
     expect(screen.getByText('/settings/appearance')).toBeInTheDocument();
+  });
+});
+
+describe('command palette: messages', () => {
+  it('offers matching messages and opens the chat at the one picked', async () => {
+    const engine = {
+      queryMessages: vi.fn(async () => [
+        {
+          id: 'm9',
+          conversationId: 'c9',
+          seq: 2,
+          senderId: 'leo',
+          senderDeviceId: null,
+          createdAt: '2026-10-22T09:00:00Z',
+          expiresAt: null,
+          status: 'received',
+          kind: 'text',
+          body: 'The cafe on the corner',
+          reactions: {},
+        },
+      ]),
+    };
+    connect.engine = engine as never;
+    renderWithProviders(<CommandPalette open onOpenChange={vi.fn()} onNewChat={vi.fn()} />);
+    await userEvent.type(screen.getByRole('combobox'), 'cafe');
+    const group = await screen.findByRole('group', { name: 'Messages' });
+    expect(within(group).getByText('cafe', { selector: 'mark' })).toBeInTheDocument();
+    await userEvent.click(within(group).getAllByRole('option')[0]!);
+    expect(takeThreadIntent('c9')).toEqual({ jumpTo: 'm9' });
+    connect.engine = null;
   });
 });

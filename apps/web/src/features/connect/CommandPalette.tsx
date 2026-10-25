@@ -3,17 +3,23 @@ import {
   EyeIcon,
   GearSixIcon,
   KeyboardIcon,
+  MagnifyingGlassIcon,
   NotePencilIcon,
   PaletteIcon,
   ShieldCheckIcon,
   UserPlusIcon,
   UsersThreeIcon,
 } from '@phosphor-icons/react';
+import { searchSnippet } from '@vybora/core';
 import { Command } from 'cmdk';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { useMe } from '@/features/auth/AuthProvider';
+import { useConnect } from './ConnectProvider';
 import { conversationTitle, useNicknames, useSecureInbox } from './hooks';
+import { Marked } from './search/MessageResults';
+import { useMessageSearch } from './search/useMessageSearch';
+import { setThreadIntent } from './threadIntents';
 
 function Item({
   value,
@@ -73,6 +79,10 @@ export function CommandPalette({
   const { userId } = useMe();
   const inbox = useSecureInbox();
   const nicknames = useNicknames();
+  const { engine } = useConnect();
+  const [term, setTerm] = useState('');
+  // Messages are searched on this device only, like the inbox's own search.
+  const found = useMessageSearch(engine, term, () => '', 6);
   const run = (fn: () => void) => {
     onOpenChange(false);
     fn();
@@ -88,7 +98,9 @@ export function CommandPalette({
     >
       <Command.Input
         autoFocus
-        placeholder="Search chats and actions"
+        value={term}
+        onValueChange={setTerm}
+        placeholder="Search chats, messages and actions"
         className="h-14 w-full border-b border-line bg-transparent px-4 text-[15px] outline-none placeholder:text-subtle"
       />
       <Command.List className="scroll-thin max-h-[min(420px,60vh)] overflow-y-auto p-2">
@@ -110,6 +122,33 @@ export function CommandPalette({
                   onSelect={() => run(() => navigate(`/messages/${c.id}`))}
                 >
                   {title}
+                </Item>
+              );
+            })}
+          </Command.Group>
+        )}
+
+        {found.hits.length > 0 && (
+          <Command.Group heading="Messages" className={GROUP}>
+            {found.hits.map((h) => {
+              const c = inbox.data?.find((x) => x.id === h.message.conversationId);
+              const where = c ? conversationTitle(c, userId, nicknames.data) : 'a chat';
+              const snippet = searchSnippet(h, 30);
+              return (
+                <Item
+                  // cmdk filters on `value`; these are already matched, so each keeps the term.
+                  key={h.message.id}
+                  value={`${term} message ${h.message.id}`}
+                  icon={<MagnifyingGlassIcon size={18} />}
+                  hint={where}
+                  onSelect={() =>
+                    run(() => {
+                      setThreadIntent(h.message.conversationId, { jumpTo: h.message.id });
+                      navigate(`/messages/${h.message.conversationId}`);
+                    })
+                  }
+                >
+                  <Marked text={snippet.text} ranges={snippet.ranges} />
                 </Item>
               );
             })}
