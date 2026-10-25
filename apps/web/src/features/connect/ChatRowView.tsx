@@ -1,4 +1,4 @@
-import { BellSlashIcon, LockSimpleIcon, PushPinIcon } from '@phosphor-icons/react';
+import { AtIcon, BellSlashIcon, LockSimpleIcon, PushPinIcon } from '@phosphor-icons/react';
 import { formatUnread, type RowPreview } from '@vybora/core';
 import type { ReactElement, ReactNode } from 'react';
 import { Link } from 'react-router';
@@ -20,6 +20,8 @@ export interface ChatRowViewProps {
   pinned: boolean;
   archived: boolean;
   muted: boolean;
+  /** An unread message in this chat mentions me. */
+  mentioned?: boolean;
   active: boolean;
   alwaysShowActions: boolean;
   onPin: () => void;
@@ -43,6 +45,7 @@ export function ChatRowView({
   pinned,
   archived,
   muted,
+  mentioned,
   active,
   alwaysShowActions,
   onPin,
@@ -118,9 +121,21 @@ export function ChatRowView({
                   </span>
                 )}
               </span>
+              {mentioned && (
+                <AtIcon
+                  size={14}
+                  weight="bold"
+                  className="ml-auto shrink-0 text-accent"
+                  aria-label="You were mentioned"
+                  role="img"
+                />
+              )}
               {unread && (
                 <span
-                  className="vy-count ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 font-mono text-[11px] leading-none font-semibold tabular-nums"
+                  className={cn(
+                    'vy-count flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 font-mono text-[11px] leading-none font-semibold tabular-nums',
+                    mentioned ? 'ml-1.5' : 'ml-auto',
+                  )}
                   data-muted={muted || undefined}
                 >
                   {formatUnread(unreadCount)}

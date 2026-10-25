@@ -43,6 +43,8 @@ import {
   useSecureInbox,
 } from './hooks';
 import { NewChatDialog } from './NewChatDialog';
+import { MessageResults } from './search/MessageResults';
+import { useMentionedChats, useMessageSearch } from './search/useMessageSearch';
 import { StarredDialog } from './StarredDialog';
 import { setThreadIntent } from './threadIntents';
 import { PaneHeader } from './ui';
@@ -273,6 +275,17 @@ export function InboxPane({
     [convs, userId],
   );
   const shownOnline = useOnlinePeers(peerIds);
+  const nameIn = (conversationId: string, uid: string) => {
+    if (uid === userId) return 'You';
+    const c = convs.find((x) => x.id === conversationId);
+    return c ? memberName(c, uid) : 'Someone';
+  };
+  const found = useMessageSearch(engine, term, nameIn);
+  const mentioned = useMentionedChats(
+    engine,
+    userId,
+    useMemo(() => Object.fromEntries(convs.map((c) => [c.id, c.lastReadSeq])), [convs]),
+  );
 
   const visible = useMemo(() => {
     const t = term.trim().toLowerCase();
@@ -448,6 +461,7 @@ export function InboxPane({
                 pinned={c.pinned}
                 archived={c.archived}
                 muted={muted}
+                mentioned={mentioned.has(c.id)}
                 active={activeId === c.id}
                 alwaysShowActions={a11y.alwaysShowActions}
                 onPin={() => prefs(c, { pinned: !c.pinned })}
@@ -466,6 +480,24 @@ export function InboxPane({
             );
           })}
         </ul>
+        <MessageResults
+          hits={found.hits.map((h) => {
+            const c = convs.find((x) => x.id === h.message.conversationId);
+            return {
+              message: h.message,
+              chat: c ? conversationTitle(c, userId, nicknames.data) : '',
+              sender: nameIn(h.message.conversationId, h.message.senderId),
+              text: h.text,
+              ranges: h.ranges,
+            };
+          })}
+          loading={found.searching}
+          term={term}
+          onOpen={(m) => {
+            setThreadIntent(m.conversationId, { jumpTo: m.id });
+            navigate(`/messages/${m.conversationId}`);
+          }}
+        />
         <p className="px-5 pt-3 pb-5 text-xs leading-relaxed text-muted">
           Chats from before end-to-end encryption are in{' '}
           <Link

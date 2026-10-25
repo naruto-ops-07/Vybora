@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetOnboardingMemory } from '@/features/onboarding/store';
 import { renderWithProviders } from '@/test/utils';
 import { InboxPane } from './InboxPane';
+import { takeThreadIntent } from './threadIntents';
 
 const api = vi.hoisted(() => ({
   fetchSecureInbox: vi.fn(),
@@ -18,8 +19,29 @@ const api = vi.hoisted(() => ({
   watchPresence: vi.fn(),
 }));
 vi.mock('@vybora/api', async (orig) => ({ ...(await orig<typeof Api>()), ...api }));
-vi.mock('@/lib/supabase', () => ({ supabase: {} }));
-vi.mock('./ConnectProvider', () => ({ useConnect: () => ({ engine: null }) }));
+// A Supabase stand-in: realtime channels are joined once an engine exists.
+vi.mock('@/lib/supabase', () => ({
+  supabase: {
+    channel: () => ({
+      on: () => ({ subscribe: () => undefined }),
+      subscribe: () => undefined,
+      unsubscribe: () => undefined,
+      send: () => undefined,
+      track: () => undefined,
+      presenceState: () => ({}),
+    }),
+    removeChannel: () => undefined,
+  },
+}));
+const fakeEngine = vi.hoisted(() => ({
+  current: null as null | {
+    queryMessages: (o?: unknown) => Promise<unknown[]>;
+    listMessages: () => Promise<unknown[]>;
+    listStarred: () => Promise<unknown[]>;
+    onChange: (fn: () => void) => () => void;
+  },
+}));
+vi.mock('./ConnectProvider', () => ({ useConnect: () => ({ engine: fakeEngine.current }) }));
 vi.mock('@/features/auth/AuthProvider', () => {
   const profile = { id: 'me', username: 'maya', display_name: 'Maya', avatar_path: null };
   return {
@@ -57,6 +79,7 @@ beforeEach(() => {
   api.watchPresence.mockReturnValue(() => undefined);
 });
 afterEach(() => {
+  fakeEngine.current = null;
   localStorage.clear();
   resetOnboardingMemory();
 });
@@ -107,7 +130,9 @@ describe('chat list on first run', () => {
     expect(screen.getByRole('button', { name: 'Say hi to sam' })).toBeInTheDocument();
     expect(screen.queryByText('No friends yet')).toBeNull();
     await userEvent.click(hi);
-    expect(api.createSecureConversation).toHaveBeenCalledWith({}, 'direct', ['id-maya_k']);
+    expect(api.createSecureConversation).toHaveBeenCalledWith(expect.anything(), 'direct', [
+      'id-maya_k',
+    ]);
     await userEvent.click(screen.getAllByRole('button', { name: 'New message' }).at(-1)!);
     expect(await screen.findByRole('dialog', { name: 'New message' })).toBeInTheDocument();
   });
@@ -219,5 +244,93 @@ describe('starred messages from the chat list', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Starred messages' }));
     expect(onStarred).toHaveBeenCalled();
+  });
+});
+
+describe('searching messages across chats', () => {
+  const conv = (id: string, title: string, lastReadSeq = 9) => ({
+    id,
+    kind: 'group' as const,
+    title,
+    members: [
+      { id: 'me', username: 'maya', display_name: 'Maya', avatar_path: null, role: 'member' },
+      { id: 'leo', username: 'leo', display_name: 'Leo', avatar_path: null, role: 'member' },
+    ],
+    lastMessageAt: '2026-10-22T10:00:00Z',
+    lastSeq: 9,
+    lastReadSeq,
+    unreadCount: 0,
+    pinned: false,
+    archived: false,
+    muted: false,
+    mutedUntil: null,
+    notificationsEnabled: true,
+    tone: 'default',
+    theme: {},
+    localTheme: null,
+    useLocalTheme: false,
+    clearedBeforeSeq: 0,
+    disappearingSeconds: null,
+    settingsPolicy: 'everyone',
+    myRole: 'member',
+    epoch: 1,
+    themeVersion: 0,
+    themeUpdatedBy: null,
+    avatarPath: null,
+  });
+  const message = (over: Record<string, unknown>) => ({
+    id: 'x1',
+    conversationId: 'c1',
+    seq: 4,
+    senderId: 'leo',
+    senderDeviceId: null,
+    createdAt: '2026-10-22T09:00:00Z',
+    expiresAt: null,
+    status: 'received',
+    kind: 'text',
+    reactions: {},
+    ...over,
+  });
+
+  it('lists matching messages under the chats and opens the one picked', async () => {
+    api.fetchSecureInbox.mockResolvedValue([conv('c1', 'Weekend crew')]);
+    fakeEngine.current = {
+      queryMessages: vi.fn(async () => [message({ body: 'The cafe on the corner' })]),
+      listMessages: vi.fn(async () => []),
+      listStarred: vi.fn(async () => []),
+      onChange: vi.fn(() => () => undefined),
+    };
+    renderInbox();
+    await userEvent.type(screen.getByRole('textbox', { name: 'Search chats' }), 'cafe');
+    const list = await screen.findByRole('list', { name: 'Messages' });
+    expect(within(list).getByText('cafe', { selector: 'mark' })).toBeInTheDocument();
+    expect(within(list).getByText(/Leo in Weekend crew/)).toBeInTheDocument();
+    await userEvent.click(within(list).getAllByRole('button')[0]!);
+    expect(takeThreadIntent('c1')).toEqual({ jumpTo: 'x1' });
+  });
+
+  it('marks a chat where an unread message mentions me', async () => {
+    api.fetchSecureInbox.mockResolvedValue([conv('c1', 'Weekend crew', 3)]);
+    fakeEngine.current = {
+      queryMessages: vi.fn(async () => [message({ seq: 4, mentions: ['me'] })]),
+      listMessages: vi.fn(async () => []),
+      listStarred: vi.fn(async () => []),
+      onChange: vi.fn(() => () => undefined),
+    };
+    renderInbox();
+    expect(await screen.findByLabelText('You were mentioned')).toBeInTheDocument();
+  });
+
+  it('does not mark a mention I have already read', async () => {
+    api.fetchSecureInbox.mockResolvedValue([conv('c1', 'Weekend crew', 9)]);
+    fakeEngine.current = {
+      queryMessages: vi.fn(async () => [message({ seq: 4, mentions: ['me'] })]),
+      listMessages: vi.fn(async () => []),
+      listStarred: vi.fn(async () => []),
+      onChange: vi.fn(() => () => undefined),
+    };
+    renderInbox();
+    await screen.findByText('Weekend crew');
+    expect(screen.queryByLabelText('You were mentioned')).toBeNull();
   });
 });
