@@ -11,7 +11,8 @@ import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-quer
 import { useEffect, useState } from 'react';
 import { useConnect } from './ConnectProvider';
 
-const formatBytes = (n: number) =>
+/** A file size in the shortest honest unit. */
+export const formatBytes = (n: number) =>
   n < 1024
     ? `${n} B`
     : n < 1048576

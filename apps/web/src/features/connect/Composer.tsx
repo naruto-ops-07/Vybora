@@ -1,23 +1,27 @@
+import { CheckIcon, LockSimpleIcon, PencilSimpleIcon, XIcon } from '@phosphor-icons/react';
 import {
-  CheckIcon,
-  LockSimpleIcon,
-  PaperclipIcon,
-  PencilSimpleIcon,
-  XIcon,
-} from '@phosphor-icons/react';
+  displayToPayload,
+  foldText,
+  insertMentionDisplay,
+  mentionQueryAt,
+  type MentionEntry,
+} from '@vybora/core';
 import {
   forwardRef,
   useCallback,
   useEffect,
+  useId,
   useImperativeHandle,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
+import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
-import { Tip } from '@/components/ui/Tooltip';
 import { useA11y } from '@/features/a11y/A11yProvider';
 import { cn } from '@/lib/cn';
+import { AttachMenu } from './AttachMenu';
 import { SendGlyph, useSealedSend } from './SealedSend';
 
 export interface ReplyDraft {
@@ -30,9 +34,22 @@ export interface ReplyDraft {
 /** The message being edited: its id and current text (body or caption). */
 export interface EditDraft {
   id: string;
+  /** As shown: mentions as `@Name` (see `entries`). */
   text: string;
   /** Editing an attachment's caption (at most 2000 characters). */
   caption?: boolean;
+  /** The mentions in `text` (from `mentionsToDisplay`). */
+  entries?: MentionEntry[];
+  /** The stored body or caption (with `@[id]` tokens): saving it unchanged sends nothing. */
+  source?: string;
+}
+
+/** Someone who can be @mentioned in this chat (never me). */
+export interface MentionCandidate {
+  id: string;
+  name: string;
+  username: string;
+  avatarPath: string | null;
 }
 
 export interface ComposerHandle {
@@ -49,9 +66,16 @@ interface Props {
    * Send the text. The sealed-send moment plays once this succeeds: right away
    * for `void`/`true`, when a returned promise resolves to anything but `false`,
    * and never for `false` or a rejection. Sending is never held up by it.
+   * The body carries `@[id]` tokens; `mentions` is passed only when there are any.
    */
-  onSend: (text: string) => void | boolean | Promise<boolean | void>;
+  onSend: (body: string, mentions?: string[]) => void | boolean | Promise<boolean | void>;
   onFiles: (files: File[]) => void;
+  /** Group members for the @mention picker (groups only: none in a direct chat). */
+  members?: readonly MentionCandidate[];
+  /** Attach menu entries beyond files. */
+  onPoll?: () => void;
+  onContact?: () => void;
+  onLocation?: () => void;
   onTyping: (typing: boolean) => void;
   draftKey: string;
   /**
@@ -59,14 +83,16 @@ interface Props {
    * `onEdit` and Esc cancels. Whatever was being typed comes back afterwards.
    */
   editing?: EditDraft | null;
-  onEdit?: (text: string) => void;
+  onEdit?: (body: string, mentions?: string[]) => void;
   onCancelEdit?: () => void;
   /** Gallery only: bump to play the seal without sending anything. */
   sealDemoRun?: number;
 }
 
 const MAX = 4000;
-const drafts = new Map<string, string>(); // in memory only: drafts never touch storage
+/** In memory only: drafts never touch storage. Mentions picked so far ride along. */
+const drafts = new Map<string, { text: string; entries: MentionEntry[] }>();
+const draftOf = (key: string) => drafts.get(key) ?? { text: '', entries: [] };
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   {
@@ -82,11 +108,18 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     editing,
     onEdit,
     onCancelEdit,
+    members,
+    onPoll,
+    onContact,
+    onLocation,
     sealDemoRun,
   },
   ref,
 ) {
-  const [text, setText] = useState(() => editing?.text ?? drafts.get(draftKey) ?? '');
+  const [text, setText] = useState(() => editing?.text ?? draftOf(draftKey).text);
+  const [entries, setEntries] = useState<MentionEntry[]>(
+    () => editing?.entries ?? draftOf(draftKey).entries,
+  );
   const area = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   useImperativeHandle(ref, () => ({ focus: () => area.current?.focus() }), []);
@@ -112,26 +145,68 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const editingNow = useRef<string | null>(null);
   useEffect(() => {
     // In edit mode the box belongs to the edit; the draft comes back when it ends.
-    if (!editingNow.current) setText(drafts.get(draftKey) ?? '');
+    if (editingNow.current) return;
+    const d = draftOf(draftKey);
+    setText(d.text);
+    setEntries(d.entries);
   }, [draftKey]);
   useEffect(() => {
     if (editId === editingNow.current) return;
     editingNow.current = editId;
     if (editId) {
       setText(editText);
+      setEntries(editing?.entries ?? []);
       requestAnimationFrame(() => {
         const el = area.current;
         if (!el) return;
         el.focus();
         el.setSelectionRange(el.value.length, el.value.length);
       });
-    } else setText(drafts.get(draftKey) ?? '');
+    } else {
+      const d = draftOf(draftKey);
+      setText(d.text);
+      setEntries(d.entries);
+    }
     // Only a change of the message being edited resets the box.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editId]);
   useEffect(() => {
-    if (!editingNow.current) drafts.set(draftKey, text);
-  }, [draftKey, text]);
+    if (!editingNow.current) drafts.set(draftKey, { text, entries });
+  }, [draftKey, text, entries]);
+
+  // ---- @mention picker (an ARIA listbox the textarea controls)
+  const [query, setQuery] = useState<{ start: number; query: string } | null>(null);
+  const [active, setActive] = useState(0);
+  const listId = useId();
+  const matches = useMemo(() => {
+    if (!members?.length || !query) return [];
+    const q = foldText(query.query);
+    return members
+      .filter((m) => foldText(m.name).includes(q) || foldText(m.username).includes(q))
+      .slice(0, 8);
+  }, [members, query]);
+  const picking = matches.length > 0;
+  const readQuery = (el: HTMLTextAreaElement) => {
+    if (!members?.length) return;
+    const cursor = el.selectionStart ?? el.value.length;
+    const next = el.selectionStart === el.selectionEnd ? mentionQueryAt(el.value, cursor) : null;
+    setQuery((q) => (q?.start === next?.start && q?.query === next?.query ? q : next));
+    if (next?.query !== query?.query || next?.start !== query?.start) setActive(0);
+  };
+  const pick = (m: MentionCandidate) => {
+    const el = area.current;
+    if (!el || !query) return;
+    const cursor = el.selectionStart ?? text.length;
+    const next = insertMentionDisplay(text, query.start, cursor, m.name);
+    setText(next.text);
+    setEntries((e) => [...e, { userId: m.id, name: m.name }]);
+    setQuery(null);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(next.cursor, next.cursor);
+    });
+  };
+  const optionId = (i: number) => `${listId}-o${i}`;
   // The box grows with its text (up to 180 px): measured before paint whenever the
   // text or the edit changes, and again whenever its width changes (a narrow phone,
   // a banner appearing), so a pre-filled edit is never clipped.
@@ -158,15 +233,24 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     if (replyTo) area.current?.focus();
   }, [replyTo]);
 
+  // The payload as it will be sent: picked mentions become tokens.
+  const payload = useMemo(() => displayToPayload(text.trim(), entries), [text, entries]);
+  const limit = editing?.caption ? 2000 : MAX;
+  const over = payload.body.length > limit;
+
   const send = () => {
-    const body = text.trim();
-    if (!body || disabled) return;
+    if (!payload.body || disabled || over) return;
+    const args: [string, string[]?] = payload.mentions.length
+      ? [payload.body, payload.mentions]
+      : [payload.body];
     if (editing) {
-      onEdit?.(body.slice(0, MAX));
+      onEdit?.(...args);
       return;
     }
-    const result = onSend(body.slice(0, MAX));
+    const result = onSend(...args);
     setText('');
+    setEntries([]);
+    setQuery(null);
     onTyping(false);
     if (result === false) return;
     if (result instanceof Promise) {
@@ -239,19 +323,48 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           </Button>
         </div>
       )}
-      <div className="flex items-end gap-2">
+      <div className="relative flex items-end gap-2">
+        {picking && (
+          <ul
+            id={listId}
+            role="listbox"
+            aria-label="Mention someone"
+            className="menu vy-popover absolute bottom-full left-0 z-30 mb-2 max-h-72 w-[min(20rem,100%)] overflow-y-auto rounded-md p-1"
+          >
+            {matches.map((m, i) => (
+              <li
+                key={m.id}
+                id={optionId(i)}
+                role="option"
+                aria-selected={i === active}
+                data-highlighted={i === active ? '' : undefined}
+                // Keep focus (and the caret) in the textarea.
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pick(m)}
+                onPointerEnter={() => setActive(i)}
+                className="vy-menu-item touch-target flex min-h-11 cursor-pointer items-center gap-3 rounded-sm px-2 text-sm"
+              >
+                <Avatar
+                  path={m.avatarPath}
+                  name={m.username}
+                  userId={m.id}
+                  displayName={m.name}
+                  size={28}
+                  decorative
+                />
+                <span className="min-w-0 flex-1 truncate font-medium">{m.name}</span>
+                <span className="shrink-0 text-xs text-muted">@{m.username}</span>
+              </li>
+            ))}
+          </ul>
+        )}
         {!editing && (
-          <Tip label="Attach, encrypted, up to 25 MB" side="top">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => fileInput.current?.click()}
-              aria-label="Attach photo, video or file"
-              className="text-muted"
-            >
-              <PaperclipIcon size={20} />
-            </Button>
-          </Tip>
+          <AttachMenu
+            onFiles={() => fileInput.current?.click()}
+            onPoll={onPoll}
+            onContact={onContact}
+            onLocation={onLocation}
+          />
         )}
         <input
           ref={fileInput}
@@ -270,12 +383,38 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             ref={area}
             rows={1}
             value={text}
-            maxLength={editing?.caption ? 2000 : MAX}
+            maxLength={limit}
+            aria-autocomplete={members?.length ? 'list' : undefined}
+            aria-controls={picking ? listId : undefined}
+            aria-activedescendant={
+              picking ? optionId(Math.min(active, matches.length - 1)) : undefined
+            }
             onChange={(e) => {
               setText(e.target.value);
               onTyping(e.target.value.length > 0);
+              readQuery(e.target);
             }}
+            onSelect={(e) => readQuery(e.currentTarget)}
             onKeyDown={(e) => {
+              if (picking && !e.nativeEvent.isComposing) {
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  const n = matches.length;
+                  setActive((a) => (a + (e.key === 'ArrowDown' ? 1 : -1) + n) % n);
+                  return;
+                }
+                if (e.key === 'Enter' || e.key === 'Tab') {
+                  e.preventDefault();
+                  pick(matches[Math.min(active, matches.length - 1)]!);
+                  return;
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setQuery(null);
+                  return;
+                }
+              }
               if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 send();
@@ -301,7 +440,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         <Button
           size="icon"
           onClick={send}
-          disabled={!text.trim()}
+          disabled={!text.trim() || over}
           aria-label={editing ? 'Save edit' : 'Send'}
           data-seal={seal.playing ? 'playing' : 'idle'}
           // While the seal plays the (now empty, disabled) button stays at full
@@ -321,9 +460,9 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           )}
         </Button>
       </div>
-      {text.length > MAX - 200 && (
-        <p className="mt-1 text-right font-mono text-[11px] text-subtle">
-          {MAX - text.length} characters left
+      {payload.body.length > limit - 200 && (
+        <p className="mt-1 text-right font-mono text-[11px] text-subtle" aria-live="polite">
+          {over ? 'Too long to send' : `${limit - payload.body.length} characters left`}
         </p>
       )}
     </div>
