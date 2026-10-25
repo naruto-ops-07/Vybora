@@ -87,6 +87,8 @@ interface Props {
   onCancelEdit?: () => void;
   /** Gallery only: bump to play the seal without sending anything. */
   sealDemoRun?: number;
+  /** Gallery only: start with this in the box (and open the picker if it ends in a query). */
+  demoText?: string;
 }
 
 const MAX = 4000;
@@ -113,10 +115,11 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     onContact,
     onLocation,
     sealDemoRun,
+    demoText,
   },
   ref,
 ) {
-  const [text, setText] = useState(() => editing?.text ?? draftOf(draftKey).text);
+  const [text, setText] = useState(() => demoText ?? editing?.text ?? draftOf(draftKey).text);
   const [entries, setEntries] = useState<MentionEntry[]>(
     () => editing?.entries ?? draftOf(draftKey).entries,
   );
@@ -232,6 +235,15 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   useEffect(() => {
     if (replyTo) area.current?.focus();
   }, [replyTo]);
+  // Gallery only: show the picker as it looks mid-sentence.
+  useEffect(() => {
+    const el = area.current;
+    if (!demoText || !el) return;
+    el.setSelectionRange(demoText.length, demoText.length);
+    readQuery(el);
+    // Once, on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // The payload as it will be sent: picked mentions become tokens.
   const payload = useMemo(() => displayToPayload(text.trim(), entries), [text, entries]);

@@ -20,6 +20,7 @@ import { FriendsSection, SealedSendSection } from './sections/Delight';
 import { EmptyStatesSection, GetStartedSection, HandleCardSection } from './sections/FirstRun';
 import { GroupAvatarsSection } from './sections/GroupAvatars';
 import { IllustrationsSection } from './sections/Illustrations';
+import { ComposeSection } from './sections/Compose';
 import { MessageKindsSection } from './sections/MessageKinds';
 import { PrimitivesSection } from './sections/Primitives';
 import { ThreadSection } from './sections/Thread';
@@ -143,6 +144,13 @@ const SECTIONS: GallerySection[] = [
     description:
       'Contact cards named only from the server profile, drawn locations with no map tiles, polls, view once, an unsupported message, mentions in tones, edited, forwarded and starred, the pin bar and edit mode. The buttons open forward, message info and starred.',
     Component: MessageKindsSection,
+  },
+  {
+    id: 'compose',
+    title: 'Composing and finding',
+    description:
+      'The @mention picker, the attach menu, the poll, contact and location dialogs, the attachment preview with view once, the in-chat search bar, the mention jump and message results.',
+    Component: ComposeSection,
   },
   {
     id: 'sealed-send',

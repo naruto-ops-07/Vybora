@@ -32,6 +32,9 @@
  *                      gradient, shadow or blur remains on a bubble or panel.
  *   kinds-dialog-{forward,info,starred,votes,once}-{look}-{dark,light,hc}[-390].png  its dialogs
  *                      (390 wide under high contrast).
+ *   compose-{look}-{mode}-{1440,390}.png, compose-{look}-hc-{mode}-{1440,390}.png  the Composing
+ *                      and finding section (mention picker, attach menu, search bar, results).
+ *   compose-dialog-{poll,contact,location,preview}-{look}-{dark,light,hc}[-390].png  its dialogs.
  *   ambient.txt-style log lines: the canvas glow's animation per look with motion allowed.
  *   {look}-{dark,light,dark-hc}-{1440,390}.png  the whole gallery in every look × mode
  *                      (and dark + high contrast) at both widths.
@@ -231,6 +234,46 @@ const SHOTS = [
       ),
     ),
   ),
+  // Composing and finding (step 2b): the section, then each dialog it opens.
+  ...['velvet', 'aurora', 'bloom'].flatMap((look) =>
+    ['dark', 'light'].flatMap((theme) =>
+      [1440, 390].map((width) => ({
+        file: `compose-${look}-${theme}-${width}.png`,
+        viewport: { width, height: width === 390 ? 844 : 900 },
+        mobile: width === 390,
+        query: `look=${look}&theme=${theme}`,
+        section: 'compose',
+      })),
+    ),
+  ),
+  ...['velvet', 'aurora', 'bloom'].flatMap((look) =>
+    ['dark', 'light'].flatMap((theme) =>
+      [1440, 390].map((width) => ({
+        file: `compose-${look}-hc-${theme}-${width}.png`,
+        viewport: { width, height: width === 390 ? 844 : 900 },
+        mobile: width === 390,
+        query: `look=${look}&theme=${theme}&contrast=high`,
+        section: 'compose',
+        hc: true,
+      })),
+    ),
+  ),
+  ...['velvet', 'aurora', 'bloom'].flatMap((look) =>
+    ['dark', 'light', 'hc'].flatMap((mode) =>
+      ['New poll', 'Share a contact', 'Share location', 'Attachment preview', 'Attach'].flatMap(
+        (click) =>
+          (mode === 'hc' ? [1440, 390] : [1440]).map((width) => ({
+            file: `compose-dialog-${click.split(' ').pop().toLowerCase()}-${look}-${mode}${width === 390 ? '-390' : ''}.png`,
+            viewport: { width, height: width === 390 ? 844 : 900 },
+            mobile: width === 390,
+            query: `look=${look}&theme=${mode === 'light' ? 'light' : 'dark'}${mode === 'hc' ? '&contrast=high' : ''}`,
+            click,
+            clickIn: '#compose',
+            hc: mode === 'hc',
+          })),
+      ),
+    ),
+  ),
   // Motion allowed: the canvas glow's ambient animation per look (logged, no image).
   ...['velvet', 'aurora', 'bloom'].map((look) => ({
     file: `ambient-${look}`,
@@ -387,13 +430,17 @@ try {
     }
     if (shot.click) {
       await page
-        .locator('#message-kinds')
+        .locator(shot.clickIn ?? '#message-kinds')
         .getByRole('button', { name: shot.click })
         .first()
         .click();
       await page.waitForTimeout(600);
       await page.screenshot({ path });
-    } else if (shot.section === 'workspace' || shot.section === 'message-kinds') {
+    } else if (
+      shot.section === 'workspace' ||
+      shot.section === 'message-kinds' ||
+      shot.section === 'compose'
+    ) {
       if (shot.hc) {
         const left = await workspaceLeftovers(page, shot.section);
         if (left.length) {
