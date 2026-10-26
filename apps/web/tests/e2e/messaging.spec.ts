@@ -50,7 +50,7 @@ test('two people sign up and each browser registers an encryption device', async
 
 test('a direct chat delivers an end-to-end encrypted message both ways', async () => {
   await alicePage.goto('/messages');
-  await alicePage.getByRole('button', { name: 'New message' }).click();
+  await alicePage.getByLabel('New message').click();
   await alicePage.getByRole('textbox', { name: 'Search people' }).fill(bob.username);
   await alicePage.getByRole('checkbox', { name: new RegExp(bob.username) }).click();
   await alicePage.getByRole('button', { name: `Message ${bob.username}` }).click();
