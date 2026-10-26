@@ -7,3 +7,5 @@ build/
 .expo/
 coverage/
 *.log
+.turbo/
+.tmp/
