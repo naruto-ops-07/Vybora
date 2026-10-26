@@ -118,3 +118,5 @@ Migrations live in `supabase/migrations` and are applied in filename order. Work
 ## Known limitations
 
 See [docs/FEATURE_STATUS.md](docs/FEATURE_STATUS.md#known-limitations). Highlights: end-to-end encryption uses a standard protocol but has **not been independently audited**; no voice/video calls or message editing; no group photos; legacy (pre-encryption) chats are read-only and were never end-to-end encrypted; OAuth providers are not wired in.
+#   V y b o r a  
+ 
