@@ -51,7 +51,8 @@
  * Requests to anything other than the dev server are blocked (fonts are self-hosted), so
  * a stray call can never reach a hosted backend.
  */
-import { mkdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
@@ -63,6 +64,19 @@ const out = join(dirname(fileURLToPath(import.meta.url)), '..', '.impeccable', '
 mkdirSync(out, { recursive: true });
 
 const ALLOWED_HOSTS = new Set([base.host]);
+
+/**
+ * What the Composing section opens, by the control's EXACT accessible name (a
+ * substring would match more than one button), and what must then be on screen.
+ */
+const COMPOSE_DIALOGS = [
+  { name: 'poll', click: 'New poll', expect: 'dialog' },
+  { name: 'contact', click: 'Share a contact', expect: 'dialog' },
+  { name: 'location', click: 'Share location', expect: 'dialog' },
+  { name: 'preview', click: 'Attachment preview', expect: 'dialog' },
+  // The composer's own clip, not the gallery button that opens the preview.
+  { name: 'attach', click: 'Attach', expect: 'menu' },
+];
 
 const SHOTS = [
   { file: 'desktop.png', viewport: { width: 1440, height: 900 }, query: 'theme=dark' },
@@ -260,17 +274,17 @@ const SHOTS = [
   ),
   ...['velvet', 'aurora', 'bloom'].flatMap((look) =>
     ['dark', 'light', 'hc'].flatMap((mode) =>
-      ['New poll', 'Share a contact', 'Share location', 'Attachment preview', 'Attach'].flatMap(
-        (click) =>
-          (mode === 'hc' ? [1440, 390] : [1440]).map((width) => ({
-            file: `compose-dialog-${click.split(' ').pop().toLowerCase()}-${look}-${mode}${width === 390 ? '-390' : ''}.png`,
-            viewport: { width, height: width === 390 ? 844 : 900 },
-            mobile: width === 390,
-            query: `look=${look}&theme=${mode === 'light' ? 'light' : 'dark'}${mode === 'hc' ? '&contrast=high' : ''}`,
-            click,
-            clickIn: '#compose',
-            hc: mode === 'hc',
-          })),
+      COMPOSE_DIALOGS.flatMap(({ name, click, expect }) =>
+        (mode === 'hc' ? [1440, 390] : [1440]).map((width) => ({
+          file: `compose-dialog-${name}-${look}-${mode}${width === 390 ? '-390' : ''}.png`,
+          viewport: { width, height: width === 390 ? 844 : 900 },
+          mobile: width === 390,
+          query: `look=${look}&theme=${mode === 'light' ? 'light' : 'dark'}${mode === 'hc' ? '&contrast=high' : ''}`,
+          click,
+          clickIn: '#compose',
+          expect,
+          hc: mode === 'hc',
+        })),
       ),
     ),
   ),
@@ -339,6 +353,7 @@ async function primitiveDepth(page) {
 
 const browser = await chromium.launch();
 let blocked = 0;
+const written = [];
 try {
   for (const shot of SHOTS) {
     const context = await browser.newContext({
@@ -429,11 +444,22 @@ try {
       continue;
     }
     if (shot.click) {
+      // Exact names only: "Attach" as a substring also matches "Attachment preview".
       await page
         .locator(shot.clickIn ?? '#message-kinds')
-        .getByRole('button', { name: shot.click })
+        .getByRole('button', { name: shot.click, exact: true })
         .first()
         .click();
+      // What was opened must be on screen, or the shot would quietly repeat another state.
+      const opened = page.locator(`[role="${shot.expect ?? 'dialog'}"]`).first();
+      try {
+        await opened.waitFor({ state: 'visible', timeout: 5000 });
+      } catch {
+        console.error(`${shot.file}: "${shot.click}" opened no ${shot.expect ?? 'dialog'}`);
+        process.exitCode = 1;
+        await context.close();
+        continue;
+      }
       await page.waitForTimeout(600);
       await page.screenshot({ path });
     } else if (
@@ -461,9 +487,26 @@ try {
       await page.locator(`#${shot.section}`).screenshot({ path });
     } else await page.screenshot({ path, fullPage: true });
     console.log(`saved ${path}`);
+    written.push(path);
     await context.close();
   }
 } finally {
   await browser.close();
 }
 if (blocked) console.log(`blocked ${blocked} request(s) to other hosts`);
+
+// Two shots of different states that came out byte-identical mean one of them
+// never happened (a selector that matched the wrong control, a dialog that
+// didn't open). Cheap to check, and it catches the whole class of mistake.
+const byHash = new Map();
+for (const file of written) {
+  const hash = createHash('sha256').update(readFileSync(file)).digest('hex');
+  byHash.set(hash, [...(byHash.get(hash) ?? []), file]);
+}
+for (const [hash, files] of byHash) {
+  if (files.length < 2) continue;
+  console.error(
+    `identical shots (${hash.slice(0, 12)}): ${files.map((f) => f.split(/[\\/]/).pop()).join(', ')}`,
+  );
+  process.exitCode = 1;
+}

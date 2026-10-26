@@ -1,0 +1,144 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Manrope:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=DM+Sans:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  .looks { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:28px; align-items:start; }
+  .phone { width:300px; height:600px; margin:0 auto; border-radius:40px; overflow:hidden; position:relative; display:flex; flex-direction:column; }
+  .ph-head { display:flex; align-items:center; gap:10px; padding:44px 16px 12px; position:relative; z-index:2; }
+  .ph-av { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; flex:none; }
+  .ph-name { font-size:15px; font-weight:700; line-height:1.1; }
+  .ph-sub { font-size:11px; opacity:.7; margin-top:2px; }
+  .ph-body { flex:1; padding:10px 14px; display:flex; flex-direction:column; justify-content:flex-end; gap:6px; position:relative; z-index:1; }
+  .b { max-width:78%; padding:9px 12px 7px; font-size:13.5px; line-height:1.35; }
+  .b small { display:block; text-align:right; font-size:10px; opacity:.65; margin-top:3px; }
+  .b .who { font-size:11.5px; font-weight:700; display:block; margin-bottom:2px; }
+  .in { align-self:flex-start; }
+  .out { align-self:flex-end; }
+  .wave { display:flex; align-items:center; gap:2px; height:18px; }
+  .wave i { display:block; width:3px; border-radius:2px; background:currentColor; opacity:.85; }
+  .ph-comp { display:flex; align-items:center; gap:8px; padding:10px 12px 26px; position:relative; z-index:2; }
+  .ph-field { flex:1; height:40px; border-radius:20px; display:flex; align-items:center; padding:0 14px; font-size:13px; }
+  .ph-send { width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex:none; }
+  .day { align-self:center; font-size:10.5px; padding:3px 10px; border-radius:10px; margin-bottom:4px; }
+  .meta-row { display:flex; gap:6px; margin:14px auto 0; width:300px; }
+  .sw { flex:1; height:22px; border-radius:6px; }
+
+  /* A — Aurora */
+  .A { background:#060A13; color:#EAF2FF; font-family:Manrope, system-ui, sans-serif; }
+  .A::before { content:""; position:absolute; inset:-20%; background:
+      radial-gradient(40% 35% at 15% 18%, rgba(20,184,166,.55), transparent 70%),
+      radial-gradient(45% 40% at 95% 70%, rgba(124,58,237,.50), transparent 70%),
+      radial-gradient(30% 25% at 40% 95%, rgba(56,189,248,.30), transparent 70%);
+    filter:blur(30px); }
+  .A .ph-head { background:rgba(255,255,255,.06); backdrop-filter:blur(18px); border-bottom:1px solid rgba(255,255,255,.08); }
+  .A .ph-name { font-family:Sora, sans-serif; }
+  .A .in { background:rgba(255,255,255,.09); border:1px solid rgba(255,255,255,.12); backdrop-filter:blur(14px); border-radius:18px 18px 18px 6px; }
+  .A .out { background:linear-gradient(135deg,#14B8A6 0%,#6366F1 100%); color:#fff; border-radius:18px 18px 6px 18px; box-shadow:0 10px 28px rgba(79,70,229,.45); }
+  .A .day { background:rgba(255,255,255,.08); }
+  .A .ph-comp { background:rgba(255,255,255,.05); backdrop-filter:blur(18px); border-top:1px solid rgba(255,255,255,.08); }
+  .A .ph-field { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.1); color:rgba(234,242,255,.55); }
+  .A .ph-send { background:linear-gradient(135deg,#2DD4BF,#818CF8); box-shadow:0 6px 18px rgba(45,212,191,.45); color:#06121A; }
+
+  /* B — Velvet */
+  .B { background:#0F0D0B; color:#F3EDE4; font-family:"DM Sans", system-ui, sans-serif; }
+  .B::before { content:""; position:absolute; inset:0; background:
+      radial-gradient(80% 50% at 50% 0%, rgba(212,180,131,.14), transparent 70%); }
+  .B .ph-head { border-bottom:1px solid rgba(212,180,131,.18); }
+  .B .ph-name { font-family:Fraunces, Georgia, serif; font-weight:600; font-size:17px; letter-spacing:.2px; }
+  .B .in { background:#1C1916; border:1px solid #2A2520; border-radius:16px 16px 16px 4px; box-shadow:0 6px 16px rgba(0,0,0,.45); }
+  .B .out { background:linear-gradient(180deg,#145244 0%,#0D3B31 100%); color:#F3EDE4; border-radius:16px 16px 4px 16px; box-shadow:0 8px 20px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08); }
+  .B .day { color:#D4B483; letter-spacing:1.5px; font-size:9.5px; text-transform:uppercase; }
+  .B .ph-field { background:#1A1714; border:1px solid #2E2822; color:#8C8274; }
+  .B .ph-send { background:linear-gradient(180deg,#E5CB9C,#C4A16C); color:#1A140C; box-shadow:0 6px 16px rgba(196,161,108,.35); }
+
+  /* C — Bloom */
+  .C { background:#F7F5FC; color:#1D1530; font-family:"Plus Jakarta Sans", system-ui, sans-serif; }
+  .C::before { content:""; position:absolute; inset:0; background:
+      radial-gradient(45% 30% at 100% 0%, rgba(255,94,138,.18), transparent 70%),
+      radial-gradient(50% 35% at 0% 60%, rgba(109,74,255,.14), transparent 70%); }
+  .C .ph-head { background:rgba(255,255,255,.75); backdrop-filter:blur(16px); box-shadow:0 1px 0 rgba(29,21,48,.06); }
+  .C .ph-name { font-weight:800; }
+  .C .in { background:#fff; border-radius:20px 20px 20px 6px; box-shadow:0 1px 2px rgba(29,21,48,.06), 0 6px 18px rgba(80,60,180,.08); }
+  .C .out { background:linear-gradient(135deg,#FF5E8A 0%,#FF8E5E 100%); color:#fff; border-radius:20px 20px 6px 20px; box-shadow:0 8px 20px rgba(255,94,138,.35); }
+  .C .day { background:#fff; box-shadow:0 2px 8px rgba(80,60,180,.08); color:#6B6185; }
+  .C .ph-comp { background:rgba(255,255,255,.8); backdrop-filter:blur(16px); }
+  .C .ph-field { background:#F1EEF9; color:#9A93AE; }
+  .C .ph-send { background:linear-gradient(135deg,#6D4AFF,#B04AFF); color:#fff; box-shadow:0 6px 16px rgba(109,74,255,.4); }
+</style>
+
+<h2>Which of these feels like the premium VYBORA?</h2>
+<p class="subtitle">Three different directions, shown on the same group chat. Click the one you like best (or tell me what you'd mix).</p>
+
+<div class="cards looks">
+  <div class="card" data-choice="aurora" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:18px 0;background:#0b0f18">
+      <div class="phone A">
+        <div class="ph-head">
+          <div class="ph-av" style="background:linear-gradient(135deg,#A3E635,#2DD4BF);color:#062">SC</div>
+          <div><div class="ph-name">Saturday crew</div><div class="ph-sub">Ines is typing…</div></div>
+        </div>
+        <div class="ph-body">
+          <div class="day">Today</div>
+          <div class="b in"><span class="who" style="color:#BEF264">Ines</span>Picnic at the lake, 3 pm?<small>17:58</small></div>
+          <div class="b in"><span class="who" style="color:#93C5FD">Theo</span>I'll bring the big blanket<small>18:01</small></div>
+          <div class="b out">Count me in. Maya's coming too<small>18:02 ✓✓</small></div>
+          <div class="b in"><span class="who" style="color:#BEF264">Ines</span><span class="wave"><i style="height:6px"></i><i style="height:12px"></i><i style="height:16px"></i><i style="height:9px"></i><i style="height:14px"></i><i style="height:7px"></i><i style="height:12px"></i><i style="height:16px"></i><i style="height:10px"></i><i style="height:5px"></i><i style="height:12px"></i><i style="height:8px"></i></span><small>0:14 · 18:04</small></div>
+        </div>
+        <div class="ph-comp"><div class="ph-field">Message</div><div class="ph-send">➤</div></div>
+      </div>
+      <div class="meta-row"><div class="sw" style="background:#060A13"></div><div class="sw" style="background:#14B8A6"></div><div class="sw" style="background:#6366F1"></div><div class="sw" style="background:#7C3AED"></div><div class="sw" style="background:#EAF2FF"></div></div>
+    </div>
+    <div class="card-body">
+      <h3>A · Aurora</h3>
+      <p>Deep night sky with soft teal-to-violet light behind frosted glass. Your messages glow in a gradient. Keeps VYBORA's teal, adds violet. Sora + Manrope.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="velvet" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:18px 0;background:#0b0a09">
+      <div class="phone B">
+        <div class="ph-head">
+          <div class="ph-av" style="background:#2A2520;color:#E5CB9C;border:1px solid #3A322A">SC</div>
+          <div><div class="ph-name">Saturday crew</div><div class="ph-sub">Ines is typing…</div></div>
+        </div>
+        <div class="ph-body">
+          <div class="day">Today</div>
+          <div class="b in"><span class="who" style="color:#E5CB9C">Ines</span>Picnic at the lake, 3 pm?<small>17:58</small></div>
+          <div class="b in"><span class="who" style="color:#9FD8C6">Theo</span>I'll bring the big blanket<small>18:01</small></div>
+          <div class="b out">Count me in. Maya's coming too<small>18:02 ✓✓</small></div>
+          <div class="b in"><span class="who" style="color:#E5CB9C">Ines</span><span class="wave"><i style="height:6px"></i><i style="height:12px"></i><i style="height:16px"></i><i style="height:9px"></i><i style="height:14px"></i><i style="height:7px"></i><i style="height:12px"></i><i style="height:16px"></i><i style="height:10px"></i><i style="height:5px"></i><i style="height:12px"></i><i style="height:8px"></i></span><small>0:14 · 18:04</small></div>
+        </div>
+        <div class="ph-comp"><div class="ph-field">Message</div><div class="ph-send">➤</div></div>
+      </div>
+      <div class="meta-row"><div class="sw" style="background:#0F0D0B"></div><div class="sw" style="background:#1C1916"></div><div class="sw" style="background:#145244"></div><div class="sw" style="background:#D4B483"></div><div class="sw" style="background:#F3EDE4"></div></div>
+    </div>
+    <div class="card-body">
+      <h3>B · Velvet</h3>
+      <p>Warm black, deep emerald and champagne gold, like a private members' club. Elegant serif titles, soft real shadows. Fraunces + DM Sans.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="bloom" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:18px 0;background:#EEEAF7">
+      <div class="phone C">
+        <div class="ph-head">
+          <div class="ph-av" style="background:linear-gradient(135deg,#FFB86B,#FF5E8A);color:#fff">SC</div>
+          <div><div class="ph-name">Saturday crew</div><div class="ph-sub" style="color:#6D4AFF;opacity:1">Ines is typing…</div></div>
+        </div>
+        <div class="ph-body">
+          <div class="day">Today</div>
+          <div class="b in"><span class="who" style="color:#E0457B">Ines</span>Picnic at the lake, 3 pm?<small>17:58</small></div>
+          <div class="b in"><span class="who" style="color:#6D4AFF">Theo</span>I'll bring the big blanket<small>18:01</small></div>
+          <div class="b out">Count me in. Maya's coming too<small>18:02 ✓✓</small></div>
+          <div class="b in"><span class="who" style="color:#E0457B">Ines</span><span class="wave" style="color:#6D4AFF"><i style="height:6px"></i><i style="height:12px"></i><i style="height:16px"></i><i style="height:9px"></i><i style="height:14px"></i><i style="height:7px"></i><i style="height:12px"></i><i style="height:16px"></i><i style="height:10px"></i><i style="height:5px"></i><i style="height:12px"></i><i style="height:8px"></i></span><small>0:14 · 18:04</small></div>
+        </div>
+        <div class="ph-comp"><div class="ph-field">Message</div><div class="ph-send">➤</div></div>
+      </div>
+      <div class="meta-row"><div class="sw" style="background:#F7F5FC;border:1px solid #e3def0"></div><div class="sw" style="background:#FF5E8A"></div><div class="sw" style="background:#FF8E5E"></div><div class="sw" style="background:#6D4AFF"></div><div class="sw" style="background:#1D1530"></div></div>
+    </div>
+    <div class="card-body">
+      <h3>C · Bloom</h3>
+      <p>Bright and playful: pearl-white with sunset-pink messages and violet accents, soft floating shadows, big rounded shapes. Plus Jakarta Sans.</p>
+    </div>
+  </div>
+</div>
+<p class="subtitle" style="margin-top:18px">Each would come in both light and dark, keep high contrast and reduced motion, and the personal colours per friend would be re-tuned to match.</p>

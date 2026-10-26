@@ -69,12 +69,12 @@ const hit = (
   ranges,
 });
 
-/** The composer with the mention picker open: the real control, nothing sent. */
-function MentionComposer() {
+/** The real composer, nothing sent. With `demoText` ending in "@" the picker is open. */
+function SampleComposer({ draftKey, demoText }: { draftKey: string; demoText?: string }) {
   const def = useChatTheme(THEME);
   return (
     <Composer
-      draftKey="gallery-mention"
+      draftKey={draftKey}
       accent={def.accent}
       replyTo={null}
       onCancelReply={noop}
@@ -82,7 +82,7 @@ function MentionComposer() {
       onFiles={noop}
       onTyping={noop}
       members={members}
-      demoText="Ask @"
+      demoText={demoText}
       onPoll={noop}
       onContact={noop}
       onLocation={noop}
@@ -130,10 +130,17 @@ export function ComposeSection() {
         </div>
       </Frame>
 
-      <Frame label="The composer: the @mention picker open, and the attach menu behind the clip">
-        {/* Room above for the picker, which opens over the thread. */}
-        <div className="max-w-3xl bg-bg pt-64" data-compose-composer="">
-          <MentionComposer />
+      {/* First in the section, so a screenshot of the attach menu finds this clip. */}
+      <Frame label="The composer, with the attach menu open behind its clip">
+        {/* Room above: the menu opens over the thread. */}
+        <div className="max-w-3xl bg-bg pt-56" data-compose-composer="">
+          <SampleComposer draftKey="gallery-attach" />
+        </div>
+      </Frame>
+
+      <Frame label="The composer mid-sentence: the @mention picker">
+        <div className="max-w-3xl bg-bg pt-56" data-compose-mentions="">
+          <SampleComposer draftKey="gallery-mention" demoText="Ask @" />
         </div>
       </Frame>
 
