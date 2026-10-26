@@ -9,3 +9,5 @@ coverage/
 *.log
 .turbo/
 .tmp/
+apps/web/test-results/
+apps/web/playwright-report/
