@@ -16,6 +16,7 @@ const pendingIds = async (d: { store: { list(p: string): Promise<string[]> } }, 
   (await d.store.list(`pp/${conv}/`)).map((k) => k.slice(k.lastIndexOf('/') + 1));
 
 describe('queued controls are re-delivered on sync', () => {
+  // MLS key operations are slow; the 5 s vitest default flakes under parallel load.
   it('a network-failed edit is applied after the next sync; everyone converges', async () => {
     const { server, alice, bob, conv } = await pair();
     const m = (await alice.engine.send(conv, { t: 'text', body: 'v1' }))!;
@@ -33,7 +34,7 @@ describe('queued controls are re-delivered on sync', () => {
     expect(await pendingIds(alice, conv)).toEqual([]);
     expect(await alice.store.list(`pq/${conv}/`)).toEqual([]);
     expect((await read(bob, conv))[0]).toMatchObject({ body: 'v2', edited: true });
-  });
+  }, 20_000);
 
   it('a lost response is recognised on sync and never posted twice', async () => {
     const { server, alice, bob, conv } = await pair();

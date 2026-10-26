@@ -12,6 +12,7 @@ import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PGlite } from '@electric-sql/pglite';
+import { format, resolveConfig } from 'prettier';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const migrationsDir = join(root, 'supabase', 'migrations');
@@ -261,7 +262,12 @@ export type Views<T extends keyof PublicSchema['Views']> = PublicSchema['Views']
 export type FunctionReturns<T extends keyof PublicSchema['Functions']> = PublicSchema['Functions'][T]['Returns'];
 `;
 
-writeFileSync(outFile, out);
+// Format with the repo's Prettier config so `pnpm format:check` and the CI
+// drift gate (`git diff --exit-code`) agree on this file.
+writeFileSync(
+  outFile,
+  await format(out, { ...(await resolveConfig(outFile)), parser: 'typescript' }),
+);
 console.log(
   `Wrote ${outFile} (${tables.length} tables, ${views.length} views, ${fns.length} functions)`,
 );

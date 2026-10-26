@@ -91,13 +91,13 @@ test('keyboard users can reach the sign-in fields with a visible focus indicator
   expect(outline).not.toBe('none');
 });
 
-test('the interface uses the VYBORA type system (Archivo, IBM Plex Mono)', async ({ page }) => {
+test('the interface uses the VYBORA type system (DM Sans, IBM Plex Mono)', async ({ page }) => {
   await page.goto('/privacy-and-security');
   await expect(page.getByText('What the server stores')).toBeVisible();
   const fonts = await page.evaluate(() => ({
     body: getComputedStyle(document.body).fontFamily,
     mono: getComputedStyle(document.querySelector('.font-mono')!).fontFamily,
   }));
-  expect(fonts.body).toContain('Archivo');
+  expect(fonts.body).toContain('DM Sans');
   expect(fonts.mono).toContain('IBM Plex Mono');
 });
