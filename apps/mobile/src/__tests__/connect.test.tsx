@@ -59,7 +59,7 @@ import { themeFor } from '@/lib/theme';
 import Verify from '@/app/messages/verify/[userId]';
 
 function wrap(ui: ReactNode) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>;
 }
 

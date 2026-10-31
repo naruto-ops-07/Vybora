@@ -147,7 +147,7 @@ describe('app lock timing', () => {
 
   it('sign out clears the lock and the unlock', async () => {
     await enableAndUnlock('1h');
-    const qc = new QueryClient();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
     await render(
       <QueryClientProvider client={qc}>
         <AuthProvider>

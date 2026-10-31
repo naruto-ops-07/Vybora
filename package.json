@@ -2,7 +2,7 @@
   "name": "vybora",
   "private": true,
   "version": "0.1.0",
-  "description": "VYBORA — Your world. Your vibe. A creator-focused social platform (web + iOS + Android) on Supabase.",
+  "description": "VYBORA \u2014 Your world. Your vibe. A creator-focused social platform (web + iOS + Android) on Supabase.",
   "packageManager": "pnpm@9.15.4",
   "engines": {
     "node": ">=20.19"
@@ -12,7 +12,7 @@
     "dev:mobile": "pnpm --filter @vybora/mobile start",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
-    "lint": "turbo run lint",
+    "lint": "turbo run lint && eslint scripts",
     "test": "turbo run test",
     "test:db": "pnpm --filter @vybora/db-tests test",
     "test:e2e": "pnpm --filter @vybora/web test:e2e",
